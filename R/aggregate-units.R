@@ -2,7 +2,7 @@
 # to the draws frame for reporting/PPC only, never fed back into training.
 # Per (draw, chain, iteration, time, group): outcome/ypred/denominator are
 # summed, treatment is max'd, period boundaries carried, and mu/mu_treated
-# pooled by log-sum-exp — the correct pooling for log-count columns, since
+# pooled by log-sum-exp -- the correct pooling for log-count columns, since
 # every estimand downstream sums exp(mu).
 
 source_units_for_spec <- function(spec, source_df) {

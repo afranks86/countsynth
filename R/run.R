@@ -41,7 +41,7 @@ write_draws_file <- function(draws, stem, dir, format) {
 #'
 #' Fits every requested (type, rank), writes the tidy draws artifact, the
 #' convergence gate JSON, and (when `output$figures` selects any) the full
-#' figure/table report — with the same directory layout and filenames as the
+#' figure/table report -- with the same directory layout and filenames as the
 #' Python `bpnmf run` command.
 #'
 #' @param config A [bpnmf_config()] object (or path to a YAML config).

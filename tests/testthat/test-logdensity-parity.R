@@ -35,7 +35,11 @@ py_to_stan_params <- function(p, treated, sample_disp) {
   out
 }
 
-expect_constant_offset <- function(lp_stan, lp_py, label, tol = 1e-5) {
+# tol is absolute spread across cases. Log-densities here are O(1e3-1e4);
+# the lgamma-heavy NB terms accumulate ~1e-8 relative float noise between
+# the two implementations, so 1e-4 absolute is tight enough to catch any
+# real mis-port (which shows up at O(0.1) or more) without false alarms.
+expect_constant_offset <- function(lp_stan, lp_py, label, tol = 1e-4) {
   offsets <- lp_stan - lp_py
   spread <- max(offsets) - min(offsets)
   expect_lt(spread, tol, label = sprintf("%s: offset spread %.2e", label, spread))
@@ -68,12 +72,13 @@ test_that("Stan joint model log-density matches numpyro up to a constant", {
     class = c("bpnmf_data", "list")
   )
 
-  dir.create(tools::R_user_dir("bpnmf", "cache"), recursive = TRUE, showWarnings = FALSE)
+  # Compile into a per-session dir: a pre-existing cached executable cannot
+  # be reused with model methods (log_prob / unconstrain_variables).
   model <- cmdstanr::cmdstan_model(
     stan_file_path("joint"),
     include_paths = system.file("stan", "include", package = "bpnmf"),
-    dir = tools::R_user_dir("bpnmf", "cache"),
-    compile_model_methods = TRUE, force_recompile = FALSE, quiet = TRUE
+    dir = withr::local_tempdir(),
+    compile_model_methods = TRUE, quiet = TRUE
   )
 
   cases <- fx$cases
@@ -167,11 +172,10 @@ test_that("Stan stage-2 model log-density matches numpyro up to a constant", {
     phi_unit = unlist(d$phi_fixed),
     outcome_distribution = "NB", adjust_for_missingness = TRUE
   )
-  dir.create(tools::R_user_dir("bpnmf", "cache"), recursive = TRUE, showWarnings = FALSE)
   model <- cmdstanr::cmdstan_model(
     stan_file_path("cut_stage2"),
     include_paths = system.file("stan", "include", package = "bpnmf"),
-    dir = tools::R_user_dir("bpnmf", "cache"),
+    dir = withr::local_tempdir(),
     compile_model_methods = TRUE, quiet = TRUE
   )
   fit <- model$sample(

@@ -20,6 +20,6 @@ fit object, draws path, and gate.
 \description{
 Fits every requested (type, rank), writes the tidy draws artifact, the
 convergence gate JSON, and (when \code{output$figures} selects any) the full
-figure/table report — with the same directory layout and filenames as the
+figure/table report -- with the same directory layout and filenames as the
 Python \verb{bpnmf run} command.
 }

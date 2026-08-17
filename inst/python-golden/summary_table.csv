@@ -1,0 +1,2 @@
+Group,Person-Years,Observed,Expected,Diff (95% CI),Obs Rate,Exp Rate,Rate Diff CI,Pct Change CI
+total*,11492058,715261,690413,"24847 (17739, 31589)",62.24,60.08,"2.16 (1.54, 2.75)","3.6% (2.6%, 4.6%)"

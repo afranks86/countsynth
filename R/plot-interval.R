@@ -2,7 +2,7 @@
 # unit with nested 67% + 95% credible intervals and a median point, sorted by
 # median effect.
 
-#' Per-draw causal effect for one (unit[, color group]) cell
+#' Per-draw causal effect per unit (and optional color group)
 #'
 #' Port of `compute_draw_effect`: with `method = "mu"`,
 #' `treated = sum(exp(mu_treated))`, `untreated = sum(exp(mu))`, and rates

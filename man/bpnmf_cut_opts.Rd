@@ -26,7 +26,7 @@ components so pooling weights them equally).}
 component \code{i} runs at \code{stage2_seed + i}).}
 
 \item{stage2_mcmc}{Named list shallow-merged over the top-level MCMC options
-for stage 2 (accepts both R and Python key names; must not set the seed —
+for stage 2 (accepts both R and Python key names; must not set the seed --
 \code{stage2_seed} is the authority).}
 }
 \description{

@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot-interval.R
 \name{compute_draw_effects}
 \alias{compute_draw_effects}
-\title{Per-draw causal effect for one (unit\link{, color group}) cell}
+\title{Per-draw causal effect per unit (and optional color group)}
 \usage{
 compute_draw_effects(df, estimand, method, rate_normalizer, agg_cols)
 }

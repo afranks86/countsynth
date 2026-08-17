@@ -123,7 +123,7 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
 #' One row per base variable: worst R-hat, smallest `min(ess_bulk, ess_tail)`
 #' across its elements, PASS/WARN/FAIL status, and whether the variable is
 #' gated. Variables whose every element has zero posterior span are tagged
-#' `"fixed"` (no R-hat/ESS, never FAIL) — this catches a fixed dispersion
+#' `"fixed"` (no R-hat/ESS, never FAIL); this catches a fixed dispersion
 #' empirically, with no model-specific knowledge. Sorted worst R-hat first.
 #'
 #' @inheritParams convergence_gate
@@ -200,7 +200,7 @@ print.bpnmf_diagnostics <- function(x, ...) {
       ifelse(is.na(x$rhat[i]), "-", sprintf("%.4f", x$rhat[i])),
       ifelse(is.na(x$ess[i]), "-", sprintf("%.0f", x$ess[i])),
       x$status[i],
-      if (x$gated[i]) "✓" else ""
+      if (x$gated[i]) "\u2713" else ""
     )
     switch(x$status[i],
       FAIL = cli::cli_verbatim(cli::col_red(line)),

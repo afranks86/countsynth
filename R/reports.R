@@ -182,7 +182,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
   )
 
   if (print_tables && nrow(summary_tbl) > 0) {
-    cli::cli_h1("{target_unit} — Observed vs Expected")
+    cli::cli_h1("{target_unit} \u2014 Observed vs Expected")
     print(as.data.frame(summary_tbl))
     if (nrow(per_unit) > 0) {
       cli::cli_h1("Post-treatment totals by unit (ranked by % excess)")

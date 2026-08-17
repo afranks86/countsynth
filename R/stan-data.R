@@ -1,7 +1,7 @@
 # Construct the data lists passed to the Stan models. All cell masks are
 # converted to 1-based integer index vectors in the canonical row-major
 # (k, d, n) flat order (see flat_idx() in utils.R) so that Stan never touches
-# booleans and the exposed-cell ordering matches numpy's reshape(-1) — that
+# booleans and the exposed-cell ordering matches numpy's reshape(-1) -- that
 # ordering defines the meaning of treatment_kt_z[e] and cut-mode provenance.
 
 #' Build the Stan data list for the joint / baseline model

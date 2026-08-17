@@ -23,6 +23,6 @@ A tibble with columns \code{parameter}, \code{rhat}, \code{ess}, \code{status},
 One row per base variable: worst R-hat, smallest \code{min(ess_bulk, ess_tail)}
 across its elements, PASS/WARN/FAIL status, and whether the variable is
 gated. Variables whose every element has zero posterior span are tagged
-\code{"fixed"} (no R-hat/ESS, never FAIL) — this catches a fixed dispersion
+\code{"fixed"} (no R-hat/ESS, never FAIL); this catches a fixed dispersion
 empirically, with no model-specific knowledge. Sorted worst R-hat first.
 }

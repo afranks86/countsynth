@@ -422,7 +422,7 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
 #' @param stage2_seed Base seed for stage-2 sampling (default `seed + 3`;
 #'   component `i` runs at `stage2_seed + i`).
 #' @param stage2_mcmc Named list shallow-merged over the top-level MCMC options
-#'   for stage 2 (accepts both R and Python key names; must not set the seed —
+#'   for stage 2 (accepts both R and Python key names; must not set the seed --
 #'   `stage2_seed` is the authority).
 #' @export
 bpnmf_cut_opts <- function(num_stage1_draws = 25,

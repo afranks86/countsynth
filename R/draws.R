@@ -1,4 +1,4 @@
-# Tidy long draws frame — the reporting contract every table and figure
+# Tidy long draws frame -- the reporting contract every table and figure
 # consumes. Parity with results.py: one row per draw x group x unit x time,
 # 1-indexed .draw/.chain/.iteration (tidybayes-style), and columns
 #   unit, time, group, outcome, denominator, treatment, ypred, mu, mu_treated

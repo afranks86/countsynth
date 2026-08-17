@@ -38,7 +38,7 @@ parse_yaml_schema <- function(x, path = "data.schema") {
       "outcomes_from_prefixes"),
     path
   )
-  # NB: [[ ]] everywhere below — `$` partial matching would let `x$outcomes`
+  # NB: [[ ]] everywhere below -- `$` partial matching would let `x$outcomes`
   # silently resolve to `outcomes_from_prefixes`.
   outcomes <- NULL
   if (!is.null(x[["outcomes"]])) {
