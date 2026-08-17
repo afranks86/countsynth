@@ -1,0 +1,83 @@
+---
+title: "Cut (modular) inference"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Cut (modular) inference}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+Joint Bayesian inference lets exposed-period outcomes inform the baseline
+(counterfactual) model. When you want the baseline learned from control data
+*only* — a "cut" or modular posterior — `bpnmf` implements the two-stage
+scheme
+
+$$p_{\text{cut}}(\phi, \theta \mid Z, Y) \;=\; p(\phi \mid Z)\;
+p(\theta \mid Y, \phi),$$
+
+where $\phi$ is the baseline (factors and fixed effects), $\theta$ the
+treatment block, $Z$ the control-cell data, and $Y$ the exposed-cell data.
+
+## How it runs
+
+1. **Stage 1** fits the baseline model on control cells (same priors as the
+   joint model with the treatment block off).
+2. `num_stage1_draws` posterior draws are selected — chain-stratified,
+   seeded, without replacement — and become the *cut components*.
+3. **Stage 2** runs one small MCMC per component, with that draw's
+   `mu_ctrl` frozen as data, so exposed outcomes can never feed back into
+   the baseline.
+4. Each component's retained draws are thinned to
+   `stage2_draws_per_component` with a deterministic even stride (equal
+   counts per component keep pooling weights equal), then pooled with
+   provenance columns `cut_component`, `stage1_draw`, `stage1_chain`,
+   `stage1_iteration`.
+
+```{r}
+library(bpnmf)
+
+cfg <- bpnmf_example_config(
+  model = bpnmf_model_opts(
+    types = list(total = bpnmf_type("total", 3)),
+    inference_mode = "cut"
+  ),
+  cut = bpnmf_cut_opts(
+    num_stage1_draws = 25,
+    stage2_draws_per_component = 100,
+    stage2_mcmc = list(iter_warmup = 500, iter_sampling = 1000, thin = 1)
+  )
+)
+
+cfit <- bpnmf_cut_fit(bpnmf_data(cfg), config = cfg)
+summary(cfit)          # stage-1 gate + per-component diagnostics
+draws <- bpnmf_draws(cfit)
+```
+
+## Seeds
+
+All cut seeds derive from `mcmc$seed`: draw selection uses `seed + 2` and
+stage 2 uses `seed + 3` (component $i$ samples at `stage2_seed + i`), unless
+set explicitly via `bpnmf_cut_opts()`. `stage2_mcmc` must not set a seed —
+`stage2_seed` is the authority. Selection is deliberately on its own stream
+so it is statistically independent of the draws being selected.
+
+## Diagnostics
+
+Convergence is assessed per real MCMC target — stage 1 once, then each
+component separately — and never on the pooled draws (which are a mixture,
+not one chain). `cfit$manifest` holds the full gate manifest; write it with
+`write_convergence_json()`.
+
+## Parallel stage 2
+
+Stage-2 fits are small and run sequentially by default (each already uses
+parallel chains). With many components you can run them on a future plan:
+
+```{r}
+future::plan(future::multisession, workers = 4)
+cfit <- bpnmf_cut_fit(bpnmf_data(cfg), config = cfg, parallel = "future")
+```

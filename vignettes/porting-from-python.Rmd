@@ -1,0 +1,78 @@
+---
+title: "Porting from the Python package"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Porting from the Python package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+`bpnmf` is a full port of the Python package `bayesian_panel_nmf`
+(NumPyro/JAX): same model, same priors, same estimands, same artifact
+layout. This vignette maps the two.
+
+## Config mapping
+
+`read_bpnmf_config()` accepts Python YAML configs verbatim. Renamed keys
+(everything else keeps its name and default):
+
+| Python YAML | R / cmdstanr |
+|---|---|
+| `mcmc.num_warmup` | `iter_warmup` |
+| `mcmc.num_samples` | `iter_sampling` |
+| `mcmc.thinning` | `thin` |
+| `mcmc.target_accept` | `adapt_delta` |
+| `mcmc.random_seed` | `seed` |
+| `mcmc.num_chains` / `chain_method` | `chains` / `parallel_chains` (`"vectorized"` warns and runs parallel) |
+| `output.save_traces` (NetCDF) | posterior draws saved as RDS |
+
+Thinning semantics are identical: both run `num_samples` post-warmup
+iterations and retain `num_samples / thinning`.
+
+## Command equivalents
+
+| Python CLI | R |
+|---|---|
+| `bpnmf run --config cfg.yaml` | `bpnmf_run("cfg.yaml")` |
+| `bpnmf run --type total --rank 5` | `bpnmf_run(cfg, types = "total", ranks = 5)` |
+| `bpnmf viz --results ...` | `bpnmf_report(draws, output_dir)` |
+| `bpnmf viz --tables-only` | `bpnmf_report(draws, dir, figures = character())` |
+| `bpnmf traces file.nc` | `parameter_diagnostics(fit)` / `bpnmf_trace_plot(fit)` |
+
+## Draws artifact
+
+The tidy draws frame has the same schema in both languages: 1-indexed
+`.draw` / `.chain` / `.iteration`, then `unit`, `time`, `group`, `outcome`,
+`denominator`, `treatment`, `ypred`, `mu`, `mu_treated`. As in Python, `mu`
+is the **untreated** log-count surface and `mu_treated = mu + te`; `ypred`
+is the counterfactual (untreated) posterior predictive. Cut runs add
+`cut_component`, `stage1_draw`, `stage1_chain`, `stage1_iteration`.
+
+## What is checked, and what is not
+
+- **Checked — exact:** the Stan models' log-densities equal the NumPyro
+  models' at shared parameter values, up to an additive constant (fixtures
+  exported from Python; run `testthat::test_file("test-logdensity-parity.R")`).
+  Cell flattening order, cut chain quotas, output-thinning strides, and gate
+  bands are also fixture-pinned.
+- **Checked — statistical:** posterior summaries on the bundled fertility
+  data agree within Monte Carlo error.
+- **Not preserved:** bitwise draw identity. NUTS implementations and RNGs
+  differ; the cut components selected for the same seed also differ (R and
+  numpy RNGs are different streams with the same stratified logic).
+
+## Implementation differences worth knowing
+
+- Stan's `joint.stan` doubles as the cut stage-1 model via the
+  `model_treated` data flag; Python keeps two deliberately duplicated model
+  files pinned together by a parity test.
+- The counterfactual `ypred` RNG clamps the log-mean at ~20.79
+  (`exp(x) < 2^30`) because Stan's count RNGs overflow above that; NumPyro
+  returns huge float draws instead. Irrelevant at realistic count scales.
+- `bpnmf` reports rely on the identical estimand formulas
+  (`sum(exp(mu))`-based excess, person-year-weighted rates, two-sided
+  posterior p-values), reproduced from `tables.py` / `plots.py`.

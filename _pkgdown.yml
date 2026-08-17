@@ -1,0 +1,67 @@
+url: ~
+template:
+  bootstrap: 5
+
+reference:
+- title: Configuration
+  contents:
+  - bpnmf_config
+  - read_bpnmf_config
+  - bpnmf_schema
+  - bpnmf_outcome
+  - bpnmf_prefixes
+  - bpnmf_model_opts
+  - bpnmf_type
+  - bpnmf_mcmc_opts
+  - bpnmf_convergence
+  - bpnmf_output_opts
+  - bpnmf_cut_opts
+  - bpnmf_aggregation
+  - bpnmf_aggregate_unit
+- title: Data
+  contents:
+  - bpnmf_data
+  - build_model_arrays
+  - bpnmf_example_data
+  - bpnmf_example_config
+- title: Fitting
+  contents:
+  - bpnmf_fit
+  - bpnmf_cut_fit
+  - bpnmf_run
+  - bpnmf_stan_model
+- title: Draws and estimands
+  contents:
+  - bpnmf_draws
+  - add_aggregate_units
+  - compute_quantiles
+  - auto_detect_target
+- title: Diagnostics
+  contents:
+  - convergence_gate
+  - parameter_diagnostics
+  - cut_component_table
+  - write_convergence_json
+- title: Tables
+  contents:
+  - bpnmf_summary_table
+  - bpnmf_post_treatment_summary
+  - bpnmf_expected_vs_observed
+- title: Figures
+  contents:
+  - theme_bpnmf
+  - bpnmf_unit_fit_plot
+  - bpnmf_unit_gap_plot
+  - bpnmf_raw_rate_plot
+  - bpnmf_group_comparison_plot
+  - bpnmf_interval_plot
+  - bpnmf_ppc_plots
+  - bpnmf_ppc_abs
+  - bpnmf_ppc_acf
+  - bpnmf_ppc_rmse
+  - bpnmf_ppc_unit_corr
+  - bpnmf_trace_plot
+- title: Reports
+  contents:
+  - bpnmf_report
+  - plot.bpnmf_fit
