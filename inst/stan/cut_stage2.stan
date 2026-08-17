@@ -1,7 +1,7 @@
 // Cut stage-2 model (port of models/cut_treatment.py): the treatment block
 // conditioned on one frozen stage-1 draw of the baseline surface. mu_ctrl and
 // the matched NB concentration enter as data, so exposed outcomes can never
-// feed back into the baseline — the cut boundary.
+// feed back into the baseline -- the cut boundary.
 functions {
   #include censoring.stanfunctions
 }
@@ -14,6 +14,7 @@ data {
   int<lower=1> n_exposed;
   array[n_exposed] int<lower=1, upper=K> exp_k;
   array[n_exposed] int<lower=1, upper=D> exp_d;
+  array[n_exposed] int<lower=1, upper=K * D> exp_kd; // (d-1)*K + k gather index
   array[n_exposed] int<lower=1, upper=KDN> exp_cell;
 
   // Likelihood subsets are positions within the exposed-cell list.
@@ -27,6 +28,21 @@ data {
   int<lower=0, upper=1> adjust_missing;
   vector<lower=0>[is_nb == 1 ? D : 0] phi_unit; // matched stage-1 concentration
 }
+transformed data {
+  vector[9] sup;                         // censored-count support 1..9
+  vector[9] lgamma_sup1;
+  for (v in 1 : 9) {
+    sup[v] = v;
+    lgamma_sup1[v] = lgamma(v + 1);
+  }
+  vector[9] neg_lgamma_sup1 = -lgamma_sup1;
+  // phi is data here, so the per-unit censoring coefficients are free.
+  vector[is_nb == 1 ? D : 0] log_phi = log(phi_unit);
+  array[is_nb == 1 ? D : 0] vector[9] b_cens;
+  for (d in 1 : (is_nb == 1 ? D : 0)) {
+    b_cens[d] = nb_censor_coeff(phi_unit[d], sup, lgamma_sup1);
+  }
+}
 parameters {
   real<lower=0> treatment_it_scale;      // HalfNormal(0.1)
   real<lower=0> treatment_state_scale;   // HalfNormal(1)
@@ -38,15 +54,11 @@ parameters {
   vector[K] category_treatment_effect;   // centered
 }
 transformed parameters {
-  vector[n_exposed] te;
-  vector[n_exposed] mu_exposed;
-  for (e in 1:n_exposed) {
-    te[e] = treatment_kt_z[e] * treatment_it_scale
-            + state_treatment_effect_z[exp_d[e]] * treatment_state_scale
-            + category_treatment_effect[exp_k[e]]
-            + state_category_te_z[exp_k[e], exp_d[e]] * state_category_scale;
-    mu_exposed[e] = mu_ctrl[exp_cell[e]] + te[e];
-  }
+  vector[n_exposed] te = treatment_kt_z * treatment_it_scale
+                         + state_treatment_effect_z[exp_d] * treatment_state_scale
+                         + category_treatment_effect[exp_k]
+                         + to_vector(state_category_te_z)[exp_kd] * state_category_scale;
+  vector[n_exposed] mu_exposed = mu_ctrl[exp_cell] + te;
 }
 model {
   treatment_it_scale ~ normal(0, 0.1);
@@ -65,15 +77,34 @@ model {
   }
 
   if (adjust_missing == 1) {
-    for (i in 1:n_cens) {
-      target += suppressed_mass(mu_exposed[cens_e[i]],
-                                is_nb == 1 ? phi_unit[exp_d[cens_e[i]]] : 1.0,
-                                is_nb);
-    }
-    for (i in 1:n_obs) {
-      target += log1m_exp(suppressed_mass(mu_exposed[obs_e[i]],
-                                          is_nb == 1 ? phi_unit[exp_d[obs_e[i]]] : 1.0,
-                                          is_nb));
+    if (is_nb == 1) {
+      for (i in 1 : n_cens) {
+        int d = exp_d[cens_e[i]];
+        target += suppressed_mass_nb(mu_exposed[cens_e[i]], phi_unit[d],
+                                     log_phi[d], b_cens[d], sup);
+      }
+      if (n_obs > 0) {
+        vector[n_obs] mass;
+        for (i in 1 : n_obs) {
+          int d = exp_d[obs_e[i]];
+          mass[i] = suppressed_mass_nb(mu_exposed[obs_e[i]], phi_unit[d],
+                                       log_phi[d], b_cens[d], sup);
+        }
+        target += sum(log1m_exp(mass));
+      }
+    } else {
+      for (i in 1 : n_cens) {
+        target += suppressed_mass_pois(mu_exposed[cens_e[i]],
+                                       neg_lgamma_sup1, sup);
+      }
+      if (n_obs > 0) {
+        vector[n_obs] mass;
+        for (i in 1 : n_obs) {
+          mass[i] = suppressed_mass_pois(mu_exposed[obs_e[i]],
+                                         neg_lgamma_sup1, sup);
+        }
+        target += sum(log1m_exp(mass));
+      }
     }
   }
 }

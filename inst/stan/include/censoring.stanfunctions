@@ -1,14 +1,30 @@
-// Censored small-count helper. Source data suppresses counts 1-9; a
+// Censored small-count helpers. Source data suppresses counts 1-9; a
 // suppressed cell contributes log P(Y in {1..9}) and an observed cell
 // contributes log P(Y not in {1..9}) (via log1m_exp at the call site).
 // Mirrors likelihood.py's logsumexp over the pmf at values 1..9.
+//
+// Instead of nine *_lpmf calls per cell per gradient evaluation, the pmf is
+// factored so that everything depending only on the concentration is
+// precomputed once per unit (coefficient row b), leaving one cheap
+// log_sum_exp over the nine-point support per cell:
+//   NB2(v | mu, phi), eta = log(mu), L = log(phi + mu):
+//     lp(v) = b[v] + phi * (log(phi) - L) + v * (eta - L)
+//     b[v]  = lgamma(v + phi) - lgamma(phi) - lgamma(v + 1)
+//   Poisson(v | mu): lp(v) = -mu + v * eta - lgamma(v + 1)
 
-// log P(Y in {1..9}) for Poisson (is_nb=0) or NB2 (is_nb=1) at log-mean lm.
-real suppressed_mass(real lm, real phi, int is_nb) {
-  vector[9] lp;
-  for (v in 1:9) {
-    lp[v] = is_nb == 1 ? neg_binomial_2_log_lpmf(v | lm, phi)
-                       : poisson_log_lpmf(v | lm);
-  }
-  return log_sum_exp(lp);
+// Per-unit NB coefficient row over the support 1..9.
+vector nb_censor_coeff(real phi, vector sup, vector lgamma_sup1) {
+  return lgamma(sup + phi) - lgamma(phi) - lgamma_sup1;
+}
+
+// log P(Y in {1..9}) for NB2 at log-mean eta, concentration phi.
+real suppressed_mass_nb(real eta, real phi, real log_phi, vector b,
+                        vector sup) {
+  real L = log_sum_exp(log_phi, eta);
+  return phi * (log_phi - L) + log_sum_exp(b + sup * (eta - L));
+}
+
+// log P(Y in {1..9}) for Poisson at log-mean eta.
+real suppressed_mass_pois(real eta, vector neg_lgamma_sup1, vector sup) {
+  return -exp(eta) + log_sum_exp(neg_lgamma_sup1 + sup * eta);
 }

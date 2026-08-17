@@ -27,6 +27,9 @@ bpnmf_stan_model <- function(name = c("joint", "cut_stage2"), quiet = TRUE) {
     stan_file_path(name),
     include_paths = system.file("stan", "include", package = "bpnmf"),
     dir = cache_dir,
+    # stanc's O1 optimization level enables memory/autodiff optimizations
+    # that measurably speed up this transformed-parameters-heavy model.
+    stanc_options = list("O1"),
     quiet = quiet
   )
 }
