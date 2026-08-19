@@ -16,11 +16,20 @@
 #'   `TRUE`).
 #' @param init Optional cmdstanr `init` argument passthrough (escape hatch for
 #'   difficult initializations).
+#' @param show_exceptions Print the sampler's informational exception
+#'   messages (default `FALSE`). During early warmup the positivity
+#'   constraints (e.g. on `time_fac`) can overflow on a proposed leapfrog
+#'   step; Stan rejects the proposal, prints an informational note, and
+#'   adapts -- the same rejection NumPyro performs silently. Sporadic
+#'   occurrences are harmless, so the notes are suppressed by default; the
+#'   convergence gate (R-hat / ESS / divergences) is the real health signal.
+#'   Set to `TRUE` to see them, or read them later via `fit$fit$output()`.
 #' @param ... Additional arguments passed to `CmdStanModel$sample()`.
 #' @return A `bpnmf_fit` object.
 #' @export
 bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
-                      gen_ypred = TRUE, init = NULL, ...) {
+                      gen_ypred = TRUE, init = NULL,
+                      show_exceptions = FALSE, ...) {
   checkmate::assert_class(data, "bpnmf_data")
   checkmate::assert_class(config, "bpnmf_config")
   type_spec <- config$model$types[[data$type]]
@@ -58,7 +67,8 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
     adapt_delta = mcmc$adapt_delta,
     seed = mcmc$seed,
     refresh = if (mcmc$progress) NULL else 0,
-    show_messages = mcmc$progress
+    show_messages = mcmc$progress,
+    show_exceptions = show_exceptions
   )
   if (!is.null(init)) args$init <- init
   args <- c(args[!vapply(args, is.null, logical(1))], list(...))
