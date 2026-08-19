@@ -127,12 +127,12 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
 
   p <- ggplot2::ggplot(plot_df, aes_base) +
     ggplot2::geom_vline(xintercept = ref, linetype = "dashed", color = "grey40") +
-    ggplot2::geom_segment(
-      ggplot2::aes(x = .data$lower_95, xend = .data$upper_95, yend = .data$unit),
+    ggplot2::geom_linerange(
+      ggplot2::aes(xmin = .data$lower_95, xmax = .data$upper_95),
       linewidth = 0.7, alpha = 0.4, position = dodge
     ) +
-    ggplot2::geom_segment(
-      ggplot2::aes(x = .data$lower_67, xend = .data$upper_67, yend = .data$unit),
+    ggplot2::geom_linerange(
+      ggplot2::aes(xmin = .data$lower_67, xmax = .data$upper_67),
       linewidth = 1.8, alpha = 0.9, position = dodge
     ) +
     ggplot2::geom_point(

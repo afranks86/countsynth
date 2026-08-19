@@ -145,3 +145,26 @@ test_that("interval plot effects are exact for the synthetic frame", {
   p <- bpnmf_interval_plot(draws, estimand = "ratio", method = "mu")
   expect_s3_class(p, "ggplot")
 })
+
+test_that("dodged interval segments stay horizontal and track their points", {
+  # geom_segment + position_dodge dodges y but not yend, slanting every
+  # interval; the linerange layers must sit at the same y as the median point.
+  draws <- make_draws_frame()
+  g2 <- draws
+  g2$group <- "other"
+  g2$mu_treated <- g2$mu + ifelse(g2$treatment == 1, log(1.5), 0)
+  draws <- dplyr::bind_rows(draws, g2)
+  class(draws) <- c("bpnmf_draws", class(draws))
+
+  layers <- ggplot2::ggplot_build(
+    bpnmf_interval_plot(draws, estimand = "ratio", method = "mu")
+  )$data
+  ci_95 <- layers[[2]]
+  ci_67 <- layers[[3]]
+  points <- layers[[4]]
+
+  expect_gt(length(unique(points$y)), 1) # groups really are dodged apart
+  expect_equal(ci_95$y, points$y)
+  expect_equal(ci_67$y, points$y)
+  expect_false("yend" %in% names(ci_95))
+})
