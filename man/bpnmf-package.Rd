@@ -19,10 +19,5 @@ Useful links:
 \author{
 \strong{Maintainer}: Alexander Franks \email{afranks@gmail.com}
 
-Authors:
-\itemize{
-  \item Alexander Franks \email{afranks@gmail.com}
-}
-
 }
 \keyword{internal}

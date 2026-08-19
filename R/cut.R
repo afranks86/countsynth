@@ -343,10 +343,11 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
 cut_component_table <- function(x) {
   checkmate::assert_class(x, "bpnmf_cut_fit")
   recs <- x$component_records
-  fmt <- "%9s %8s %10s %12s %5s  %s"
+  fmt <- "%9s %8s %10s %12s %5s %8s  %s"
   cli::cli_h1("Cut stage-2 components")
   cli::cli_verbatim(sprintf(
-    fmt, "component", "s1 chain", "max R-hat", "min bulk ESS", "div", "status"
+    fmt, "component", "s1 chain", "max R-hat", "min bulk ESS", "div",
+    "div rate", "status"
   ))
   n_pass <- 0L
   for (r in recs) {
@@ -355,6 +356,7 @@ cut_component_table <- function(x) {
     line <- sprintf(
       fmt, r$component, r$stage1_chain, sprintf("%.4f", r$rhat_max),
       sprintf("%.0f", r$ess_bulk_min), r$divergences,
+      sprintf("%.2f%%", 100 * (r$divergence_fraction %||% 0)),
       if (ok) "PASS" else "FAIL"
     )
     if (ok) cli::cli_verbatim(line) else cli::cli_verbatim(cli::col_red(line))

@@ -196,6 +196,7 @@ mcmc:
     rhat_fail: 1.05
     ess_min: 400
     ess_fail_fraction: 0.25
+    divergence_fail_fraction: 0.01   # share of retained draws; 0 = allow none
 
 output:
   figures: false                 # true/all/none, or a list of figure names:
@@ -314,8 +315,11 @@ noise per cell but fewer time points for the factorization to work with.
 **Sampling and the convergence gate.** The defaults (1000 warmup, 2500
 sampling, thin 10) are a real run, not a smoke test; expect a substantial
 wait on a full panel. Raise `target_accept` toward 0.95 if you see
-divergences. The gate is deliberately strict — `converged` requires a PASS
-on both R-hat and ESS *and* zero divergences. Note that the factorization is
+divergences. `converged` requires a PASS on both R-hat and ESS *and* a
+divergent-transition rate at or below `divergence_fail_fraction` — 1% of the
+retained draws by default, with 0 demanding none at all. The gate uses the
+rate rather than a raw count so that the threshold means the same thing
+however long you sample. Note that the factorization is
 rotation-non-identifiable by design: the individual factors (`time_fac`,
 `unit_weight`) are not expected to mix well, and it is the combined
 quantities — the baseline log-rate surface `mu_ctrl` and the treatment

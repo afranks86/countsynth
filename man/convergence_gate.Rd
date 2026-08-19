@@ -17,10 +17,12 @@ R-hat/ESS gate is restricted to (defaults to the config's
 }
 \value{
 A list: \code{rhat_max}, \code{ess_bulk_min}, \code{ess_tail_min}, \code{divergences},
-\code{converged} (+ \code{gate_params} when set).
+\code{divergence_fraction}, \code{converged} (+ \code{gate_params} when set).
 }
 \description{
 Port of \code{diagnostics.convergence_summary}: worst R-hat and smallest
 bulk/tail ESS over the gated parameters, plus the run-wide divergence
-count. \code{converged} requires PASS-band status and zero divergences.
+count. \code{converged} requires PASS-band status and a divergence rate at or
+below \code{divergence_fail_fraction} (0 for that threshold restores the older
+zero-divergence rule).
 }

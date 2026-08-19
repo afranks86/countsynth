@@ -18,6 +18,34 @@ test_that("custom thresholds are honored", {
   expect_equal(convergence_status(1.05, 49, th), "FAIL")
 })
 
+test_that("divergences are summarized as a rate over retained transitions", {
+  fake_fit <- function(divergent) {
+    sd <- posterior::as_draws_array(array(
+      divergent,
+      dim = c(length(divergent) / 2L, 2L, 1L),
+      dimnames = list(NULL, NULL, "divergent__")
+    ))
+    list(sampler_diagnostics = function() sd)
+  }
+  d <- divergence_summary(fake_fit(c(1, 0, 0, 0, 0, 0, 0, 0, 0, 0)))
+  expect_equal(d$count, 1)
+  expect_equal(d$transitions, 10)
+  expect_equal(d$fraction, 0.1)
+
+  clean <- divergence_summary(fake_fit(rep(0, 10)))
+  expect_equal(clean$count, 0)
+  expect_equal(clean$fraction, 0)
+})
+
+test_that("divergence_fail_fraction sets the gate's tolerance", {
+  expect_equal(bpnmf_convergence()$divergence_fail_fraction, 0.01)
+  # 0 restores the old rule: any divergence at all fails.
+  strict <- bpnmf_convergence(divergence_fail_fraction = 0)
+  expect_true(0 <= strict$divergence_fail_fraction)
+  expect_false(1e-9 <= strict$divergence_fail_fraction)
+  expect_error(bpnmf_convergence(divergence_fail_fraction = 1.5))
+})
+
 test_that("gate_params prefix matching errors on zero matches", {
   expect_error(
     match_gate_params(c("mu_ctrl", "te"), "bogus"),

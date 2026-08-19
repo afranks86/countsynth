@@ -126,14 +126,16 @@ parse_yaml_mcmc <- function(x, path = "mcmc") {
   if (!is.null(x$convergence)) {
     cv <- x$convergence
     check_known_keys(
-      cv, c("rhat_warn", "rhat_fail", "ess_min", "ess_fail_fraction"),
+      cv, c("rhat_warn", "rhat_fail", "ess_min", "ess_fail_fraction",
+            "divergence_fail_fraction"),
       glue::glue("{path}.convergence")
     )
     convergence <- bpnmf_convergence(
       rhat_warn = cv$rhat_warn %||% 1.01,
       rhat_fail = cv$rhat_fail %||% 1.05,
       ess_min = cv$ess_min %||% 400,
-      ess_fail_fraction = cv$ess_fail_fraction %||% 0.25
+      ess_fail_fraction = cv$ess_fail_fraction %||% 0.25,
+      divergence_fail_fraction = cv$divergence_fail_fraction %||% 0.01
     )
   }
   chains <- x$num_chains

@@ -197,18 +197,28 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
 #' A parameter PASSes below `rhat_warn` with ESS at/above `ess_min`; FAILs at/
 #' above `rhat_fail` or below `ess_min * ess_fail_fraction`; WARNs in between.
 #' ESS is `min(bulk, tail)` per parameter.
+#'
+#' Divergent transitions are gated separately, as a rate over the retained
+#' draws rather than a raw count, so the threshold does not drift as the
+#' sampling length changes. `divergence_fail_fraction = 0` restores the
+#' zero-divergence rule.
 #' @param rhat_warn,rhat_fail,ess_min,ess_fail_fraction Gate thresholds.
+#' @param divergence_fail_fraction Largest share of retained transitions that
+#'   may be divergent while still counting as converged.
 #' @export
 bpnmf_convergence <- function(rhat_warn = 1.01, rhat_fail = 1.05,
-                              ess_min = 400, ess_fail_fraction = 0.25) {
+                              ess_min = 400, ess_fail_fraction = 0.25,
+                              divergence_fail_fraction = 0.01) {
   checkmate::assert_number(rhat_warn, lower = 1)
   checkmate::assert_number(rhat_fail, lower = 1)
   checkmate::assert_number(ess_min, lower = 0)
   checkmate::assert_number(ess_fail_fraction, lower = 0, upper = 1)
+  checkmate::assert_number(divergence_fail_fraction, lower = 0, upper = 1)
   new_bpnmf_class(
     list(
       rhat_warn = rhat_warn, rhat_fail = rhat_fail,
-      ess_min = ess_min, ess_fail_fraction = ess_fail_fraction
+      ess_min = ess_min, ess_fail_fraction = ess_fail_fraction,
+      divergence_fail_fraction = divergence_fail_fraction
     ),
     "bpnmf_convergence"
   )

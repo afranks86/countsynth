@@ -22,7 +22,8 @@ summary.bpnmf_fit <- function(object, ...) {
   status <- if (isTRUE(gate$converged)) "PASS" else "FAIL"
   cli::cli_li(
     "gate: {status} (max R-hat {round(gate$rhat_max, 4)}, min bulk ESS
-     {round(gate$ess_bulk_min)}, {gate$divergences} divergence{?s})"
+     {round(gate$ess_bulk_min)}, {gate$divergences} divergence{?s} =
+     {sprintf('%.2f%%', 100 * gate$divergence_fraction)})"
   )
   invisible(gate)
 }

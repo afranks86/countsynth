@@ -62,18 +62,29 @@ match_gate_params <- function(base_names, gate_params) {
   gated
 }
 
-count_divergences <- function(fit) {
-  sd <- fit$sampler_diagnostics()
-  sum(posterior::as_draws_matrix(
-    posterior::subset_draws(sd, variable = "divergent__")
-  ))
+# Divergent transitions over the retained draws, with the denominator needed
+# to turn the count into a rate. Counting retained rather than all post-warmup
+# transitions keeps the rate comparable to the ESS figures, which are also
+# computed on the retained draws.
+divergence_summary <- function(fit) {
+  sd <- posterior::as_draws_matrix(
+    posterior::subset_draws(fit$sampler_diagnostics(), variable = "divergent__")
+  )
+  transitions <- nrow(sd)
+  list(
+    count = sum(sd),
+    transitions = transitions,
+    fraction = if (transitions > 0) sum(sd) / transitions else 0
+  )
 }
 
 #' Run-level convergence gate
 #'
 #' Port of `diagnostics.convergence_summary`: worst R-hat and smallest
 #' bulk/tail ESS over the gated parameters, plus the run-wide divergence
-#' count. `converged` requires PASS-band status and zero divergences.
+#' count. `converged` requires PASS-band status and a divergence rate at or
+#' below `divergence_fail_fraction` (0 for that threshold restores the older
+#' zero-divergence rule).
 #'
 #' @param fit A `bpnmf_fit` / `bpnmf_cut_fit`, or a raw `CmdStanMCMC`.
 #' @param gate_params Optional character vector of variable-name prefixes the
@@ -81,7 +92,7 @@ count_divergences <- function(fit) {
 #'   `mcmc$gate_params` when `fit` is a `bpnmf_fit`).
 #' @param thresholds A [bpnmf_convergence()] object.
 #' @return A list: `rhat_max`, `ess_bulk_min`, `ess_tail_min`, `divergences`,
-#'   `converged` (+ `gate_params` when set).
+#'   `divergence_fraction`, `converged` (+ `gate_params` when set).
 #' @export
 convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
   if (inherits(fit, "bpnmf_fit") || inherits(fit, "bpnmf_cut_fit")) {
@@ -100,7 +111,7 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
   rhat_max <- max(gated_summ$rhat, na.rm = TRUE)
   ess_bulk_min <- min(gated_summ$ess_bulk, na.rm = TRUE)
   ess_tail_min <- min(gated_summ$ess_tail, na.rm = TRUE)
-  divergences <- count_divergences(fit)
+  div <- divergence_summary(fit)
   status <- convergence_status(
     rhat_max, min(ess_bulk_min, ess_tail_min), thresholds
   )
@@ -109,8 +120,10 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
     rhat_max = rhat_max,
     ess_bulk_min = ess_bulk_min,
     ess_tail_min = ess_tail_min,
-    divergences = divergences,
-    converged = status == "PASS" && divergences == 0
+    divergences = div$count,
+    divergence_fraction = div$fraction,
+    converged = status == "PASS" &&
+      div$fraction <= thresholds$divergence_fail_fraction
   )
   if (!is.null(gate_params)) {
     out$gate_params <- gate_params

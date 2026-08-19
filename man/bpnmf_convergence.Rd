@@ -8,14 +8,24 @@ bpnmf_convergence(
   rhat_warn = 1.01,
   rhat_fail = 1.05,
   ess_min = 400,
-  ess_fail_fraction = 0.25
+  ess_fail_fraction = 0.25,
+  divergence_fail_fraction = 0.01
 )
 }
 \arguments{
 \item{rhat_warn, rhat_fail, ess_min, ess_fail_fraction}{Gate thresholds.}
+
+\item{divergence_fail_fraction}{Largest share of retained transitions that
+may be divergent while still counting as converged.}
 }
 \description{
 A parameter PASSes below \code{rhat_warn} with ESS at/above \code{ess_min}; FAILs at/
 above \code{rhat_fail} or below \code{ess_min * ess_fail_fraction}; WARNs in between.
 ESS is \code{min(bulk, tail)} per parameter.
+}
+\details{
+Divergent transitions are gated separately, as a rate over the retained
+draws rather than a raw count, so the threshold does not drift as the
+sampling length changes. \code{divergence_fail_fraction = 0} restores the
+zero-divergence rule.
 }
