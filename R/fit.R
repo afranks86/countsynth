@@ -71,7 +71,12 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
     show_exceptions = show_exceptions
   )
   if (!is.null(init)) args$init <- init
-  args <- c(args[!vapply(args, is.null, logical(1))], list(...))
+  args <- args[!vapply(args, is.null, logical(1))]
+  # Explicit `...` arguments win over the config-derived defaults.
+  dots <- list(...)
+  named <- names(dots)
+  if (!is.null(named)) args <- args[!(names(args) %in% named[nzchar(named)])]
+  args <- c(args, dots)
   fit <- do.call(model$sample, args)
 
   new_bpnmf_class(
