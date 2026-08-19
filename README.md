@@ -36,7 +36,7 @@ cmdstanr::install_cmdstan()   # one-time, ~10 min
 
 # install bpnmf from source
 # install.packages("remotes")
-remotes::install_local("path/to/bpnmf-r")
+remotes::install_github("afranks86/bpnmf")
 ```
 
 Check the toolchain before a long run — `cmdstanr::cmdstan_path()` should
