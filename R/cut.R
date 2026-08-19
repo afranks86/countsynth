@@ -96,6 +96,22 @@ select_stage1_draws <- function(n_chains, per_chain, m, selection_seed) {
   refs[c("component", "chain", "iteration", "draw")]
 }
 
+#' Derived seed for a component's untreated predictive draws
+#'
+#' The stage-2 sampler seeds occupy `stage2_seed + component`, so the
+#' predictive stream is offset by a large multiplier to keep it disjoint.
+#' The arithmetic is done in double precision and wrapped into the valid
+#' `set.seed()` range: `stage2_seed * 1000` overflows 32-bit integers for any
+#' base seed above ~2.1 million (the default `8675309 + 3` among them).
+#'
+#' @param stage2_seed Base stage-2 seed.
+#' @param component Component index (1-based).
+#' @return A single integer seed.
+#' @keywords internal
+predictive_seed <- function(stage2_seed, component) {
+  as.integer((as.numeric(stage2_seed) * 1000 + component) %% 2147483647)
+}
+
 run_stage2_component <- function(model, sd2, stage2_mcmc, seed_i, quiet = TRUE) {
   ch <- resolve_chains(stage2_mcmc)
   fit <- model$sample(
@@ -216,7 +232,7 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
     n_out <- nrow(te_out)
 
     # Fresh untreated predictive from the component's frozen baseline.
-    withr::with_seed(settings$stage2_seed * 1000L + ref$component, {
+    withr::with_seed(predictive_seed(settings$stage2_seed, ref$component), {
       mu_grid <- matrix(mu1[ref$draw, ], nrow = n_out, ncol = ncol(mu1), byrow = TRUE)
       phi_row <- if (is_nb) phi_unit[cell_unit] else NULL
       ypred_out <- sample_untreated_predictions(mu_grid, phi_row)

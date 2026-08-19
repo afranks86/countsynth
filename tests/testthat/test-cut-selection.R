@@ -67,3 +67,14 @@ test_that("seed collisions warn", {
   )
   expect_warning(resolve_cut_settings(cfg), "collides")
 })
+
+test_that("predictive seed stays in integer range and is component-distinct", {
+  # the default stage-2 seed: 8675309 * 1000 overflows a 32-bit integer
+  s <- predictive_seed(8675312L, 1L)
+  expect_true(is.integer(s))
+  expect_false(is.na(s))
+  expect_no_error(withr::with_seed(s, runif(1)))
+  expect_false(predictive_seed(8675312L, 1L) == predictive_seed(8675312L, 2L))
+  # small seeds keep the plain arithmetic
+  expect_identical(predictive_seed(7L, 3L), 7003L)
+})
