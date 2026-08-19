@@ -23,7 +23,7 @@ bpnmf_output_opts(
 }
 \arguments{
 \item{figures}{\code{TRUE}/\code{FALSE}, \code{"all"}/\code{"none"}, or a character vector of
-figure names from unit_fit, unit_gap, raw_rate, interval, group_comparison, ppc. Tables always render.}
+figure names from unit_fit, unit_gap, raw_rate, interval, group_comparison, ppc, te_regression. Tables always render.}
 
 \item{clean}{Remove the per-type output dir before writing.}
 

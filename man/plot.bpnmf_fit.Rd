@@ -10,7 +10,8 @@
 \item{x}{A \code{bpnmf_fit} or \code{bpnmf_cut_fit}.}
 
 \item{which}{One of \code{"unit_fit"}, \code{"unit_gap"}, \code{"raw_rate"},
-\code{"group_comparison"}, \code{"interval"}, \code{"trace"}.}
+\code{"group_comparison"}, \code{"interval"}, \code{"trace"}, \code{"te_regression"}, or
+\code{"te_coef"} (the last two require a \code{treatment_effects} formula).}
 
 \item{unit}{Unit for the per-unit figures (auto-detected target when
 \code{NULL}).}

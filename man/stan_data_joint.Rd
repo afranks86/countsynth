@@ -12,7 +12,8 @@ stan_data_joint(
   nb_disp = 1e-04,
   sample_disp = FALSE,
   adjust_for_missingness = TRUE,
-  gen_ypred = TRUE
+  gen_ypred = TRUE,
+  te_design = NULL
 )
 }
 \arguments{
@@ -33,6 +34,10 @@ gives the baseline (cut stage-1) model.}
 
 \item{gen_ypred}{Emit the counterfactual posterior predictive in
 \verb{generated quantities}.}
+
+\item{te_design}{Optional \code{bpnmf_te_design} (see \code{\link[=build_te_design]{build_te_design()}})
+replacing the legacy treatment-effect hierarchy with a covariate
+regression; requires \code{model_treated = TRUE}.}
 }
 \value{
 A named list for \code{cmdstanr}'s \code{data} argument, plus attributes

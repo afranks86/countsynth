@@ -35,6 +35,10 @@ save_plot <- function(plot, path, width = 10, height = 6) {
 #' @param fit_gap_per_unit Also render fit/gap for every treated unit
 #'   (restricted to the `"total"` group).
 #' @param print_tables Print summary tables to the terminal.
+#' @param fit Optional `bpnmf_fit` / `bpnmf_cut_fit` the draws came from.
+#'   Required for the `"te_regression"` figures, which read the
+#'   treatment-effect design and coefficient draws rather than the draws
+#'   frame; without it that figure is skipped.
 #' @return Invisible list with `summary`, `per_unit`, `detail`,
 #'   `target_unit`, `figs_dir`, `treated_units`.
 #' @export
@@ -43,7 +47,8 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
                          ppc_draws = NULL, ppc_units = NULL,
                          ppc_exclude_units = NULL, ppc_acf_lags = NULL,
                          ppc_unit_corr_max_time = NULL,
-                         fit_gap_per_unit = FALSE, print_tables = TRUE) {
+                         fit_gap_per_unit = FALSE, print_tables = TRUE,
+                         fit = NULL) {
   selected <- figures %||% FIGURE_NAMES
   unknown <- setdiff(selected, FIGURE_NAMES)
   if (length(unknown) > 0) {
@@ -130,6 +135,21 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
       bpnmf_group_comparison_plot(draws),
       file.path(figs_dir, "group_comparison.png"),
       width = 11, height = 7
+    )
+  }
+  if ("te_regression" %in% selected && !is.null(fit) &&
+    !is.null(fit$te_design)) {
+    te_dir <- file.path(figs_dir, "te")
+    dir.create(te_dir, recursive = TRUE, showWarnings = FALSE)
+    te_figs <- te_report_figures(fit)
+    for (nm in names(te_figs)) {
+      save_plot(te_figs[[nm]], file.path(te_dir, paste0(nm, ".png")),
+        width = 10, height = 6
+      )
+    }
+    utils::write.csv(
+      bpnmf_te_coef_table(fit), file.path(te_dir, "te_coefficients.csv"),
+      row.names = FALSE
     )
   }
   if ("ppc" %in% selected) {

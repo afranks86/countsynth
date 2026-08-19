@@ -76,9 +76,31 @@ parse_yaml_model <- function(x, path = "model") {
   check_known_keys(
     x,
     c("outcome_distribution", "types", "nb_disp", "sample_disp",
-      "adjust_for_missingness", "model_treated", "inference_mode"),
+      "adjust_for_missingness", "model_treated", "inference_mode",
+      "treatment_effects"),
     path
   )
+  treatment_effects <- NULL
+  if (!is.null(x$treatment_effects)) {
+    te <- x$treatment_effects
+    tpath <- glue::glue("{path}.treatment_effects")
+    check_known_keys(
+      te,
+      c("formula", "covariates_file", "standardize", "coef_prior_scale",
+        "re_prior_scale"),
+      tpath
+    )
+    if (is.null(te$formula)) {
+      cli::cli_abort("{.field {tpath}} must define a {.field formula}.")
+    }
+    treatment_effects <- bpnmf_te_opts(
+      formula = te$formula,
+      covariates = te$covariates_file,
+      standardize = yaml_flag(te$standardize, glue::glue("{tpath}.standardize"), TRUE),
+      coef_prior_scale = unlist(te$coef_prior_scale %||% 1, use.names = FALSE),
+      re_prior_scale = unlist(te$re_prior_scale %||% 1, use.names = FALSE)
+    )
+  }
   types <- list()
   if (!is.null(x$types)) {
     types <- lapply(names(x$types), function(nm) {
@@ -107,7 +129,8 @@ parse_yaml_model <- function(x, path = "model") {
     adjust_for_missingness =
       yaml_flag(x$adjust_for_missingness, glue::glue("{path}.adjust_for_missingness"), TRUE),
     model_treated = yaml_flag(x$model_treated, glue::glue("{path}.model_treated"), TRUE),
-    inference_mode = x$inference_mode
+    inference_mode = x$inference_mode,
+    treatment_effects = treatment_effects
   )
 }
 

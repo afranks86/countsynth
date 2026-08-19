@@ -16,6 +16,9 @@
 #' @param adjust_for_missingness Integrate over censored small counts.
 #' @param gen_ypred Emit the counterfactual posterior predictive in
 #'   `generated quantities`.
+#' @param te_design Optional `bpnmf_te_design` (see [build_te_design()])
+#'   replacing the legacy treatment-effect hierarchy with a covariate
+#'   regression; requires `model_treated = TRUE`.
 #' @return A named list for `cmdstanr`'s `data` argument, plus attributes
 #'   `dims` (K, D, N) and `exposed` (the exposed-cell subscripts).
 #' @keywords internal
@@ -23,7 +26,12 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
                             outcome_distribution = "NB", nb_disp = 1e-4,
                             sample_disp = FALSE,
                             adjust_for_missingness = TRUE,
-                            gen_ypred = TRUE) {
+                            gen_ypred = TRUE, te_design = NULL) {
+  if (!is.null(te_design) && !model_treated) {
+    cli::cli_abort(
+      "te_design requires {.field model_treated} = TRUE."
+    )
+  }
   K <- length(data$groups)
   D <- length(data$units)
   N <- length(data$times)
@@ -77,6 +85,7 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
     nb_disp = nb_disp,
     gen_ypred = as.integer(gen_ypred)
   )
+  sd <- c(sd, te_stan_fields(te_design, length(exp_cell)))
   attr(sd, "dims") <- c(K = K, D = D, N = N)
   attr(sd, "exposed") <- exp_sub
   sd
@@ -89,11 +98,13 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
 #'   flat vector in canonical row-major order (length `K*D*N`).
 #' @param phi_unit Matched per-unit NB concentration for the same stage-1 draw
 #'   (`NULL` for Poisson).
-#' @param outcome_distribution,adjust_for_missingness See [stan_data_joint()].
+#' @param outcome_distribution,adjust_for_missingness,te_design See
+#'   [stan_data_joint()].
 #' @keywords internal
 stan_data_stage2 <- function(data, mu_ctrl_flat, phi_unit = NULL,
                              outcome_distribution = "NB",
-                             adjust_for_missingness = TRUE) {
+                             adjust_for_missingness = TRUE,
+                             te_design = NULL) {
   K <- length(data$groups)
   D <- length(data$units)
   N <- length(data$times)
@@ -135,6 +146,7 @@ stan_data_stage2 <- function(data, mu_ctrl_flat, phi_unit = NULL,
     adjust_missing = as.integer(adjust_for_missingness),
     phi_unit = if (is_nb) as.array(as.numeric(phi_unit)) else numeric(0)
   )
+  sd <- c(sd, te_stan_fields(te_design, length(exp_cell)))
   attr(sd, "dims") <- c(K = K, D = D, N = N)
   attr(sd, "exposed") <- exp_sub
   sd

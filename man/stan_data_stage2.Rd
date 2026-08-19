@@ -9,7 +9,8 @@ stan_data_stage2(
   mu_ctrl_flat,
   phi_unit = NULL,
   outcome_distribution = "NB",
-  adjust_for_missingness = TRUE
+  adjust_for_missingness = TRUE,
+  te_design = NULL
 )
 }
 \arguments{
@@ -21,7 +22,8 @@ flat vector in canonical row-major order (length \code{K*D*N}).}
 \item{phi_unit}{Matched per-unit NB concentration for the same stage-1 draw
 (\code{NULL} for Poisson).}
 
-\item{outcome_distribution, adjust_for_missingness}{See \code{\link[=stan_data_joint]{stan_data_joint()}}.}
+\item{outcome_distribution, adjust_for_missingness, te_design}{See
+\code{\link[=stan_data_joint]{stan_data_joint()}}.}
 }
 \description{
 Build the Stan data list for the cut stage-2 model

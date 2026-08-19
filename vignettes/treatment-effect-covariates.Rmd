@@ -1,0 +1,186 @@
+---
+title: "Treatment-effect covariates"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Treatment-effect covariates}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE, purl = FALSE)
+```
+
+By default the treatment effect on an exposed cell is a hierarchy of
+group, unit, and group-by-unit random effects plus an i.i.d. cell-level
+term — informative about *how large* the effect is, silent about *what
+moves it*. Setting a `treatment_effects` formula replaces that hierarchy
+with a linear regression surface, so the effect can vary with covariates:
+how it evolves over time since a ban took effect, or how it tracks the
+change in distance to the nearest clinic.
+
+The formula applies identically to joint inference and to cut stage 2 —
+in cut mode the design is built once and shared by every stage-2
+component, and coefficient draws are pooled with the same provenance
+columns as the rest of the cut posterior.
+
+## The model
+
+Writing $e$ for an exposed cell, the log-rate on treated cells is
+$\mu_e = \mu^{\text{ctrl}}_e + \tau_e$ with
+
+$$\tau_e \;=\; x_e^\top\beta \;+\; \sum_j z_{j,e}^\top u_{j,\ell_j(e)}
+\;+\; \sigma_{\text{cell}}\,\varepsilon_e ,$$
+
+where $x_e$ is the fixed-effect design row, each $j$ is a random-effect
+term with level $\ell_j(e)$, and $u_{j,\ell} \sim
+\mathcal{N}(0, \sigma_j^2)$ shrinks that level's coefficients toward the
+regression surface $x_e^\top\beta$. The i.i.d. cell term
+$\sigma_{\text{cell}}\varepsilon_e$ (a HalfNormal(0.1) scale) is always
+present and never written in the formula.
+
+Setting no formula leaves the original model untouched, down to the
+random-number stream: the legacy parameters keep their declaration order
+and the regression block is declared zero-size, so an existing analysis
+reproduces exactly.
+
+## Syntax
+
+`bpnmf_te_opts()` takes an lme4-style one-sided formula. Fixed-effect terms
+build the regression surface; each `(expr | g)` term lets `expr`'s
+coefficients vary by the levels of `g`, shrinking toward that surface.
+
+```{r}
+library(bpnmf)
+
+# Effect that trends with time since treatment, varying by group.
+bpnmf_te_opts(formula = ~ 1 + event_time + (1 + event_time | group))
+
+# Effect mediated by the change in distance to the nearest clinic, with a
+# group-specific intercept and slope.
+bpnmf_te_opts(
+  formula = ~ 1 + dist_change + (1 + dist_change | group),
+  covariates = "clinic_distance.csv"
+)
+
+# Subgroup surfaces that share nothing but the prior: a separate intercept
+# and time slope per group, with no pooled fixed part.
+bpnmf_te_opts(formula = ~ 0 + (1 + event_time | group))
+```
+
+These variables are always available:
+
+| Variable | Meaning |
+| --- | --- |
+| `group` | Outcome group (factor) |
+| `unit` | Panel unit (factor), levels restricted to treated units |
+| `time_idx` | 1-based period index |
+| `event_time` | Periods since the unit's first treated period, 0 at onset |
+
+Grouping factors may be `group`, `unit`, an interaction such as
+`group:unit`, or any categorical covariate.
+
+## Covariates
+
+`covariates` takes a data frame or CSV path joined onto the exposed cells
+by whichever of `unit`, `time`, `group` it contains. A unit-level mediator
+is keyed by `unit` alone; something that also moves over time is keyed by
+`unit` and `time`.
+
+Every treated unit needs a value. In the bundled fertility example the
+fourteen states with a ban are the ones that carry exposed cells:
+
+```{r}
+dist <- data.frame(
+  unit = c(
+    "Alabama", "Arkansas", "Georgia", "Idaho", "Kentucky", "Louisiana",
+    "Mississippi", "Missouri", "Oklahoma", "South Dakota", "Tennessee",
+    "Texas", "West Virginia", "Wisconsin"
+  ),
+  dist_change = c(
+    227.8, 195.4, 172.6, 310.5, 158.9, 243.7,
+    288.1, 141.2, 178.9, 264.3, 166.5,
+    210.4, 132.7, 119.8
+  )
+)
+
+cfg <- bpnmf_example_config(
+  model = bpnmf_model_opts(
+    types = list(total = bpnmf_type("total", 3)),
+    inference_mode = "cut",
+    treatment_effects = bpnmf_te_opts(
+      formula = ~ 1 + event_time + dist_change + (1 + event_time | unit),
+      covariates = dist
+    )
+  )
+)
+cfit <- bpnmf_cut_fit(bpnmf_data(cfg), config = cfg)
+```
+
+Three things are worth knowing before you build a design. Only exposed
+cells enter it, so a unit-level covariate is constant — and therefore
+collinear with the intercept — unless several units are treated; a
+rank-deficient design is refused rather than sampled. Covariates must be
+non-missing on every exposed cell they are used for. And a grouping factor
+with only one level among the exposed cells (grouping by `group` when the
+type has a single outcome group, say) warns: its coefficients are
+confounded with the matching fixed effects, and only the prior tells them
+apart.
+
+Continuous covariates are standardized by default, so a fixed-effect
+coefficient reads as the effect per standard deviation. Plots map back to
+the original scale regardless; set `standardize = FALSE` to sample on the
+raw scale.
+
+## Reading the results
+
+Every existing table and figure is unchanged — the treatment effect still
+flows through `mu_treated`, so `bpnmf_summary_table()`,
+`bpnmf_interval_plot()`, and the rest report exactly as before. The
+regression adds its own layer on top.
+
+```{r}
+# Posterior of the regression function over a covariate, with 67% / 95%
+# bands, on the covariate's original scale.
+bpnmf_te_regression_plot(cfit, predictor = "event_time")
+
+# One surface per subgroup: the fixed surface plus each level's deviation.
+bpnmf_te_regression_plot(cfit, predictor = "event_time", by = "unit")
+
+# As a percent change in the rate rather than an additive log-rate effect.
+bpnmf_te_regression_plot(cfit, predictor = "dist_change", scale = "percent")
+
+# Coefficients as a forest plot, and as a table.
+bpnmf_te_coef_plot(cfit, terms = "all")
+bpnmf_te_coef_table(cfit)
+
+# The numbers behind the curve, and the raw coefficient draws.
+bpnmf_te_regression_summary(cfit, predictor = "event_time", by = "unit")
+bpnmf_te_draws(cfit)
+```
+
+In `bpnmf_te_draws()` and `bpnmf_te_coef_table()`, a `(fixed)` row is the
+population coefficient and a random-effect row is that level's *deviation*
+from the fixed surface. `bpnmf_te_coef_plot()` shows the total per-level
+coefficient by default; pass `deviation = TRUE` for the deviations alone.
+
+Adding `"te_regression"` to `output$figures` writes the whole set under
+`figs/te/` on a `bpnmf_run()`, alongside `te_coefficients.csv`.
+
+```{r}
+cfg$output <- bpnmf_output_opts(figures = c("interval", "te_regression"))
+bpnmf_run(cfg)
+```
+
+## YAML
+
+```yaml
+model:
+  inference_mode: cut
+  treatment_effects:
+    formula: ~ 1 + event_time + dist_change + (1 + event_time | unit)
+    covariates_file: clinic_distance.csv
+    standardize: true
+    coef_prior_scale: 1.0
+    re_prior_scale: 1.0
+```

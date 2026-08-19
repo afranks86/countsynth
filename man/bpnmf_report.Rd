@@ -17,7 +17,8 @@ bpnmf_report(
   ppc_acf_lags = NULL,
   ppc_unit_corr_max_time = NULL,
   fit_gap_per_unit = FALSE,
-  print_tables = TRUE
+  print_tables = TRUE,
+  fit = NULL
 )
 }
 \arguments{
@@ -44,6 +45,11 @@ the stage-1 PPC frame).}
 (restricted to the \code{"total"} group).}
 
 \item{print_tables}{Print summary tables to the terminal.}
+
+\item{fit}{Optional \code{bpnmf_fit} / \code{bpnmf_cut_fit} the draws came from.
+Required for the \code{"te_regression"} figures, which read the
+treatment-effect design and coefficient draws rather than the draws
+frame; without it that figure is skipped.}
 }
 \value{
 Invisible list with \code{summary}, \code{per_unit}, \code{detail},

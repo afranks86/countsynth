@@ -54,7 +54,8 @@ summary.bpnmf_cut_fit <- function(object, ...) {
 #'
 #' @param x A `bpnmf_fit` or `bpnmf_cut_fit`.
 #' @param which One of `"unit_fit"`, `"unit_gap"`, `"raw_rate"`,
-#'   `"group_comparison"`, `"interval"`, `"trace"`.
+#'   `"group_comparison"`, `"interval"`, `"trace"`, `"te_regression"`, or
+#'   `"te_coef"` (the last two require a `treatment_effects` formula).
 #' @param unit Unit for the per-unit figures (auto-detected target when
 #'   `NULL`).
 #' @param group Group for the per-unit figures.
@@ -65,10 +66,18 @@ plot.bpnmf_fit <- function(x, which = "unit_fit", unit = NULL, group = NULL,
   checkmate::assert_choice(
     which,
     c("unit_fit", "unit_gap", "raw_rate", "group_comparison", "interval",
-      "trace")
+      "trace", "te_regression", "te_coef")
   )
   if (which == "trace") {
     return(bpnmf_trace_plot(x, ...))
+  }
+  # The treatment-effect figures read the design and coefficient draws off
+  # the fit, not the tidy draws frame.
+  if (which == "te_regression") {
+    return(bpnmf_te_regression_plot(x, ...))
+  }
+  if (which == "te_coef") {
+    return(bpnmf_te_coef_plot(x, ...))
   }
   draws <- bpnmf_draws(x)
   unit <- unit %||% auto_detect_target(draws)

@@ -11,7 +11,8 @@ bpnmf_model_opts(
   sample_disp = FALSE,
   adjust_for_missingness = TRUE,
   model_treated = TRUE,
-  inference_mode = NULL
+  inference_mode = NULL,
+  treatment_effects = NULL
 )
 }
 \arguments{
@@ -30,6 +31,11 @@ counts (values 1-9 suppressed in the source data).}
 \item{model_treated}{Include the treatment-effect block.}
 
 \item{inference_mode}{\code{NULL} (default joint), \code{"joint"}, or \code{"cut"}.}
+
+\item{treatment_effects}{Optional \code{\link[=bpnmf_te_opts]{bpnmf_te_opts()}} object replacing the
+default treatment-effect hierarchy with a covariate regression surface
+(applies to both joint inference and cut stage 2). \code{NULL} keeps the
+legacy \code{(1 | group) + (1 | unit) + (1 | group:unit)} model.}
 }
 \description{
 Model options: likelihood family, model types, dispersion, treatment

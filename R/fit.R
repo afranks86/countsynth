@@ -37,6 +37,14 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
   checkmate::assert_int(rank, lower = 1)
   model_treated <- model_treated %||% config$model$model_treated
 
+  # The covariate regression only exists in the treated model; the baseline
+  # (cut stage-1) fit ignores it.
+  te_design <- if (model_treated && !is.null(config$model$treatment_effects)) {
+    build_te_design(config$model$treatment_effects, data)
+  } else {
+    NULL
+  }
+
   sd <- stan_data_joint(
     data,
     rank = rank,
@@ -45,7 +53,8 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
     nb_disp = config$model$nb_disp,
     sample_disp = config$model$sample_disp,
     adjust_for_missingness = config$model$adjust_for_missingness,
-    gen_ypred = gen_ypred
+    gen_ypred = gen_ypred,
+    te_design = te_design
   )
   if (model_treated && sd$n_exposed == 0) {
     cli::cli_abort(
@@ -88,6 +97,7 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
       rank = as.integer(rank),
       type = data$type,
       model_treated = model_treated,
+      te_design = te_design,
       inference_mode = "joint"
     ),
     "bpnmf_fit"

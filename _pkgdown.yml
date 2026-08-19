@@ -16,6 +16,7 @@ reference:
   - bpnmf_convergence
   - bpnmf_output_opts
   - bpnmf_cut_opts
+  - bpnmf_te_opts
   - bpnmf_aggregation
   - bpnmf_aggregate_unit
 - title: Data
@@ -33,6 +34,7 @@ reference:
 - title: Draws and estimands
   contents:
   - bpnmf_draws
+  - bpnmf_te_draws
   - add_aggregate_units
   - compute_quantiles
   - auto_detect_target
@@ -47,6 +49,7 @@ reference:
   - bpnmf_summary_table
   - bpnmf_post_treatment_summary
   - bpnmf_expected_vs_observed
+  - bpnmf_te_coef_table
 - title: Figures
   contents:
   - theme_bpnmf
@@ -55,6 +58,9 @@ reference:
   - bpnmf_raw_rate_plot
   - bpnmf_group_comparison_plot
   - bpnmf_interval_plot
+  - bpnmf_te_regression_plot
+  - bpnmf_te_regression_summary
+  - bpnmf_te_coef_plot
   - bpnmf_ppc_plots
   - bpnmf_ppc_abs
   - bpnmf_ppc_acf

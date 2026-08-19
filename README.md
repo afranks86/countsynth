@@ -17,7 +17,8 @@ subgroup, state, and bimonth) with a 0/1 treatment indicator:
   plus unit and time fixed effects (Poisson or Negative Binomial likelihood),
 - adds a hierarchical treatment-effect block on exposed cells (staggered
   adoption supported; non-centered parameterization for the weakly-identified
-  scales),
+  scales), optionally driven by **covariates** through an lme4-style formula
+  so the effect can vary with time since treatment or a mediator,
 - optionally integrates the likelihood over **censored small counts** (values
   1–9 suppressed in the source data),
 - supports **joint** inference and two-stage **cut** (modular) inference,
@@ -200,7 +201,7 @@ mcmc:
 output:
   figures: false                 # true/all/none, or a list of figure names:
                                  # unit_fit, unit_gap, raw_rate, interval,
-                                 # group_comparison, ppc
+                                 # group_comparison, ppc, te_regression
   clean: false                   # wipe the type's output dir before writing
   save_traces: false             # also save full draws as .rds
   target_unit: Texas             # highlighted unit (default: auto-detected)
@@ -216,6 +217,14 @@ output:
   # aggregate_units:             # synthetic reporting-only units
   #   - unit: "All treated"
   #     include_treated_units: true   # or include_all_units / include_units
+
+  # Optional: covariate model for the treatment effect (see the
+  # "Treatment-effect covariates" vignette). Omit for the default
+  # group / unit / group:unit hierarchy.
+  # treatment_effects:
+  #   formula: ~ 1 + event_time + dist_change + (1 + event_time | unit)
+  #   covariates_file: clinic_distance.csv
+  #   standardize: true
 
 # Only read when model.inference_mode is "cut":
 cut:
@@ -374,6 +383,39 @@ configured much shorter than stage 1 via `cut.stage2_mcmc`. Retained draw
 counts must be equal across components so that pooling weights them equally.
 Seeds are derived from `mcmc.random_seed` unless you set `selection_seed` /
 `stage2_seed` explicitly; `cut.stage2_mcmc` may not set a seed of its own.
+
+## Treatment-effect covariates
+
+By default the treatment effect is a group / unit / group:unit hierarchy,
+which says how large the effect is but not what moves it. A
+`treatment_effects` formula replaces that hierarchy with a regression
+surface, in lme4-style syntax, shared by joint and cut inference:
+
+```r
+cfg <- bpnmf_example_config(
+  model = bpnmf_model_opts(
+    types = list(total = bpnmf_type("total", 3)),
+    treatment_effects = bpnmf_te_opts(
+      # Effect trending with time since treatment, plus a mediator, with
+      # per-unit intercepts and slopes shrunk toward the surface.
+      formula = ~ 1 + event_time + dist_change + (1 + event_time | unit),
+      covariates = dist   # data frame or CSV, joined by unit / time / group
+    )
+  )
+)
+fit <- bpnmf_fit(bpnmf_data(cfg), config = cfg)
+
+bpnmf_te_regression_plot(fit, predictor = "event_time")            # surface
+bpnmf_te_regression_plot(fit, predictor = "event_time", by = "unit")  # by level
+bpnmf_te_coef_plot(fit, terms = "all")                             # forest
+bpnmf_te_coef_table(fit)                                           # summary
+```
+
+`event_time` (periods since the unit's first treated period), `time_idx`,
+`group`, and `unit` are always available; covariates are joined onto the
+exposed cells. All existing tables and figures are unchanged. Leaving
+`treatment_effects` unset reproduces earlier results exactly, down to the
+random-number stream.
 
 ## Parity with the Python implementation
 

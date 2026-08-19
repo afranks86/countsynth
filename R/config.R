@@ -7,9 +7,12 @@
 
 # Canonical figure names output$figures may select. Must stay in sync with the
 # figure functions wired up in reports.R (the Python side derives this from
-# PLOT_REGISTRY for the same no-drift reason).
+# PLOT_REGISTRY for the same no-drift reason). "te_regression" is the one
+# exception: it needs the fit object (not just draws), so bpnmf_run() renders
+# it and bpnmf_report() ignores it.
 FIGURE_NAMES <- c(
-  "unit_fit", "unit_gap", "raw_rate", "interval", "group_comparison", "ppc"
+  "unit_fit", "unit_gap", "raw_rate", "interval", "group_comparison", "ppc",
+  "te_regression"
 )
 
 AGGREGATION_PERIODS <- c("monthly", "bimonthly", "quarterly", "yearly")
@@ -155,11 +158,16 @@ bpnmf_type <- function(groups, ranks_to_test, total_from = NULL,
 #'   counts (values 1-9 suppressed in the source data).
 #' @param model_treated Include the treatment-effect block.
 #' @param inference_mode `NULL` (default joint), `"joint"`, or `"cut"`.
+#' @param treatment_effects Optional [bpnmf_te_opts()] object replacing the
+#'   default treatment-effect hierarchy with a covariate regression surface
+#'   (applies to both joint inference and cut stage 2). `NULL` keeps the
+#'   legacy `(1 | group) + (1 | unit) + (1 | group:unit)` model.
 #' @export
 bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
                              nb_disp = 1e-4, sample_disp = FALSE,
                              adjust_for_missingness = TRUE,
-                             model_treated = TRUE, inference_mode = NULL) {
+                             model_treated = TRUE, inference_mode = NULL,
+                             treatment_effects = NULL) {
   checkmate::assert_choice(outcome_distribution, c("NB", "Poisson"))
   checkmate::assert_list(types, types = "bpnmf_type")
   if (length(types) > 0) {
@@ -181,12 +189,20 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
       "{.field model.sample_disp}=TRUE requires {.field outcome_distribution}='NB'."
     )
   }
+  checkmate::assert_class(treatment_effects, "bpnmf_te_opts", null.ok = TRUE)
+  if (!is.null(treatment_effects) && !is.null(treatment_effects$formula) &&
+    !model_treated) {
+    cli::cli_abort(
+      "{.field model.treatment_effects} requires {.field model_treated}=TRUE."
+    )
+  }
   new_bpnmf_class(
     list(
       outcome_distribution = outcome_distribution, types = types,
       nb_disp = nb_disp, sample_disp = sample_disp,
       adjust_for_missingness = adjust_for_missingness,
-      model_treated = model_treated, inference_mode = inference_mode
+      model_treated = model_treated, inference_mode = inference_mode,
+      treatment_effects = treatment_effects
     ),
     "bpnmf_model_opts"
   )

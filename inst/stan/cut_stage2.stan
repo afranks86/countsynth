@@ -27,6 +27,24 @@ data {
   int<lower=0, upper=1> is_nb;
   int<lower=0, upper=1> adjust_missing;
   vector<lower=0>[is_nb == 1 ? D : 0] phi_unit; // matched stage-1 concentration
+
+  // Optional treatment-effect regression (te_reg == 1): the legacy
+  // group/unit/group:unit hierarchy is replaced by a linear fixed-effect
+  // surface X * te_beta plus J ragged random-effect terms whose per-level
+  // coefficients shrink toward that surface. The iid exposed-cell effect
+  // (treatment_kt_z) is kept in both parameterizations.
+  int<lower=0, upper=1> te_reg;
+  int<lower=0> P;                        // fixed-effect design columns
+  matrix[n_exposed, P] X;
+  int<lower=0> J;                        // random-effect terms
+  int<lower=0> Qtot;                     // total term predictors, sum(Q)
+  int<lower=0> Utot;                     // total coefficients, sum(L .* Q)
+  array[J] int<lower=1> L;               // levels per term
+  array[J] int<lower=1> Q;               // predictors per term
+  matrix[n_exposed, Qtot] Z;             // column-concatenated term designs
+  array[J, n_exposed] int<lower=1> re_level; // level of each exposed cell
+  vector<lower=0>[P] te_beta_prior_scale;
+  vector<lower=0>[Qtot] te_re_prior_scale;
 }
 transformed data {
   vector[9] sup;                         // censored-count support 1..9
@@ -44,31 +62,63 @@ transformed data {
   }
 }
 parameters {
+  // Declaration order matches the pre-regression model, and the blocks below
+  // are zero-size in the parameterization they do not belong to, so the
+  // legacy unconstrained vector is unchanged -- same seed, same draws.
   real<lower=0> treatment_it_scale;      // HalfNormal(0.1)
-  real<lower=0> treatment_state_scale;   // HalfNormal(1)
-  real<lower=0> treatment_category_scale; // HalfNormal(1)
-  real<lower=0> state_category_scale;    // HalfNormal(1)
+  array[te_reg == 1 ? 0 : 1] real<lower=0> treatment_state_scale; // HalfNormal(1)
+  array[te_reg == 1 ? 0 : 1] real<lower=0> treatment_category_scale; // HalfNormal(1)
+  array[te_reg == 1 ? 0 : 1] real<lower=0> state_category_scale; // HalfNormal(1)
   vector[n_exposed] treatment_kt_z;
-  vector[D] state_treatment_effect_z;
-  matrix[K, D] state_category_te_z;
-  vector[K] category_treatment_effect;   // centered
+  vector[te_reg == 1 ? 0 : D] state_treatment_effect_z;
+  matrix[te_reg == 1 ? 0 : K, te_reg == 1 ? 0 : D] state_category_te_z;
+  vector[te_reg == 1 ? 0 : K] category_treatment_effect; // centered
+  // Regression surface; all sizes are zero when te_reg == 0.
+  vector[P] te_beta;
+  vector<lower=0>[Qtot] te_re_scale;     // HalfNormal(te_re_prior_scale)
+  vector[Utot] te_re_z;                  // non-centered level coefficients
 }
 transformed parameters {
-  vector[n_exposed] te = treatment_kt_z * treatment_it_scale
-                         + state_treatment_effect_z[exp_d] * treatment_state_scale
-                         + category_treatment_effect[exp_k]
-                         + to_vector(state_category_te_z)[exp_kd] * state_category_scale;
-  vector[n_exposed] mu_exposed = mu_ctrl[exp_cell] + te;
+  vector[n_exposed] te = treatment_kt_z * treatment_it_scale;
+  vector[n_exposed] mu_exposed;
+  if (te_reg == 0) {
+    te += state_treatment_effect_z[exp_d] * treatment_state_scale[1]
+          + category_treatment_effect[exp_k]
+          + to_vector(state_category_te_z)[exp_kd] * state_category_scale[1];
+  } else {
+    if (P > 0) {
+      te += X * te_beta;
+    }
+    // Ragged gather: term j predictor q holds L[j] level coefficients laid
+    // out term-major then predictor-major in te_re_z.
+    int uo = 0;
+    int qo = 0;
+    for (j in 1 : J) {
+      for (q in 1 : Q[j]) {
+        te += col(Z, qo + q)
+              .* (segment(te_re_z, uo + 1, L[j]) * te_re_scale[qo + q])[re_level[j]];
+        uo += L[j];
+      }
+      qo += Q[j];
+    }
+  }
+  mu_exposed = mu_ctrl[exp_cell] + te;
 }
 model {
   treatment_it_scale ~ normal(0, 0.1);
-  treatment_state_scale ~ normal(0, 1);
-  treatment_category_scale ~ normal(0, 1);
-  state_category_scale ~ normal(0, 1);
   treatment_kt_z ~ std_normal();
-  state_treatment_effect_z ~ std_normal();
-  to_vector(state_category_te_z) ~ std_normal();
-  category_treatment_effect ~ normal(0, treatment_category_scale);
+  if (te_reg == 0) {
+    treatment_state_scale[1] ~ normal(0, 1);
+    treatment_category_scale[1] ~ normal(0, 1);
+    state_category_scale[1] ~ normal(0, 1);
+    state_treatment_effect_z ~ std_normal();
+    to_vector(state_category_te_z) ~ std_normal();
+    category_treatment_effect ~ normal(0, treatment_category_scale[1]);
+  } else {
+    te_beta ~ normal(0, te_beta_prior_scale);
+    te_re_scale ~ normal(0, te_re_prior_scale);
+    te_re_z ~ std_normal();
+  }
 
   if (is_nb == 1) {
     y ~ neg_binomial_2_log(mu_exposed[obs_e], phi_unit[exp_d[obs_e]]);

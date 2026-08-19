@@ -191,6 +191,14 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
   exposed_cell <- as.integer(stage1$stan_data$exp_cell)
   cell_unit <- as.integer(stage1$stan_data$cell_unit)
 
+  # Optional treatment-effect regression: one design shared by every stage-2
+  # component (it depends only on the data, not on the stage-1 draw).
+  te_design <- if (!is.null(config$model$treatment_effects)) {
+    build_te_design(config$model$treatment_effects, data)
+  } else {
+    NULL
+  }
+
   phi_for_ref <- function(draw) {
     if (!is_nb) {
       return(NULL)
@@ -206,7 +214,8 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
       mu_ctrl_flat = mu1[ref$draw, ],
       phi_unit = phi_unit,
       outcome_distribution = config$model$outcome_distribution,
-      adjust_for_missingness = config$model$adjust_for_missingness
+      adjust_for_missingness = config$model$adjust_for_missingness,
+      te_design = te_design
     )
     fit2 <- run_stage2_component(
       model2, sd2, settings$stage2_mcmc,
@@ -231,6 +240,17 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
     iter_ids <- rep(seq_len(quota), times = ci2$n_chains)
     n_out <- nrow(te_out)
 
+    # Regression coefficients ride along on the same thinned draw indices, so
+    # a coefficient row and its te row come from the same stage-2 draw.
+    te_coefs <- NULL
+    if (!is.null(te_design)) {
+      m <- te_coef_matrices(fit2, te_design)
+      sub <- function(x) if (is.null(x)) NULL else x[keep_idx, , drop = FALSE]
+      te_coefs <- te_coef_tidy(
+        te_design, sub(m$beta), sub(m$scale), sub(m$z), chain_ids, iter_ids
+      )
+    }
+
     # Fresh untreated predictive from the component's frozen baseline.
     withr::with_seed(predictive_seed(settings$stage2_seed, ref$component), {
       mu_grid <- matrix(mu1[ref$draw, ], nrow = n_out, ncol = ncol(mu1), byrow = TRUE)
@@ -239,7 +259,7 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
       list(
         ref = ref, diag = diag, te_out = te_out, ypred_out = ypred_out,
         mu_grid = mu_grid, chain_ids = chain_ids, iter_ids = iter_ids,
-        n_out = n_out,
+        n_out = n_out, te_coefs = te_coefs,
         retained_draws = ci2$n_chains * ci2$per_chain
       )
     })
@@ -277,6 +297,7 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
   }
   draw_offset <- 0L
   component_frames <- vector("list", n_comp)
+  component_te_frames <- vector("list", n_comp)
   component_records <- vector("list", n_comp)
   for (i in seq_len(n_comp)) {
     r <- results[[i]]
@@ -290,6 +311,15 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
     df$stage1_chain <- r$ref$chain
     df$stage1_iteration <- r$ref$iteration
     component_frames[[i]] <- df
+    if (!is.null(r$te_coefs)) {
+      tc <- r$te_coefs
+      tc$.draw <- tc$.draw + draw_offset
+      tc$cut_component <- r$ref$component
+      tc$stage1_draw <- r$ref$draw
+      tc$stage1_chain <- r$ref$chain
+      tc$stage1_iteration <- r$ref$iteration
+      component_te_frames[[i]] <- tc
+    }
     component_records[[i]] <- c(
       list(
         component = r$ref$component, stage1_draw = r$ref$draw,
@@ -306,6 +336,12 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
   attr(draws, "times") <- data$times
   class(draws) <- c("bpnmf_draws", class(draws))
 
+  te_draws <- NULL
+  if (!is.null(te_design)) {
+    te_draws <- dplyr::bind_rows(component_te_frames)
+    class(te_draws) <- c("bpnmf_te_draws", class(te_draws))
+  }
+
   all_converged <- all(vapply(component_records, function(r) isTRUE(r$converged), logical(1)))
   manifest <- list(
     inference_mode = "cut",
@@ -321,6 +357,8 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
   new_bpnmf_class(
     list(
       draws = draws,
+      te_draws = te_draws,
+      te_design = te_design,
       stage1 = stage1,
       stage1_ppc = stage1_ppc,
       component_records = component_records,

@@ -45,9 +45,30 @@ data {
   int<lower=0, upper=1> adjust_missing;
   real<lower=0> nb_disp;                 // fixed dispersion (phi = 1/nb_disp)
   int<lower=0, upper=1> gen_ypred;       // emit counterfactual predictive
+
+  // Optional treatment-effect regression (te_reg == 1, requires
+  // model_treated == 1): the legacy group/unit/group:unit hierarchy is
+  // replaced by a linear fixed-effect surface X * te_beta plus J ragged
+  // random-effect terms whose per-level coefficients shrink toward that
+  // surface. The iid exposed-cell effect (treatment_kt_z) is kept in both
+  // parameterizations. All sizes below are zero when te_reg == 0.
+  int<lower=0, upper=1> te_reg;
+  int<lower=0> P;                        // fixed-effect design columns
+  matrix[n_exposed, P] X;
+  int<lower=0> J;                        // random-effect terms
+  int<lower=0> Qtot;                     // total term predictors, sum(Q)
+  int<lower=0> Utot;                     // total coefficients, sum(L .* Q)
+  array[J] int<lower=1> L;               // levels per term
+  array[J] int<lower=1> Q;               // predictors per term
+  matrix[n_exposed, Qtot] Z;             // column-concatenated term designs
+  array[J, n_exposed] int<lower=1> re_level; // level of each exposed cell
+  vector<lower=0>[P] te_beta_prior_scale;
+  vector<lower=0>[Qtot] te_re_prior_scale;
 }
 transformed data {
   int DN = D * N;
+  // Legacy treatment hierarchy is active only without the regression design.
+  int te_legacy = (model_treated == 1 && te_reg == 0) ? 1 : 0;
   vector[9] sup;                         // censored-count support 1..9
   vector[9] lgamma_sup1;
   for (v in 1 : 9) {
@@ -70,18 +91,26 @@ parameters {
   matrix<lower=0>[N, K] time_fe;             // Gamma(1, 1), logged in use
   array[K, D] simplex[R] unit_weight;        // Dirichlet(1,...,1) per (k, d)
 
-  // Treatment block; zero-size when model_treated == 0.
+  // Treatment block; zero-size when model_treated == 0. Declaration order
+  // matches the pre-regression model, and the legacy hierarchy is zero-size
+  // exactly when the regression replaces it, so the legacy unconstrained
+  // vector is unchanged -- same seed, same draws.
   array[model_treated] real<lower=0> treatment_it_scale;      // HalfNormal(0.1)
-  array[model_treated] real<lower=0> treatment_state_scale;   // HalfNormal(1)
-  array[model_treated] real<lower=0> treatment_category_scale; // HalfNormal(1)
-  array[model_treated] real<lower=0> state_category_scale;    // HalfNormal(1)
+  array[te_legacy] real<lower=0> treatment_state_scale;       // HalfNormal(1)
+  array[te_legacy] real<lower=0> treatment_category_scale;    // HalfNormal(1)
+  array[te_legacy] real<lower=0> state_category_scale;        // HalfNormal(1)
   vector[model_treated == 1 ? n_exposed : 0] treatment_kt_z;
-  vector[model_treated == 1 ? D : 0] state_treatment_effect_z;
-  matrix[model_treated == 1 ? K : 0, model_treated == 1 ? D : 0] state_category_te_z;
-  vector[model_treated == 1 ? K : 0] category_treatment_effect; // centered
+  vector[te_legacy == 1 ? D : 0] state_treatment_effect_z;
+  matrix[te_legacy == 1 ? K : 0, te_legacy == 1 ? D : 0] state_category_te_z;
+  vector[te_legacy == 1 ? K : 0] category_treatment_effect;   // centered
 
   // Per-unit dispersion; Uniform(0,1) via constraint + factor prior below.
   vector<lower=0, upper=1>[sample_disp == 1 ? D : 0] disp;
+
+  // Regression surface; all sizes are zero when te_reg == 0.
+  vector[P] te_beta;
+  vector<lower=0>[Qtot] te_re_scale;     // HalfNormal(te_re_prior_scale)
+  vector[Utot] te_re_z;                  // non-centered level coefficients
 }
 transformed parameters {
   vector[KDN] mu_ctrl;                   // untreated log-count surface
@@ -109,10 +138,28 @@ transformed parameters {
   }
 
   if (model_treated == 1) {
-    te = treatment_kt_z * treatment_it_scale[1]
-         + state_treatment_effect_z[exp_d] * treatment_state_scale[1]
-         + category_treatment_effect[exp_k]
-         + to_vector(state_category_te_z)[exp_kd] * state_category_scale[1];
+    te = treatment_kt_z * treatment_it_scale[1];
+    if (te_reg == 0) {
+      te += state_treatment_effect_z[exp_d] * treatment_state_scale[1]
+            + category_treatment_effect[exp_k]
+            + to_vector(state_category_te_z)[exp_kd] * state_category_scale[1];
+    } else {
+      if (P > 0) {
+        te += X * te_beta;
+      }
+      // Ragged gather: term j predictor q holds L[j] level coefficients laid
+      // out term-major then predictor-major in te_re_z.
+      int uo = 0;
+      int qo = 0;
+      for (j in 1 : J) {
+        for (q in 1 : Q[j]) {
+          te += col(Z, qo + q)
+                .* (segment(te_re_z, uo + 1, L[j]) * te_re_scale[qo + q])[re_level[j]];
+          uo += L[j];
+        }
+        qo += Q[j];
+      }
+    }
   }
 
   if (is_nb == 1) {
@@ -141,13 +188,19 @@ model {
   // Treatment priors (joint.py:164-207).
   if (model_treated == 1) {
     treatment_it_scale[1] ~ normal(0, 0.1);
-    treatment_state_scale[1] ~ normal(0, 1);
-    treatment_category_scale[1] ~ normal(0, 1);
-    state_category_scale[1] ~ normal(0, 1);
     treatment_kt_z ~ std_normal();
-    state_treatment_effect_z ~ std_normal();
-    to_vector(state_category_te_z) ~ std_normal();
-    category_treatment_effect ~ normal(0, treatment_category_scale[1]);
+    if (te_reg == 0) {
+      treatment_state_scale[1] ~ normal(0, 1);
+      treatment_category_scale[1] ~ normal(0, 1);
+      state_category_scale[1] ~ normal(0, 1);
+      state_treatment_effect_z ~ std_normal();
+      to_vector(state_category_te_z) ~ std_normal();
+      category_treatment_effect ~ normal(0, treatment_category_scale[1]);
+    } else {
+      te_beta ~ normal(0, te_beta_prior_scale);
+      te_re_scale ~ normal(0, te_re_prior_scale);
+      te_re_z ~ std_normal();
+    }
   }
 
   // Dispersion factor prior (joint.py:224-232): disp ~ Uniform(0,1) via the
