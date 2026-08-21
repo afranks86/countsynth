@@ -23,6 +23,6 @@ Port of \code{tables.make_summary_table}. Person-year-weighted rates
 (\code{denominator * years} summed over post-treatment periods), rate
 difference and percent change with equal-tailed 95\% intervals, and a
 two-sided posterior p-value (\code{*} marks p < 0.05 on the group label). A
-dagger (\verb{†}) marks a group whose post-treatment window includes any
-cell imputed by \code{\link[=add_aggregate_units]{add_aggregate_units()}} (see the \code{Imputed} column).
+dagger marks a group whose post-treatment window includes any cell
+imputed by \code{\link[=add_aggregate_units]{add_aggregate_units()}} (see the \code{Imputed} column).
 }

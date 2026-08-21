@@ -67,8 +67,8 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 #' (`denominator * years` summed over post-treatment periods), rate
 #' difference and percent change with equal-tailed 95% intervals, and a
 #' two-sided posterior p-value (`*` marks p < 0.05 on the group label). A
-#' dagger (`†`) marks a group whose post-treatment window includes any
-#' cell imputed by [add_aggregate_units()] (see the `Imputed` column).
+#' dagger marks a group whose post-treatment window includes any cell
+#' imputed by [add_aggregate_units()] (see the `Imputed` column).
 #'
 #' @param draws A `bpnmf_draws` frame.
 #' @param target_unit Unit to summarize.
@@ -129,7 +129,7 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
     imputed <- !is.null(imputed_by_group) &&
       isTRUE(imputed_by_group$imputed[imputed_by_group$group == grp])
     tibble::tibble(
-      Group = paste0(grp, sig, if (imputed) " †" else ""),
+      Group = paste0(grp, sig, if (imputed) " \u2020" else ""),
       Imputed = imputed,
       `Person-Years` = as.integer(mean(gd$denom_val)),
       Observed = as.integer(outcome_mean),
