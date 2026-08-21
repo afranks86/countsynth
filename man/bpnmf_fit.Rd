@@ -11,6 +11,7 @@ bpnmf_fit(
   model_treated = NULL,
   gen_ypred = TRUE,
   init = NULL,
+  show_exceptions = FALSE,
   ...
 )
 }
@@ -30,6 +31,15 @@ from it).}
 
 \item{init}{Optional cmdstanr \code{init} argument passthrough (escape hatch for
 difficult initializations).}
+
+\item{show_exceptions}{Print the sampler's informational exception
+messages (default \code{FALSE}). During early warmup the positivity
+constraints (e.g. on \code{time_fac}) can overflow on a proposed leapfrog
+step; Stan rejects the proposal, prints an informational note, and
+adapts -- the same rejection NumPyro performs silently. Sporadic
+occurrences are harmless, so the notes are suppressed by default; the
+convergence gate (R-hat / ESS / divergences) is the real health signal.
+Set to \code{TRUE} to see them, or read them later via \code{fit$fit$output()}.}
 
 \item{...}{Additional arguments passed to \code{CmdStanModel$sample()}.}
 }
