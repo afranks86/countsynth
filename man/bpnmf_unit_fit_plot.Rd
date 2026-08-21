@@ -19,5 +19,7 @@ A ggplot object.
 \description{
 Observed counts as points, posterior-predictive mean as a line, with the
 equal-tailed 95\% interval ribbon and a dashed vertical line at the unit's
-first treated period.
+first treated period. Cells where a source unit's suppressed count was
+filled in by \code{\link[=add_aggregate_units]{add_aggregate_units()}} (e.g. a synthetic "all treated"
+unit) are ringed in orange.
 }

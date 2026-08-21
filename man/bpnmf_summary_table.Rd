@@ -15,11 +15,14 @@ bpnmf_summary_table(draws, target_unit = NULL, rate_normalizer = 1000)
 }
 \value{
 A tibble with pre-formatted CI columns (parity with the Python
-CSV), or an empty tibble when the unit has no post-treatment rows.
+CSV) plus a logical \code{Imputed} column, or an empty tibble when the unit
+has no post-treatment rows.
 }
 \description{
 Port of \code{tables.make_summary_table}. Person-year-weighted rates
 (\code{denominator * years} summed over post-treatment periods), rate
 difference and percent change with equal-tailed 95\% intervals, and a
-two-sided posterior p-value (\code{*} marks p < 0.05 on the group label).
+two-sided posterior p-value (\code{*} marks p < 0.05 on the group label). A
+dagger (\verb{†}) marks a group whose post-treatment window includes any
+cell imputed by \code{\link[=add_aggregate_units]{add_aggregate_units()}} (see the \code{Imputed} column).
 }

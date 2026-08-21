@@ -10,11 +10,14 @@ compute_quantiles(draws)
 \item{draws}{A \code{bpnmf_draws} frame.}
 }
 \value{
-A tibble keyed by unit, time, group, outcome, treatment.
+A tibble keyed by unit, time, group, outcome, treatment, with an
+\code{outcome_imputed} column (\code{FALSE} when \code{draws} doesn't have one).
 }
 \description{
 Port of \code{tables._compute_quantiles}: mean / median / equal-tailed 95\%
 interval of \code{ypred}. Rows whose grouping keys contain NA (e.g. a missing
 observed outcome) are dropped, matching pandas' groupby behavior in the
-Python implementation.
+Python implementation. \code{outcome_imputed}, when present on \code{draws} (set by
+\code{\link[=add_aggregate_units]{add_aggregate_units()}} for cells where a source unit's suppressed count
+was filled in), is carried through so plots can mark those points.
 }

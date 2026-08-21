@@ -15,5 +15,6 @@ upstream R \code{make_fertility_table} / JAMA supplement:
 \code{expected = sum(exp(mu))} (counterfactual), \code{treated = sum(exp(mu_treated))},
 \code{excess = treated - expected}, \code{excess_pct = 100 * (treated/expected - 1)},
 each with the draw-level equal-tailed 95\% interval. \code{observed} is retained
-for transparency only.
+for transparency only. \code{observed_imputed} flags a unit-group whose
+post-treatment window includes a cell imputed by \code{\link[=add_aggregate_units]{add_aggregate_units()}}.
 }

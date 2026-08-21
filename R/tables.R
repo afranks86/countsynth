@@ -8,17 +8,21 @@
 #' Port of `tables._compute_quantiles`: mean / median / equal-tailed 95%
 #' interval of `ypred`. Rows whose grouping keys contain NA (e.g. a missing
 #' observed outcome) are dropped, matching pandas' groupby behavior in the
-#' Python implementation.
+#' Python implementation. `outcome_imputed`, when present on `draws` (set by
+#' [add_aggregate_units()] for cells where a source unit's suppressed count
+#' was filled in), is carried through so plots can mark those points.
 #'
 #' @param draws A `bpnmf_draws` frame.
-#' @return A tibble keyed by unit, time, group, outcome, treatment.
+#' @return A tibble keyed by unit, time, group, outcome, treatment, with an
+#'   `outcome_imputed` column (`FALSE` when `draws` doesn't have one).
 #' @export
 compute_quantiles <- function(draws) {
-  draws |>
+  has_imputed <- "outcome_imputed" %in% names(draws)
+  group_vars <- c("unit", "time", "group", "outcome", "treatment")
+  if (has_imputed) group_vars <- c(group_vars, "outcome_imputed")
+  out <- draws |>
     dplyr::filter(!is.na(.data$outcome), !is.na(.data$treatment)) |>
-    dplyr::group_by(
-      .data$unit, .data$time, .data$group, .data$outcome, .data$treatment
-    ) |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(group_vars))) |>
     dplyr::summarise(
       ypred_mean = mean(.data$ypred),
       ypred_lower = stats::quantile(.data$ypred, 0.025, names = FALSE),
@@ -26,6 +30,8 @@ compute_quantiles <- function(draws) {
       ypred_median = stats::median(.data$ypred),
       .groups = "drop"
     )
+  if (!has_imputed) out$outcome_imputed <- FALSE
+  out
 }
 
 #' Pick the unit with the most post-treatment observations
@@ -60,13 +66,16 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 #' Port of `tables.make_summary_table`. Person-year-weighted rates
 #' (`denominator * years` summed over post-treatment periods), rate
 #' difference and percent change with equal-tailed 95% intervals, and a
-#' two-sided posterior p-value (`*` marks p < 0.05 on the group label).
+#' two-sided posterior p-value (`*` marks p < 0.05 on the group label). A
+#' dagger (`†`) marks a group whose post-treatment window includes any
+#' cell imputed by [add_aggregate_units()] (see the `Imputed` column).
 #'
 #' @param draws A `bpnmf_draws` frame.
 #' @param target_unit Unit to summarize.
 #' @param rate_normalizer Rates are per this many person-years (default 1000).
 #' @return A tibble with pre-formatted CI columns (parity with the Python
-#'   CSV), or an empty tibble when the unit has no post-treatment rows.
+#'   CSV) plus a logical `Imputed` column, or an empty tibble when the unit
+#'   has no post-treatment rows.
 #' @export
 bpnmf_summary_table <- function(draws, target_unit = NULL,
                                 rate_normalizer = 1000) {
@@ -80,6 +89,7 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
     return(tibble::tibble())
   }
   df$years <- years_per_row(df)
+  has_imputed <- "outcome_imputed" %in% names(df)
 
   draw_stats <- df |>
     dplyr::group_by(.data$group, .data$.draw) |>
@@ -98,6 +108,15 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
       outcome_diff = .data$treated - .data$untreated
     )
 
+  imputed_by_group <- if (has_imputed) {
+    df |>
+      dplyr::distinct(.data$time, .data$group, .keep_all = TRUE) |>
+      dplyr::group_by(.data$group) |>
+      dplyr::summarise(imputed = any(.data$outcome_imputed), .groups = "drop")
+  } else {
+    NULL
+  }
+
   q <- function(x, p) stats::quantile(x, p, names = FALSE)
   rows <- lapply(unique(draw_stats$group), function(grp) {
     gd <- draw_stats[draw_stats$group == grp, ]
@@ -107,8 +126,11 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
     pct <- 100 * (gd$treated_rate / gd$untreated_rate - 1)
     pval <- 2 * min(mean(gd$untreated > gd$treated), mean(gd$untreated < gd$treated))
     sig <- if (pval < 0.05) "*" else ""
+    imputed <- !is.null(imputed_by_group) &&
+      isTRUE(imputed_by_group$imputed[imputed_by_group$group == grp])
     tibble::tibble(
-      Group = paste0(grp, sig),
+      Group = paste0(grp, sig, if (imputed) " †" else ""),
+      Imputed = imputed,
       `Person-Years` = as.integer(mean(gd$denom_val)),
       Observed = as.integer(outcome_mean),
       Expected = as.integer(outcome_mean - mean(diff)),
@@ -135,14 +157,15 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
 #' `expected = sum(exp(mu))` (counterfactual), `treated = sum(exp(mu_treated))`,
 #' `excess = treated - expected`, `excess_pct = 100 * (treated/expected - 1)`,
 #' each with the draw-level equal-tailed 95% interval. `observed` is retained
-#' for transparency only.
+#' for transparency only. `observed_imputed` flags a unit-group whose
+#' post-treatment window includes a cell imputed by [add_aggregate_units()].
 #'
 #' @param draws A `bpnmf_draws` frame.
 #' @export
 bpnmf_post_treatment_summary <- function(draws) {
   post <- draws[!is.na(draws$treatment) & draws$treatment == 1, ]
   cols <- c(
-    "unit", "group", "n_periods", "observed",
+    "unit", "group", "n_periods", "observed", "observed_imputed",
     "expected_mean", "expected_lower_95", "expected_upper_95",
     "excess_mean", "excess_lower_95", "excess_upper_95",
     "excess_pct_mean", "excess_pct_lower_95", "excess_pct_upper_95"
@@ -153,6 +176,7 @@ bpnmf_post_treatment_summary <- function(draws) {
     )
     return(empty)
   }
+  has_imputed <- "outcome_imputed" %in% names(post)
 
   draw_sums <- post |>
     dplyr::group_by(.data$unit, .data$group, .data$.draw) |>
@@ -172,6 +196,7 @@ bpnmf_post_treatment_summary <- function(draws) {
     dplyr::summarise(
       n_periods = length(unique(.data$time)),
       observed = sum(.data$outcome),
+      observed_imputed = if (has_imputed) any(.data$outcome_imputed) else FALSE,
       .groups = "drop"
     )
 
@@ -201,7 +226,8 @@ bpnmf_post_treatment_summary <- function(draws) {
 #'
 #' Port of the `expected_vs_observed.csv` construction in `reports.py`:
 #' renamed posterior-predictive quantiles plus `gap = observed -
-#' expected_mean` and `gap_pct`.
+#' expected_mean` and `gap_pct`. `observed_imputed` flags a cell where a
+#' source unit's suppressed count was filled in by [add_aggregate_units()].
 #'
 #' @param draws A `bpnmf_draws` frame.
 #' @param target_unit Unit flagged in the `treated_unit` column
@@ -212,6 +238,7 @@ bpnmf_expected_vs_observed <- function(draws, target_unit = NULL) {
   detail <- compute_quantiles(draws) |>
     dplyr::rename(
       observed = "outcome",
+      observed_imputed = "outcome_imputed",
       expected_mean = "ypred_mean",
       expected_median = "ypred_median",
       expected_lower_95 = "ypred_lower",
@@ -224,6 +251,7 @@ bpnmf_expected_vs_observed <- function(draws, target_unit = NULL) {
     ) |>
     dplyr::select(
       "unit", "time", "group", "treatment", "treated_unit", "observed",
+      "observed_imputed",
       "expected_mean", "expected_median", "expected_lower_95",
       "expected_upper_95", "gap", "gap_pct"
     ) |>

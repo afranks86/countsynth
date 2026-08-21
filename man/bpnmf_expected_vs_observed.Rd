@@ -14,5 +14,6 @@ bpnmf_expected_vs_observed(draws, target_unit = NULL)
 }
 \description{
 Port of the \code{expected_vs_observed.csv} construction in \code{reports.py}:
-renamed posterior-predictive quantiles plus \code{gap = observed - expected_mean} and \code{gap_pct}.
+renamed posterior-predictive quantiles plus \code{gap = observed - expected_mean} and \code{gap_pct}. \code{observed_imputed} flags a cell where a
+source unit's suppressed count was filled in by \code{\link[=add_aggregate_units]{add_aggregate_units()}}.
 }
