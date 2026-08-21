@@ -14,6 +14,21 @@ save_plot <- function(plot, path, width = 10, height = 6) {
   )
 }
 
+# PPC plots facet by (unit, group) or, for unit_corr, by group alone (see
+# ppc_histogram()'s ncol logic in plot-ppc.R). A fixed canvas size squashes
+# every row once unit/group counts grow past what fits at that size, so scale
+# the canvas to the facet grid instead.
+ppc_plot_dims <- function(n_facets, ncol,
+                          per_facet_width = 3.6, per_facet_height = 1.9,
+                          min_width = 9, min_height = 5) {
+  n_facets <- max(n_facets, 1L)
+  facet_nrow <- ceiling(n_facets / ncol)
+  list(
+    width = max(min_width, ncol * per_facet_width),
+    height = max(min_height, facet_nrow * per_facet_height)
+  )
+}
+
 #' Generate figures and tables from posterior draws
 #'
 #' Port of `reports.generate_reports`. Per-unit figures are nested under
@@ -147,8 +162,13 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
       ppc_exclude_units = ppc_exclude_units
     )
     for (nm in names(ppc$plots)) {
-      save_plot(ppc$plots[[nm]], file.path(ppc_dir, paste0(nm, ".png")),
-        width = 11, height = 8
+      is_unit_corr <- identical(nm, "ppc_unit_corr")
+      check_type <- if (identical(nm, "ppc_abs_residual")) "abs" else sub("^ppc_", "", nm)
+      n_facets <- sum(ppc$pvals$check_type == check_type)
+      dims <- ppc_plot_dims(n_facets, ncol = if (is_unit_corr) 2L else 3L)
+      save_plot(
+        ppc$plots[[nm]], file.path(ppc_dir, paste0(nm, ".png")),
+        width = dims$width, height = dims$height
       )
     }
     utils::write.csv(
