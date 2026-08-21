@@ -2,7 +2,7 @@
 # under <output_dir>/figs/ with the same filenames the Python package writes
 # (fit_<unit>.png, gap_<unit>.png, raw_rate.png, interval.png,
 # group_comparison.png, ppc/ppc_*.png + ppc_pvalues.csv, summary_table.csv,
-# summary_table_<unit>.csv, expected_vs_observed.csv,
+# summary_table_by_unit.csv, expected_vs_observed.csv,
 # post_treatment_summary.csv). Tables ALWAYS write; only figures are gated by
 # the `figures` selection.
 
@@ -163,13 +163,17 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     summary_tbl, file.path(figs_dir, "summary_table.csv"),
     row.names = FALSE
   )
-  for (tu in treated_units) {
-    utils::write.csv(
-      bpnmf_summary_table(reporting, tu),
-      file.path(figs_dir, sprintf("summary_table_%s.csv", unit_slug(tu))),
-      row.names = FALSE
-    )
-  }
+  by_unit_tbl <- dplyr::bind_rows(lapply(treated_units, function(tu) {
+    tbl <- bpnmf_summary_table(reporting, tu)
+    if (nrow(tbl) == 0) {
+      return(tbl)
+    }
+    tibble::add_column(tbl, Unit = tu, .before = 1)
+  }))
+  utils::write.csv(
+    by_unit_tbl, file.path(figs_dir, "summary_table_by_unit.csv"),
+    row.names = FALSE
+  )
   detail <- bpnmf_expected_vs_observed(reporting, target_unit)
   utils::write.csv(
     detail, file.path(figs_dir, "expected_vs_observed.csv"),
