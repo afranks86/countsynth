@@ -15,7 +15,7 @@ bpnmf_config(
   date_format = "auto",
   start_date = NULL,
   end_date = NULL,
-  aggregation = bpnmf_aggregation(),
+  time_aggregation = bpnmf_time_aggregation(),
   allow_unbalanced_panel = FALSE,
   outcome = NULL
 )
@@ -40,7 +40,7 @@ bpnmf_config(
 \item{start_date, end_date}{Optional date filter; \code{start_date} inclusive,
 \code{end_date} \strong{exclusive}.}
 
-\item{aggregation}{A \code{\link[=bpnmf_aggregation]{bpnmf_aggregation()}} object.}
+\item{time_aggregation}{A \code{\link[=bpnmf_time_aggregation]{bpnmf_time_aggregation()}} object.}
 
 \item{allow_unbalanced_panel}{Treat structurally absent (unit, time) cells
 as missing instead of erroring.}

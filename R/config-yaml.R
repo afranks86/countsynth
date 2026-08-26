@@ -297,18 +297,36 @@ read_bpnmf_config <- function(path) {
   check_known_keys(
     d,
     c("input_file", "output_dir", "schema", "date_format", "start_date",
-      "end_date", "aggregation", "allow_unbalanced_panel", "outcome"),
+      "end_date", "time_aggregation", "aggregation",
+      "allow_unbalanced_panel", "outcome"),
     "data"
   )
   if (is.null(d$schema)) {
     cli::cli_abort("Config must define {.field data.schema}.")
   }
-  aggregation <- bpnmf_aggregation()
+  # `aggregation` was the key's name before it was made specific; still read
+  # so existing configs keep loading, but only one of the two may be set.
   if (!is.null(d$aggregation)) {
-    check_known_keys(d$aggregation, c("enabled", "period"), "data.aggregation")
-    aggregation <- bpnmf_aggregation(
-      enabled = yaml_flag(d$aggregation$enabled, "data.aggregation.enabled", FALSE),
-      period = d$aggregation$period %||% "bimonthly"
+    if (!is.null(d$time_aggregation)) {
+      cli::cli_abort(
+        "Config sets both {.field data.time_aggregation} and the deprecated
+         {.field data.aggregation}; keep only {.field data.time_aggregation}."
+      )
+    }
+    cli::cli_warn(
+      "{.field data.aggregation} is deprecated; rename it to
+       {.field data.time_aggregation}."
+    )
+    d$time_aggregation <- d$aggregation
+  }
+  time_aggregation <- bpnmf_time_aggregation()
+  if (!is.null(d$time_aggregation)) {
+    ta <- d$time_aggregation
+    check_known_keys(ta, c("enabled", "period", "n_periods"), "data.time_aggregation")
+    time_aggregation <- bpnmf_time_aggregation(
+      enabled = yaml_flag(ta$enabled, "data.time_aggregation.enabled", FALSE),
+      period = ta$period,
+      n_periods = ta$n_periods
     )
   }
   bpnmf_config(
@@ -322,7 +340,7 @@ read_bpnmf_config <- function(path) {
     date_format = d$date_format %||% "auto",
     start_date = d$start_date,
     end_date = d$end_date,
-    aggregation = aggregation,
+    time_aggregation = time_aggregation,
     allow_unbalanced_panel =
       yaml_flag(d$allow_unbalanced_panel, "data.allow_unbalanced_panel", FALSE),
     outcome = d$outcome

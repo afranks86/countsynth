@@ -45,7 +45,7 @@ bpnmf_example_config <- function(output_dir = file.path(tempdir(), "bpnmf_result
     output = bpnmf_output_opts(figures = TRUE),
     date_format = "%Y-%m-%d",
     start_date = "2016-01-01", end_date = "2024-01-01",
-    aggregation = bpnmf_aggregation(enabled = TRUE, period = "bimonthly")
+    time_aggregation = bpnmf_time_aggregation(enabled = TRUE, period = "bimonthly")
   )
   override <- list(...)
   for (nm in names(override)) {

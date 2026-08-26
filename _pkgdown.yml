@@ -16,7 +16,7 @@ reference:
   - bpnmf_convergence
   - bpnmf_output_opts
   - bpnmf_cut_opts
-  - bpnmf_aggregation
+  - bpnmf_time_aggregation
   - bpnmf_aggregate_unit
 - title: Data
   contents:

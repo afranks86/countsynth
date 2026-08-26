@@ -162,3 +162,43 @@ test_that("the Python repo's shipped configs load when present", {
     expect_s3_class(cfg, "bpnmf_config")
   }
 })
+
+test_that("time_aggregation parses, and the old `aggregation` key still loads", {
+  with_data <- function(block) {
+    sub("  schema:", paste0(block, "\n  schema:"), BASE_YAML, fixed = TRUE)
+  }
+
+  n <- read_bpnmf_config(write_yaml_config(with_data(
+    "  time_aggregation:\n    enabled: true\n    n_periods: 7"
+  )))
+  expect_equal(n$time_aggregation$n_periods, 7L)
+  expect_null(n$time_aggregation$period)
+
+  p <- read_bpnmf_config(write_yaml_config(with_data(
+    "  time_aggregation:\n    enabled: true\n    period: quarterly"
+  )))
+  expect_equal(p$time_aggregation$period, "quarterly")
+  expect_null(p$time_aggregation$n_periods)
+
+  expect_warning(
+    old <- read_bpnmf_config(write_yaml_config(with_data(
+      "  aggregation:\n    enabled: true\n    period: yearly"
+    ))),
+    "deprecated"
+  )
+  expect_equal(old$time_aggregation$period, "yearly")
+
+  expect_error(
+    read_bpnmf_config(write_yaml_config(with_data(
+      paste0("  aggregation:\n    enabled: true\n",
+             "  time_aggregation:\n    enabled: true")
+    ))),
+    "both"
+  )
+  expect_error(
+    read_bpnmf_config(write_yaml_config(with_data(
+      "  time_aggregation:\n    enabled: true\n    periods: 7"
+    ))),
+    "Unknown"
+  )
+})

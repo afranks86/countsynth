@@ -159,7 +159,7 @@ test_that("temporal aggregation sums outcomes, maxes treatment, means denominato
   wide <- make_wide_df()
   cfg <- wide_config(
     list(both = bpnmf_type(groups = c("g1", "g2"), ranks_to_test = 2)),
-    aggregation = bpnmf_aggregation(enabled = TRUE, period = "quarterly")
+    time_aggregation = bpnmf_time_aggregation(enabled = TRUE, period = "quarterly")
   )
   dat <- bpnmf_data(cfg, df = wide)
   raw <- make_test_data()
@@ -176,6 +176,74 @@ test_that("temporal aggregation sums outcomes, maxes treatment, means denominato
     as.Date(dat$df$end_date[dat$df$start_date == as.Date("2020-01-01")][1]),
     as.Date("2020-03-31")
   )
+})
+
+test_that("n_periods aggregation combines N consecutive periods", {
+  # 5 monthly points, blocks of 2 -> Jan+Feb, Mar+Apr, May (partial).
+  wide <- make_wide_df()
+  cfg <- wide_config(
+    list(both = bpnmf_type(groups = c("g1", "g2"), ranks_to_test = 2)),
+    time_aggregation = bpnmf_time_aggregation(enabled = TRUE, n_periods = 2)
+  )
+  expect_warning(dat <- bpnmf_data(cfg, df = wide), "final block holds 1")
+  expect_equal(dim(dat$Y)[3], 3)
+
+  raw <- make_test_data()
+  janfeb <- raw[raw$unit == "A" & raw$group == "g1" &
+    raw$time < as.Date("2020-03-01"), ]
+  expect_equal(dat$Y[1, 1, 1], sum(janfeb$outcome))
+  expect_equal(dat$denominators[1, 1, 1], mean(janfeb$denominator) / 1e4)
+
+  # Blocks are anchored to the panel start, not the calendar, and the short
+  # trailing block records its real one-month exposure.
+  bounds <- unique(dat$df[, c("start_date", "end_date")])
+  bounds <- bounds[order(bounds$start_date), ]
+  expect_equal(as.Date(bounds$start_date),
+               as.Date(c("2020-01-01", "2020-03-01", "2020-05-01")))
+  # Each block ends the day before the next input period starts; the trailing
+  # block has no successor, so its width is extrapolated from the last gap.
+  expect_equal(as.Date(bounds$end_date),
+               as.Date(c("2020-02-29", "2020-04-30", "2020-05-30")))
+})
+
+test_that("n_periods works at daily resolution, where calendar bins cannot", {
+  # 28 daily points in one month: `period` has nothing to bin on, n_periods
+  # turns them into 4 weeks.
+  days <- seq(as.Date("2021-03-01"), by = "day", length.out = 28)
+  grid <- expand.grid(unit = c("A", "B"), time = days, stringsAsFactors = FALSE)
+  grid$treatment <- as.integer(grid$unit == "B" & grid$time >= days[15])
+  grid$births_total <- 10
+  grid$pop_total <- 1000
+  cfg <- bpnmf_config(
+    input_file = "unused.csv", output_dir = tempdir(),
+    schema = wide_schema(),
+    model = bpnmf_model_opts(
+      types = list(t = bpnmf_type(groups = "total", ranks_to_test = 1))
+    ),
+    time_aggregation = bpnmf_time_aggregation(enabled = TRUE, n_periods = 7)
+  )
+  dat <- bpnmf_data(cfg, df = tibble::as_tibble(grid))
+  expect_equal(dim(dat$Y)[3], 4)
+  expect_equal(dat$Y[1, 1, 1], 70) # 7 days x 10
+  wk <- unique(dat$df[, c("start_date", "end_date")])
+  wk <- wk[order(wk$start_date), ]
+  expect_equal(as.Date(wk$start_date), days[c(1, 8, 15, 22)])
+  expect_equal(as.Date(wk$end_date), days[c(7, 14, 21, 28)])
+
+  # Calendar monthly collapses the same panel to a single time point.
+  cfg$time_aggregation <- bpnmf_time_aggregation(enabled = TRUE, period = "monthly")
+  expect_equal(dim(bpnmf_data(cfg, df = tibble::as_tibble(grid))$Y)[3], 1)
+})
+
+test_that("period and n_periods are mutually exclusive", {
+  expect_error(
+    bpnmf_time_aggregation(enabled = TRUE, period = "monthly", n_periods = 3),
+    "only one of"
+  )
+  expect_null(bpnmf_time_aggregation()$period)
+  # Enabling without either keeps the historical bimonthly default.
+  expect_equal(bpnmf_time_aggregation(enabled = TRUE)$period, "bimonthly")
+  expect_null(bpnmf_time_aggregation(enabled = TRUE)$n_periods)
 })
 
 test_that("date auto-parsing handles multiple formats", {

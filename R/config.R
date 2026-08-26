@@ -100,15 +100,48 @@ bpnmf_schema <- function(unit_col, time_col, treatment_col,
 }
 
 #' Temporal aggregation settings
+#'
+#' Two ways to coarsen the time axis, one of which must be chosen when
+#' `enabled` is `TRUE`:
+#'
+#' * `period` bins by the **calendar**: rows are grouped by calendar month,
+#'   two-month block, quarter, or year, so bins land on calendar boundaries
+#'   (Q1 is always Jan-Mar) no matter when the panel starts. This assumes the
+#'   input is monthly or finer.
+#' * `n_periods` bins by **position**: every `n_periods` consecutive time
+#'   points in the panel are combined, whatever the underlying resolution --
+#'   daily, weekly, monthly, or an arbitrary integer index. Blocks are cut
+#'   from the panel's sorted distinct times, so all units stay aligned. Use
+#'   this when the data is not monthly, or when you want blocks anchored to
+#'   the panel's own start rather than to the calendar.
+#'
 #' @param enabled Aggregate input rows into coarser periods?
-#' @param period One of `"monthly"`, `"bimonthly"`, `"quarterly"`, `"yearly"`.
+#' @param period Calendar bin: one of `"monthly"`, `"bimonthly"`,
+#'   `"quarterly"`, `"yearly"`. Mutually exclusive with `n_periods`.
+#' @param n_periods Number of consecutive input periods to combine into one.
+#'   Mutually exclusive with `period`. A trailing block with fewer than
+#'   `n_periods` points is kept (and warned about); its shorter exposure is
+#'   carried in `start_date`/`end_date`, so person-year rates stay correct.
 #' @export
-bpnmf_aggregation <- function(enabled = FALSE, period = "bimonthly") {
+bpnmf_time_aggregation <- function(enabled = FALSE, period = NULL,
+                                   n_periods = NULL) {
   checkmate::assert_flag(enabled)
-  checkmate::assert_choice(period, AGGREGATION_PERIODS)
+  checkmate::assert_choice(period, AGGREGATION_PERIODS, null.ok = TRUE)
+  checkmate::assert_int(n_periods, lower = 1, null.ok = TRUE)
+  if (!is.null(period) && !is.null(n_periods)) {
+    cli::cli_abort(
+      "Set only one of {.field period} (calendar bins) and
+       {.field n_periods} (combine N consecutive periods)."
+    )
+  }
+  # Keeping the historical default here rather than in the signature means
+  # `period`/`n_periods` can stay NULL-by-default and still be exclusive.
+  if (enabled && is.null(period) && is.null(n_periods)) {
+    period <- "bimonthly"
+  }
   new_bpnmf_class(
-    list(enabled = enabled, period = period),
-    "bpnmf_aggregation"
+    list(enabled = enabled, period = period, n_periods = n_periods),
+    "bpnmf_time_aggregation"
   )
 }
 
@@ -483,7 +516,7 @@ bpnmf_cut_opts <- function(num_stage1_draws = 25,
 #' @param date_format `"auto"` or a `strptime` format for the time column.
 #' @param start_date,end_date Optional date filter; `start_date` inclusive,
 #'   `end_date` **exclusive**.
-#' @param aggregation A [bpnmf_aggregation()] object.
+#' @param time_aggregation A [bpnmf_time_aggregation()] object.
 #' @param allow_unbalanced_panel Treat structurally absent (unit, time) cells
 #'   as missing instead of erroring.
 #' @param outcome Optional label used in draws filenames (falls back to the
@@ -497,7 +530,7 @@ bpnmf_config <- function(input_file, output_dir, schema,
                          cut = NULL,
                          date_format = "auto", start_date = NULL,
                          end_date = NULL,
-                         aggregation = bpnmf_aggregation(),
+                         time_aggregation = bpnmf_time_aggregation(),
                          allow_unbalanced_panel = FALSE, outcome = NULL) {
   checkmate::assert_string(input_file, min.chars = 1)
   checkmate::assert_string(output_dir, min.chars = 1)
@@ -509,7 +542,7 @@ bpnmf_config <- function(input_file, output_dir, schema,
   checkmate::assert_string(date_format, min.chars = 1)
   checkmate::assert_string(start_date, null.ok = TRUE)
   checkmate::assert_string(end_date, null.ok = TRUE)
-  checkmate::assert_class(aggregation, "bpnmf_aggregation")
+  checkmate::assert_class(time_aggregation, "bpnmf_time_aggregation")
   checkmate::assert_flag(allow_unbalanced_panel)
   checkmate::assert_string(outcome, min.chars = 1, null.ok = TRUE)
   new_bpnmf_class(
@@ -517,7 +550,7 @@ bpnmf_config <- function(input_file, output_dir, schema,
       input_file = input_file, output_dir = output_dir, schema = schema,
       model = model, mcmc = mcmc, output = output, cut = cut,
       date_format = date_format, start_date = start_date, end_date = end_date,
-      aggregation = aggregation,
+      time_aggregation = time_aggregation,
       allow_unbalanced_panel = allow_unbalanced_panel, outcome = outcome
     ),
     "bpnmf_config"

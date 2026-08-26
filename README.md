@@ -158,9 +158,10 @@ data:
   date_format: auto              # or an explicit strptime format
   start_date: "2016-01-01"       # inclusive
   end_date: "2024-01-01"         # EXCLUSIVE
-  aggregation:
+  time_aggregation:
     enabled: false
-    period: bimonthly            # monthly | bimonthly | quarterly | yearly
+    period: bimonthly            # calendar bins: monthly | bimonthly | quarterly | yearly
+    # n_periods: 3               # ...or combine N consecutive periods (any resolution)
   allow_unbalanced_panel: false
   outcome: births                # label used in output filenames
 
@@ -263,7 +264,7 @@ cfg <- bpnmf_config(
   mcmc = bpnmf_mcmc_opts(iter_warmup = 1000, iter_sampling = 2500, thin = 10),
   output = bpnmf_output_opts(figures = TRUE, target_unit = "Texas"),
   start_date = "2016-01-01", end_date = "2024-01-01",
-  aggregation = bpnmf_aggregation(enabled = TRUE, period = "bimonthly")
+  time_aggregation = bpnmf_time_aggregation(enabled = TRUE, period = "bimonthly")
 )
 ```
 
@@ -311,6 +312,23 @@ counts, averages denominators, and takes the max of the treatment indicator
 within each period — so a period that is partly exposed counts as exposed.
 Choose the period to balance signal and length: coarser periods mean less
 noise per cell but fewer time points for the factorization to work with.
+
+`time_aggregation` bins the time axis one of two ways, and you set exactly one
+of them. `period` bins by the **calendar** — rows are grouped into calendar
+months, two-month blocks, quarters, or years, so bins land on calendar
+boundaries (Q1 is always Jan–Mar) whatever date the panel starts on. It
+assumes monthly-or-finer input, since it bins on year and month.
+
+`n_periods` bins by **position**: every N consecutive time points in the panel
+are combined, at whatever resolution the panel actually has. Daily data over a
+single month has no calendar bin to fall back on — `period: monthly` would
+collapse it to one point — but `n_periods: 7` turns it into weeks. Blocks are
+cut from the panel's sorted distinct times rather than per unit, so units stay
+aligned even when one is missing a period, and a short trailing block is kept
+with its real (shorter) exposure recorded in `start_date`/`end_date`, so
+person-year rates stay correct.
+
+The older key name `aggregation` still loads, with a deprecation warning.
 
 **Sampling and the convergence gate.** The defaults (1000 warmup, 2500
 sampling, thin 10) are a real run, not a smoke test; expect a substantial
