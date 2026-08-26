@@ -1,10 +1,22 @@
 # Figure/table orchestration with artifact-layout parity: figures and tables
 # under <output_dir>/figs/ with the same filenames the Python package writes
 # (fit_<unit>.png, gap_<unit>.png, raw_rate.png, interval.png,
-# group_comparison.png, ppc/ppc_*.png + ppc_pvalues.csv, summary_table.csv,
+# group_comparison.png, ppc/ppc_*.png + ppc_pvalues.csv,
 # summary_table_by_unit.csv, expected_vs_observed.csv,
 # post_treatment_summary.csv). Tables ALWAYS write; only figures are gated by
-# the `figures` selection.
+# the `figures` selection. The target unit's headline table is not written
+# separately: it is the `Unit == target_unit` subset of
+# summary_table_by_unit.csv.
+
+# write.csv serializes doubles at full 15-17 significant digits, which makes
+# the tables unreadable and implies precision the posterior does not have.
+# Round to 6 significant digits on the way out; integer/character columns
+# pass through untouched.
+write_table_csv <- function(df, path, digits = 6) {
+  num <- vapply(df, function(x) is.double(x) && !inherits(x, "Date"), logical(1))
+  df[num] <- lapply(df[num], signif, digits = digits)
+  utils::write.csv(df, path, row.names = FALSE)
+}
 
 save_plot <- function(plot, path, width = 10, height = 6) {
   dev <- if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png else "png"
@@ -171,18 +183,15 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
         width = dims$width, height = dims$height
       )
     }
-    utils::write.csv(
-      ppc$pvals, file.path(ppc_dir, "ppc_pvalues.csv"),
-      row.names = FALSE
+    write_table_csv(
+      ppc$pvals, file.path(ppc_dir, "ppc_pvalues.csv")
     )
   }
 
   # Tables: always written, never gated by `figures`.
+  # Returned (and printed) but not written: its rows are the target unit's
+  # slice of summary_table_by_unit.csv below.
   summary_tbl <- bpnmf_summary_table(reporting, target_unit)
-  utils::write.csv(
-    summary_tbl, file.path(figs_dir, "summary_table.csv"),
-    row.names = FALSE
-  )
   by_unit_tbl <- dplyr::bind_rows(lapply(treated_units, function(tu) {
     tbl <- bpnmf_summary_table(reporting, tu)
     if (nrow(tbl) == 0) {
@@ -190,19 +199,16 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     }
     tibble::add_column(tbl, Unit = tu, .before = 1)
   }))
-  utils::write.csv(
-    by_unit_tbl, file.path(figs_dir, "summary_table_by_unit.csv"),
-    row.names = FALSE
+  write_table_csv(
+    by_unit_tbl, file.path(figs_dir, "summary_table_by_unit.csv")
   )
   detail <- bpnmf_expected_vs_observed(reporting, target_unit)
-  utils::write.csv(
-    detail, file.path(figs_dir, "expected_vs_observed.csv"),
-    row.names = FALSE
+  write_table_csv(
+    detail, file.path(figs_dir, "expected_vs_observed.csv")
   )
   per_unit <- bpnmf_post_treatment_summary(reporting)
-  utils::write.csv(
-    per_unit, file.path(figs_dir, "post_treatment_summary.csv"),
-    row.names = FALSE
+  write_table_csv(
+    per_unit, file.path(figs_dir, "post_treatment_summary.csv")
   )
 
   if (print_tables && nrow(summary_tbl) > 0) {
