@@ -11,6 +11,7 @@ bpnmf_output_opts(
   target_unit = NULL,
   report_groups = NULL,
   fit_gap_per_unit = FALSE,
+  interval_aggregates = FALSE,
   print_tables = TRUE,
   print_target_table = TRUE,
   aggregate_units = NULL,

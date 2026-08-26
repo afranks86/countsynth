@@ -374,6 +374,7 @@ normalize_figures <- function(v) {
 bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
                               save_traces = FALSE, target_unit = NULL,
                               report_groups = NULL, fit_gap_per_unit = FALSE,
+                              interval_aggregates = FALSE,
                               print_tables = TRUE, print_target_table = TRUE,
                               aggregate_units = NULL, ppc_units = NULL,
                               ppc_exclude_units = NULL, ppc_acf_lags = NULL,
@@ -388,6 +389,7 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
     min.len = 1, any.missing = FALSE, null.ok = TRUE
   )
   checkmate::assert_flag(fit_gap_per_unit)
+  checkmate::assert_flag(interval_aggregates)
   checkmate::assert_flag(print_tables)
   checkmate::assert_flag(print_target_table)
   checkmate::assert_list(
@@ -409,7 +411,8 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
     list(
       figures = figures, clean = clean, save_traces = save_traces,
       target_unit = target_unit, report_groups = report_groups,
-      fit_gap_per_unit = fit_gap_per_unit, print_tables = print_tables,
+      fit_gap_per_unit = fit_gap_per_unit,
+      interval_aggregates = interval_aggregates, print_tables = print_tables,
       print_target_table = print_target_table,
       aggregate_units = aggregate_units, ppc_units = ppc_units,
       ppc_exclude_units = ppc_exclude_units,

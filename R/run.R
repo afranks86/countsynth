@@ -133,6 +133,7 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
           ppc_acf_lags = out$ppc_acf_lags,
           ppc_unit_corr_max_time = out$ppc_unit_corr_max_time,
           fit_gap_per_unit = out$fit_gap_per_unit,
+          interval_aggregates = out$interval_aggregates,
           print_tables = out$print_tables
         )
       }

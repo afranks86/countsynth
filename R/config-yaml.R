@@ -179,7 +179,8 @@ parse_yaml_output <- function(x, path = "output") {
   check_known_keys(
     x,
     c("figures", "clean", "save_traces", "target_unit", "report_groups",
-      "fit_gap_per_unit", "print_tables", "print_target_table",
+      "fit_gap_per_unit", "interval_aggregates",
+      "print_tables", "print_target_table",
       "aggregate_units", "ppc_units", "ppc_exclude_units", "ppc_acf_lags",
       "ppc_unit_corr_max_time", "draws_format"),
     path
@@ -224,6 +225,8 @@ parse_yaml_output <- function(x, path = "output") {
     report_groups = yaml_chr(x$report_groups),
     fit_gap_per_unit =
       yaml_flag(x$fit_gap_per_unit, glue::glue("{path}.fit_gap_per_unit"), FALSE),
+    interval_aggregates =
+      yaml_flag(x$interval_aggregates, glue::glue("{path}.interval_aggregates"), FALSE),
     print_tables = yaml_flag(x$print_tables, glue::glue("{path}.print_tables"), TRUE),
     print_target_table =
       yaml_flag(x$print_target_table, glue::glue("{path}.print_target_table"), TRUE),

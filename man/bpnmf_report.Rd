@@ -17,6 +17,7 @@ bpnmf_report(
   ppc_acf_lags = NULL,
   ppc_unit_corr_max_time = NULL,
   fit_gap_per_unit = FALSE,
+  interval_aggregates = FALSE,
   print_tables = TRUE
 )
 }
@@ -42,6 +43,10 @@ the stage-1 PPC frame).}
 
 \item{fit_gap_per_unit}{Also render fit/gap for every treated unit
 (restricted to the \code{"total"} group).}
+
+\item{interval_aggregates}{Include the \code{aggregate_units} in \code{interval.png},
+split off into their own band above the individual units. No effect when
+\code{aggregate_units} is \code{NULL}.}
 
 \item{print_tables}{Print summary tables to the terminal.}
 }

@@ -1,6 +1,9 @@
 # Causal-effect interval plot (port of plots.make_interval_plot). One row per
 # unit with nested 67% + 95% credible intervals and a median point, sorted by
-# median effect.
+# median effect. Aggregate/pooled units (see add_aggregate_units()) are not
+# comparable to the individual units they pool over -- they share every draw
+# with them -- so `separate_units` sets them into their own facet band,
+# visually split off from the rest rather than sorted in among them.
 
 #' Per-draw causal effect per unit (and optional color group)
 #'
@@ -60,15 +63,24 @@ compute_draw_effects <- function(df, estimand, method, rate_normalizer,
 #' @param rate_normalizer Rates are per this many person-years.
 #' @param color_group Optional column used to color/dodge points within a
 #'   row (defaults to `"group"` when more than one group is present).
+#' @param separate_units Units to split into their own band at the top of the
+#'   plot, above a gap, instead of being sorted in with the rest -- intended
+#'   for aggregate units from [add_aggregate_units()]. Units not present in
+#'   `draws` are ignored. Each band is still sorted by median effect.
 #' @return A ggplot object.
 #' @export
 bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
                                 estimand = c("ratio", "diff"),
                                 method = c("mu", "pred"),
                                 rate_normalizer = 1000,
-                                color_group = NULL) {
+                                color_group = NULL,
+                                separate_units = NULL) {
   estimand <- match.arg(estimand)
   method <- match.arg(method)
+  checkmate::assert_character(
+    separate_units,
+    any.missing = FALSE, null.ok = TRUE
+  )
   df <- draws
   if (!is.null(categories)) {
     df <- df[df$group %in% categories, ]
@@ -106,6 +118,17 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
     dplyr::summarise(m = stats::median(.data$median), .groups = "drop") |>
     dplyr::arrange(.data$m)
   plot_df$unit <- factor(plot_df$unit, levels = unit_order$unit)
+
+  # Facet with free + proportional y so each band shows only its own units
+  # and keeps one row's worth of height per unit.
+  split_units <- intersect(separate_units %||% character(), levels(plot_df$unit))
+  faceted <- length(split_units) > 0
+  if (faceted) {
+    plot_df$.band <- factor(
+      ifelse(plot_df$unit %in% split_units, "separate", "units"),
+      levels = c("separate", "units")
+    )
+  }
 
   ref <- if (estimand == "ratio" && method == "pred") 1 else 0
   xlab <- if (estimand == "ratio") {
@@ -145,6 +168,18 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
       x = xlab, y = NULL
     ) +
     theme_bpnmf()
+  if (faceted) {
+    p <- p +
+      ggplot2::facet_grid(
+        rows = ggplot2::vars(.data$.band),
+        scales = "free_y", space = "free_y"
+      ) +
+      ggplot2::theme(
+        strip.text.y = ggplot2::element_blank(),
+        strip.background = ggplot2::element_blank(),
+        panel.spacing.y = ggplot2::unit(0.5, "lines")
+      )
+  }
   if (is.null(color_group)) {
     p <- p + ggplot2::scale_color_manual(values = "#4C72B0", guide = "none")
   }
