@@ -110,7 +110,18 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
         gate, file.path(type_dir, paste0(stem, "_convergence.json"))
       )
       if (isFALSE(gate$converged)) {
-        cli::cli_warn("Convergence gate FAILED for {stem}; artifacts still written.")
+        reasons <- gate_failure_bullets(
+          gate, config$mcmc$convergence, if (is_cut) NULL else fit
+        )
+        cli::cli_warn(c(
+          "Convergence gate FAILED for {stem}; artifacts still written.",
+          stats::setNames(reasons, rep("*", length(reasons))),
+          i = "Per-parameter detail: {.code parameter_diagnostics(fit)}.",
+          i = "Restrict the gate to the parameters you report with
+               {.field mcmc.gate_params} -- an NMF factorization is invariant
+               to permuting and rescaling its factors, so the factor
+               parameters can have a huge R-hat while the estimands are fine."
+        ))
       }
       if (out$save_traces) {
         saveRDS(

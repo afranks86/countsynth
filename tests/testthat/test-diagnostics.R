@@ -129,3 +129,49 @@ test_that("only run-specific ADVI complaints warn, not CmdStan's standard banner
   })
   expect_warning(warn_advi_quality(noisy), "may be poor")
 })
+
+test_that("gate failure bullets name the criterion that tripped", {
+  th <- bpnmf_convergence(
+    rhat_warn = 1.1, rhat_fail = 1.5, ess_min = 100,
+    ess_fail_fraction = 0.25, divergence_fail_fraction = 0.01
+  )
+  # The fertility_yearly failure: R-hat and ESS both blown, no divergences.
+  gate <- list(
+    rhat_max = 1.8258, ess_bulk_min = 5.865, ess_tail_min = 15.886,
+    divergences = 0, divergence_fraction = 0, converged = FALSE
+  )
+  b <- gate_failure_bullets(gate, th)
+  expect_length(b, 2)
+  expect_match(b[1], "max R-hat 1.83 \\(fails at 1.5\\)")
+  expect_match(b[2], "min ESS 5.87 \\(fails below 25")
+
+  # Divergences alone.
+  div <- list(
+    rhat_max = 1.01, ess_bulk_min = 900, ess_tail_min = 900,
+    divergences = 40L, divergence_fraction = 0.02, converged = FALSE
+  )
+  db <- gate_failure_bullets(div, th)
+  expect_length(db, 1)
+  expect_match(db, "40 divergences = 2.00% \\(fails above 1.00%\\)")
+
+  # A WARN-level R-hat with ESS above the fail floor trips no branch; the
+  # numbers still have to be reported rather than an empty bullet list.
+  edge <- list(
+    rhat_max = 1.2, ess_bulk_min = 60, ess_tail_min = 60,
+    divergences = 0, divergence_fraction = 0, converged = FALSE
+  )
+  eb <- gate_failure_bullets(edge, th)
+  expect_length(eb, 1)
+  expect_match(eb, "max R-hat 1.2, min ESS 60, 0 divergences")
+
+  # ESS uses the smaller of bulk and tail.
+  tail_bad <- list(
+    rhat_max = 1.01, ess_bulk_min = 900, ess_tail_min = 10,
+    divergences = 0, divergence_fraction = 0, converged = FALSE
+  )
+  expect_match(gate_failure_bullets(tail_bad, th), "min ESS 10")
+})
+
+test_that("gate_worst_parameters is silent without a fit", {
+  expect_equal(gate_worst_parameters(NULL), character())
+})

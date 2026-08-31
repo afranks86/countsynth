@@ -275,6 +275,71 @@ print.bpnmf_diagnostics <- function(x, ...) {
   invisible(x)
 }
 
+# Why a gate came back FALSE, as cli bullets. A bare "FAILED" leaves the user
+# to go dig the numbers out of the JSON; naming the tripped criterion and the
+# worst offending parameters answers the question on the spot.
+gate_failure_bullets <- function(gate, thresholds = NULL, fit = NULL,
+                                 max_params = 3L) {
+  thresholds <- thresholds %||% bpnmf_convergence()
+  bullets <- character()
+
+  ess_min <- min(gate$ess_bulk_min, gate$ess_tail_min, na.rm = TRUE)
+  ess_floor <- thresholds$ess_min * thresholds$ess_fail_fraction
+  if (isTRUE(gate$rhat_max >= thresholds$rhat_fail)) {
+    bullets <- c(bullets, sprintf(
+      "max R-hat %.3g (fails at %.3g)", gate$rhat_max, thresholds$rhat_fail
+    ))
+  }
+  if (isTRUE(ess_min < ess_floor)) {
+    bullets <- c(bullets, sprintf(
+      "min ESS %.3g (fails below %.3g = ess_min %.3g x ess_fail_fraction %.3g)",
+      ess_min, ess_floor, thresholds$ess_min, thresholds$ess_fail_fraction
+    ))
+  }
+  if (isTRUE(gate$divergence_fraction > thresholds$divergence_fail_fraction)) {
+    bullets <- c(bullets, sprintf(
+      "%d divergence%s = %.2f%% (fails above %.2f%%)",
+      gate$divergences, if (gate$divergences == 1) "" else "s",
+      100 * gate$divergence_fraction,
+      100 * thresholds$divergence_fail_fraction
+    ))
+  }
+  # A gate can fail on a WARN-level R-hat combined with low ESS, in which case
+  # neither branch above fires; report the numbers rather than nothing.
+  if (length(bullets) == 0) {
+    bullets <- sprintf(
+      "max R-hat %.3g, min ESS %.3g, %d divergence%s",
+      gate$rhat_max, ess_min, gate$divergences,
+      if (gate$divergences == 1) "" else "s"
+    )
+  }
+
+  worst <- gate_worst_parameters(fit, max_params)
+  if (length(worst) > 0) {
+    bullets <- c(bullets, sprintf("worst gated parameter%s: %s",
+                                  if (length(worst) == 1) "" else "s",
+                                  paste(worst, collapse = ", ")))
+  }
+  bullets
+}
+
+# Top offenders among the gated parameters, formatted "name (R-hat x, ESS y)".
+gate_worst_parameters <- function(fit, max_params = 3L) {
+  if (is.null(fit)) {
+    return(character())
+  }
+  diag <- tryCatch(parameter_diagnostics(fit), error = function(e) NULL)
+  if (is.null(diag) || nrow(diag) == 0) {
+    return(character())
+  }
+  bad <- diag[diag$gated & diag$status == "FAIL" & !is.na(diag$rhat), ]
+  if (nrow(bad) == 0) {
+    return(character())
+  }
+  bad <- utils::head(bad, max_params)
+  sprintf("%s (R-hat %.3g, ESS %.3g)", bad$parameter, bad$rhat, bad$ess)
+}
+
 #' Write a convergence gate as JSON (artifact parity with Python)
 #' @param gate A list from [convergence_gate()] or a cut manifest.
 #' @param path Output file path.
