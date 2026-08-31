@@ -408,6 +408,9 @@ normalize_figures <- function(v) {
 #' @param fit_gap_per_unit Also render fit/gap for every treated unit
 #'   (restricted to the `"total"` group).
 #' @param print_tables,print_target_table Terminal-table switches.
+#'   `print_target_table` adds the target unit's own table above the by-unit
+#'   one; its rows are already in the by-unit table, so it defaults to off.
+#' @param html_tables Also write the `gt` HTML summary tables.
 #' @param aggregate_units List of [bpnmf_aggregate_unit()] specs.
 #' @param ppc_units,ppc_exclude_units Unit filters for the PPC suite.
 #' @param ppc_acf_lags Integer lags for the ACF check (default 6).
@@ -418,7 +421,8 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
                               save_traces = FALSE, target_unit = NULL,
                               report_groups = NULL, fit_gap_per_unit = FALSE,
                               interval_aggregates = TRUE,
-                              print_tables = TRUE, print_target_table = TRUE,
+                              print_tables = TRUE, print_target_table = FALSE,
+                              html_tables = TRUE,
                               aggregate_units = NULL, ppc_units = NULL,
                               ppc_exclude_units = NULL, ppc_acf_lags = NULL,
                               ppc_unit_corr_max_time = NULL,
@@ -435,6 +439,7 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
   checkmate::assert_flag(interval_aggregates)
   checkmate::assert_flag(print_tables)
   checkmate::assert_flag(print_target_table)
+  checkmate::assert_flag(html_tables)
   checkmate::assert_list(
     aggregate_units,
     types = "bpnmf_aggregate_unit", null.ok = TRUE
@@ -456,7 +461,7 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
       target_unit = target_unit, report_groups = report_groups,
       fit_gap_per_unit = fit_gap_per_unit,
       interval_aggregates = interval_aggregates, print_tables = print_tables,
-      print_target_table = print_target_table,
+      print_target_table = print_target_table, html_tables = html_tables,
       aggregate_units = aggregate_units, ppc_units = ppc_units,
       ppc_exclude_units = ppc_exclude_units,
       ppc_acf_lags = if (is.null(ppc_acf_lags)) NULL else as.integer(ppc_acf_lags),

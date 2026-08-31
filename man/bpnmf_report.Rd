@@ -18,7 +18,9 @@ bpnmf_report(
   ppc_unit_corr_max_time = NULL,
   fit_gap_per_unit = FALSE,
   interval_aggregates = TRUE,
-  print_tables = TRUE
+  print_tables = TRUE,
+  print_target_table = FALSE,
+  html_tables = TRUE
 )
 }
 \arguments{
@@ -48,7 +50,15 @@ the stage-1 PPC frame).}
 split off into their own band above the individual units. Set \code{FALSE} to
 plot only the real units. No effect when \code{aggregate_units} is \code{NULL}.}
 
-\item{print_tables}{Print summary tables to the terminal.}
+\item{print_tables}{Print the by-unit summary table to the terminal.}
+
+\item{print_target_table}{Also print the target unit's own table. Its rows
+are the target unit's slice of the by-unit table, so this is off by
+default when \code{target_unit} is not set explicitly.}
+
+\item{html_tables}{Also write \code{summary_table.html} and
+\code{summary_table_by_unit.html} via \code{\link[=bpnmf_gt_table]{bpnmf_gt_table()}}. Needs the \code{gt}
+package; warns and skips when it is missing.}
 }
 \value{
 Invisible list with \code{summary}, \code{per_unit}, \code{detail},

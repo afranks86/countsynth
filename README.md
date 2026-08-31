@@ -210,8 +210,9 @@ output:
                                  #  treated unit with the most periods)
   report_groups: [total]
   fit_gap_per_unit: false        # fit/gap figure for every treated unit
-  print_tables: true
-  print_target_table: true
+  print_tables: true             # by-unit summary table in the terminal
+  print_target_table: false      # also print the target unit's own table
+  html_tables: true              # write gt HTML tables (needs the gt package)
   draws_format: csv              # csv | parquet
   # ppc_units: [Texas]
   # ppc_exclude_units: [Alaska]
@@ -375,6 +376,27 @@ individual units — they pool the same draws as the units they cover, so
 ranking them together would read as a peer comparison when it is not. Set
 `interval_aggregates: false` to plot only the real units.
 
+**Tables.** Every run writes `summary_table_by_unit.csv` (display-formatted:
+counts, rates per 1,000 person-years, pre-formatted CIs, `*` for a two-sided
+posterior p < 0.05) and `post_treatment_summary.csv` (the same estimands as
+plain numeric columns, for joining and plotting). With the `gt` package
+installed you also get `summary_table.html` and `summary_table_by_unit.html`,
+which are the display tables rendered for publication — counts and rates under
+their own spanners, one row group per unit.
+
+Build one yourself from a draws frame:
+
+```r
+draws <- bpnmf_draws(fit)
+bpnmf_gt_table(draws)                  # headline unit, one row per group
+bpnmf_gt_table(draws, by_unit = TRUE)  # every treated unit, grouped
+gt::gtsave(bpnmf_gt_table(draws, by_unit = TRUE), "summary.html")
+```
+
+The terminal prints the by-unit table only. `print_target_table: true` adds
+the target unit's own table above it — its rows are already in the by-unit
+table, so it is off by default.
+
 ## 5. What lands on disk
 
 `bpnmf_run(cfg)` writes, per model type (and per rank when more than one rank
@@ -385,7 +407,12 @@ is requested):
   df_<type>.csv                              # the standardized long panel
   {NB|Poisson}_{outcome}_{type}_{rank}.csv   # tidy draws (or .parquet)
   ..._convergence.json                       # gate: R-hat, ESS, divergences
-  [rank_<rank>/]figs/...                     # figures, if output.figures
+  [rank_<rank>/]figs/
+    summary_table_by_unit.csv                # display-formatted, per unit
+    summary_table*.html                      # the same, via gt
+    post_treatment_summary.csv               # numeric estimands + CIs
+    expected_vs_observed.csv                 # per (unit, time, group) detail
+    *.png                                    # figures, if output.figures
 ```
 
 A failed gate is a warning, not a stop — artifacts are still written so you

@@ -134,7 +134,9 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
           ppc_unit_corr_max_time = out$ppc_unit_corr_max_time,
           fit_gap_per_unit = out$fit_gap_per_unit,
           interval_aggregates = out$interval_aggregates,
-          print_tables = out$print_tables
+          print_tables = out$print_tables,
+          print_target_table = out$print_target_table,
+          html_tables = out$html_tables
         )
       }
 

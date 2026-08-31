@@ -18,6 +18,14 @@ write_table_csv <- function(df, path, digits = 6) {
   utils::write.csv(df, path, row.names = FALSE)
 }
 
+# The `Imputed` flag only means something once a cell has actually been
+# imputed; an all-FALSE column is a wasted column in an already-wide table.
+# It stays in the CSV either way, where a stable schema matters more.
+drop_unused_imputed <- function(tbl) {
+  if ("Imputed" %in% names(tbl) && !any(tbl$Imputed)) tbl$Imputed <- NULL
+  tbl
+}
+
 save_plot <- function(plot, path, width = 10, height = 6) {
   dev <- if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png else "png"
   ggplot2::ggsave(
@@ -64,7 +72,13 @@ ppc_plot_dims <- function(n_facets, ncol,
 #' @param interval_aggregates Include the `aggregate_units` in `interval.png`,
 #'   split off into their own band above the individual units. Set `FALSE` to
 #'   plot only the real units. No effect when `aggregate_units` is `NULL`.
-#' @param print_tables Print summary tables to the terminal.
+#' @param print_tables Print the by-unit summary table to the terminal.
+#' @param print_target_table Also print the target unit's own table. Its rows
+#'   are the target unit's slice of the by-unit table, so this is off by
+#'   default when `target_unit` is not set explicitly.
+#' @param html_tables Also write `summary_table.html` and
+#'   `summary_table_by_unit.html` via [bpnmf_gt_table()]. Needs the `gt`
+#'   package; warns and skips when it is missing.
 #' @return Invisible list with `summary`, `per_unit`, `detail`,
 #'   `target_unit`, `figs_dir`, `treated_units`.
 #' @export
@@ -74,7 +88,8 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
                          ppc_exclude_units = NULL, ppc_acf_lags = NULL,
                          ppc_unit_corr_max_time = NULL,
                          fit_gap_per_unit = FALSE,
-                         interval_aggregates = TRUE, print_tables = TRUE) {
+                         interval_aggregates = TRUE, print_tables = TRUE,
+                         print_target_table = FALSE, html_tables = TRUE) {
   selected <- figures %||% FIGURE_NAMES
   unknown <- setdiff(selected, FIGURE_NAMES)
   if (length(unknown) > 0) {
@@ -207,13 +222,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
   # Returned (and printed) but not written: its rows are the target unit's
   # slice of summary_table_by_unit.csv below.
   summary_tbl <- bpnmf_summary_table(reporting, target_unit)
-  by_unit_tbl <- dplyr::bind_rows(lapply(treated_units, function(tu) {
-    tbl <- bpnmf_summary_table(reporting, tu)
-    if (nrow(tbl) == 0) {
-      return(tbl)
-    }
-    tibble::add_column(tbl, Unit = tu, .before = 1)
-  }))
+  by_unit_tbl <- bpnmf_summary_table_by_unit(reporting, treated_units)
   write_table_csv(
     by_unit_tbl, file.path(figs_dir, "summary_table_by_unit.csv")
   )
@@ -225,14 +234,21 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
   write_table_csv(
     per_unit, file.path(figs_dir, "post_treatment_summary.csv")
   )
+  if (html_tables) {
+    write_gt_tables(reporting, target_unit, figs_dir)
+  }
 
-  if (print_tables && nrow(summary_tbl) > 0) {
-    cli::cli_h1("{target_unit} \u2014 Observed vs Expected")
-    print(as.data.frame(summary_tbl))
-    if (nrow(per_unit) > 0) {
-      cli::cli_h1("Post-treatment totals by unit (ranked by % excess)")
-      print(as.data.frame(per_unit), digits = 4)
+  if (print_tables && nrow(by_unit_tbl) > 0) {
+    # One formatted table, not two: the by-unit table is the target table plus
+    # every other unit, so printing both repeats the headline rows. The raw
+    # post_treatment_summary frame is 14 numeric columns wide and unreadable
+    # in a terminal -- it stays a CSV, for joining and plotting.
+    if (print_target_table && nrow(summary_tbl) > 0) {
+      cli::cli_h1("{target_unit} \u2014 observed vs expected")
+      print(as.data.frame(drop_unused_imputed(summary_tbl)))
     }
+    cli::cli_h1("Post-treatment effect by unit")
+    print(as.data.frame(drop_unused_imputed(by_unit_tbl)), row.names = FALSE)
   }
 
   invisible(list(

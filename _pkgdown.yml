@@ -45,6 +45,8 @@ reference:
 - title: Tables
   contents:
   - bpnmf_summary_table
+  - bpnmf_summary_table_by_unit
+  - bpnmf_gt_table
   - bpnmf_post_treatment_summary
   - bpnmf_expected_vs_observed
 - title: Figures

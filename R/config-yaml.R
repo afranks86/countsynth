@@ -180,7 +180,7 @@ parse_yaml_output <- function(x, path = "output") {
     x,
     c("figures", "clean", "save_traces", "target_unit", "report_groups",
       "fit_gap_per_unit", "interval_aggregates",
-      "print_tables", "print_target_table",
+      "print_tables", "print_target_table", "html_tables",
       "aggregate_units", "ppc_units", "ppc_exclude_units", "ppc_acf_lags",
       "ppc_unit_corr_max_time", "draws_format"),
     path
@@ -229,7 +229,8 @@ parse_yaml_output <- function(x, path = "output") {
       yaml_flag(x$interval_aggregates, glue::glue("{path}.interval_aggregates"), TRUE),
     print_tables = yaml_flag(x$print_tables, glue::glue("{path}.print_tables"), TRUE),
     print_target_table =
-      yaml_flag(x$print_target_table, glue::glue("{path}.print_target_table"), TRUE),
+      yaml_flag(x$print_target_table, glue::glue("{path}.print_target_table"), FALSE),
+    html_tables = yaml_flag(x$html_tables, glue::glue("{path}.html_tables"), TRUE),
     aggregate_units = aggregate_units,
     ppc_units = yaml_chr(x$ppc_units),
     ppc_exclude_units = yaml_chr(x$ppc_exclude_units),

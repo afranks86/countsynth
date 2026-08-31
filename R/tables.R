@@ -163,6 +163,29 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
   dplyr::bind_rows(rows)
 }
 
+#' Headline summary table stacked over several units
+#'
+#' [bpnmf_summary_table()] run per unit and row-bound, with a `Unit` column in
+#' front. Units with no post-treatment rows drop out.
+#'
+#' @param draws A `bpnmf_draws` frame.
+#' @param units Units to include (`NULL` = every treated unit, aggregates
+#'   included when the frame has them).
+#' @param rate_normalizer Rates are per this many person-years.
+#' @return A tibble, or an empty tibble when no unit has post-treatment rows.
+#' @export
+bpnmf_summary_table_by_unit <- function(draws, units = NULL,
+                                        rate_normalizer = 1000) {
+  units <- units %||% identify_treated_units(draws)
+  dplyr::bind_rows(lapply(units, function(u) {
+    tbl <- bpnmf_summary_table(draws, u, rate_normalizer = rate_normalizer)
+    if (nrow(tbl) == 0) {
+      return(tbl)
+    }
+    tibble::add_column(tbl, Unit = u, .before = 1)
+  }))
+}
+
 #' Per-(unit, group) post-treatment totals, ranked by percent excess
 #'
 #' Port of `tables._compute_per_unit_post_treatment`; estimands match the
