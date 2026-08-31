@@ -19,3 +19,9 @@ Each spec aggregates from the \emph{original} frame, so chaining multiple specs
 never double-counts. An aggregate colliding with an existing unit is an
 error unless the spec sets \code{overwrite}.
 }
+\details{
+The names of the units actually created are recorded in an
+\code{aggregate_units} attribute on the result, so downstream reporting can tell
+a pooled unit from a real one -- they are otherwise ordinary rows. Read it
+with \code{\link[=aggregate_unit_names]{aggregate_unit_names()}}.
+}

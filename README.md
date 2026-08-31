@@ -205,7 +205,9 @@ output:
                                  # group_comparison, ppc
   clean: false                   # wipe the type's output dir before writing
   save_traces: false             # also save full draws as .rds
-  target_unit: Texas             # highlighted unit (default: auto-detected)
+  target_unit: Texas             # highlighted unit
+                                 # (default: the aggregate unit, else the
+                                 #  treated unit with the most periods)
   report_groups: [total]
   fit_gap_per_unit: false        # fit/gap figure for every treated unit
   print_tables: true
@@ -215,6 +217,7 @@ output:
   # ppc_exclude_units: [Alaska]
   # ppc_acf_lags: [6]
   # ppc_unit_corr_max_time: "2022-01-01"
+  interval_aggregates: true      # show aggregate units in interval.png
   # aggregate_units:             # synthetic reporting-only units
   #   - unit: "All treated"
   #     include_treated_units: true   # or include_all_units / include_units
@@ -349,11 +352,22 @@ parameters rather than by anything you report, restrict it with
 gate verdict.
 
 **Target unit.** `target_unit` selects the unit highlighted in tables and
-per-unit figures. Left unset, it is auto-detected as the treated unit with
-the most treated periods. For a summary across treated units, add an
+per-unit figures. For a summary across treated units, add an
 `aggregate_units` entry with `include_treated_units: true` — these are
 reporting-only synthetic units, computed from draws after fitting, so they do
 not change the model.
+
+Left unset, `target_unit` is auto-detected: **a configured aggregate unit wins
+when there is one**, on the reasoning that if you defined a pooled unit, the
+pooled effect is the headline. Failing that, it falls back to the treated unit
+with the most treated periods. So a config with `aggregate_units` and no
+`target_unit` reports "All treated", not whichever single state happens to
+have the longest exposure.
+
+Aggregate units also appear in `interval.png`, in their own band above the
+individual units — they pool the same draws as the units they cover, so
+ranking them together would read as a peer comparison when it is not. Set
+`interval_aggregates: false` to plot only the real units.
 
 ## 5. What lands on disk
 

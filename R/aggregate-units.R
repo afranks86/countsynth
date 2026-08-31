@@ -107,6 +107,11 @@ aggregate_one <- function(source_df, unit_name, sources) {
 #' never double-counts. An aggregate colliding with an existing unit is an
 #' error unless the spec sets `overwrite`.
 #'
+#' The names of the units actually created are recorded in an
+#' `aggregate_units` attribute on the result, so downstream reporting can tell
+#' a pooled unit from a real one -- they are otherwise ordinary rows. Read it
+#' with [aggregate_unit_names()].
+#'
 #' @param draws A `bpnmf_draws` frame.
 #' @param specs A list of [bpnmf_aggregate_unit()] specs.
 #' @return The draws frame with aggregate-unit rows appended.
@@ -156,8 +161,24 @@ add_aggregate_units <- function(draws, specs) {
   for (nm in names(attrs)) {
     attr(out, nm) <- attrs[[nm]]
   }
+  attr(out, "aggregate_units") <- unique(c(
+    aggregate_unit_names(draws), names(aggregate_frames)
+  ))
   if (!inherits(out, "bpnmf_draws")) {
     class(out) <- c("bpnmf_draws", class(out))
   }
   out
+}
+
+#' Names of the synthetic aggregate units in a draws frame
+#'
+#' Reads the `aggregate_units` attribute stamped by [add_aggregate_units()],
+#' which survives row subsetting and `dplyr` verbs. Returns `character(0)` for
+#' a frame that never had any.
+#'
+#' @param draws A `bpnmf_draws` frame.
+#' @return Character vector of unit names.
+#' @export
+aggregate_unit_names <- function(draws) {
+  attr(draws, "aggregate_units") %||% character()
 }

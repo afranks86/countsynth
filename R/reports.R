@@ -62,8 +62,8 @@ ppc_plot_dims <- function(n_facets, ncol,
 #' @param fit_gap_per_unit Also render fit/gap for every treated unit
 #'   (restricted to the `"total"` group).
 #' @param interval_aggregates Include the `aggregate_units` in `interval.png`,
-#'   split off into their own band above the individual units. No effect when
-#'   `aggregate_units` is `NULL`.
+#'   split off into their own band above the individual units. Set `FALSE` to
+#'   plot only the real units. No effect when `aggregate_units` is `NULL`.
 #' @param print_tables Print summary tables to the terminal.
 #' @return Invisible list with `summary`, `per_unit`, `detail`,
 #'   `target_unit`, `figs_dir`, `treated_units`.
@@ -74,7 +74,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
                          ppc_exclude_units = NULL, ppc_acf_lags = NULL,
                          ppc_unit_corr_max_time = NULL,
                          fit_gap_per_unit = FALSE,
-                         interval_aggregates = FALSE, print_tables = TRUE) {
+                         interval_aggregates = TRUE, print_tables = TRUE) {
   selected <- figures %||% FIGURE_NAMES
   unknown <- setdiff(selected, FIGURE_NAMES)
   if (length(unknown) > 0) {
@@ -92,7 +92,9 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     draws
   }
 
-  target_unit <- target_unit %||% auto_detect_target(draws)
+  # Detect on `reporting`, not `draws`: an aggregate unit exists only in the
+  # former, and when one is configured it is the headline unit by default.
+  target_unit <- target_unit %||% auto_detect_target(reporting)
   if (is.null(target_unit)) {
     cli::cli_abort("No treated units in draws and no target_unit specified.")
   }
@@ -106,7 +108,9 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     )
   }
 
-  treated_units <- identify_treated_units(draws)
+  # From `reporting` so the aggregate unit appears in the by-unit table
+  # alongside post_treatment_summary.csv, which is built from the same frame.
+  treated_units <- identify_treated_units(reporting)
   fit_gap_units <- function(grp) {
     if (fit_gap_per_unit && grp == "total") {
       unique(c(target_unit, treated_units))
@@ -150,16 +154,14 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
 
   # Cross-group figures.
   if ("interval" %in% selected) {
-    # Default stays on the raw frame: an aggregate unit pools the same draws
-    # as the units it covers, so it only belongs here once asked for, and
-    # then in its own band rather than ranked among them.
-    agg_names <- vapply(aggregate_units %||% list(), function(s) s$unit, character(1))
-    show_agg <- interval_aggregates && length(agg_names) > 0
+    # An aggregate unit pools the same draws as the units it covers, so it is
+    # shown in its own band rather than ranked among them; `interval_aggregates
+    # = FALSE` drops it from the figure entirely.
     save_plot(
       bpnmf_interval_plot(
-        if (show_agg) reporting else draws,
+        if (interval_aggregates) reporting else draws,
         estimand = "ratio", method = "mu",
-        separate_units = if (show_agg) agg_names else NULL
+        separate_units = if (interval_aggregates) NULL else character()
       ),
       file.path(figs_dir, "interval.png"),
       width = 10, height = 8

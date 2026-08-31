@@ -34,8 +34,9 @@ counts).}
 row (defaults to \code{"group"} when more than one group is present).}
 
 \item{separate_units}{Units to split into their own band at the top of the
-plot, above a gap, instead of being sorted in with the rest -- intended
-for aggregate units from \code{\link[=add_aggregate_units]{add_aggregate_units()}}. Units not present in
+plot, above a gap, instead of being sorted in with the rest. Defaults to
+the frame's own aggregate units (see \code{\link[=aggregate_unit_names]{aggregate_unit_names()}}); pass
+\code{character()} to rank everything together instead. Units not present in
 \code{draws} are ignored. Each band is still sorted by median effect.}
 }
 \value{

@@ -407,7 +407,7 @@ normalize_figures <- function(v) {
 bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
                               save_traces = FALSE, target_unit = NULL,
                               report_groups = NULL, fit_gap_per_unit = FALSE,
-                              interval_aggregates = FALSE,
+                              interval_aggregates = TRUE,
                               print_tables = TRUE, print_target_table = TRUE,
                               aggregate_units = NULL, ppc_units = NULL,
                               ppc_exclude_units = NULL, ppc_acf_lags = NULL,

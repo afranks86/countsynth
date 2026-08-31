@@ -34,13 +34,26 @@ compute_quantiles <- function(draws) {
   out
 }
 
-#' Pick the unit with the most post-treatment observations
+#' Pick the headline unit for reporting
+#'
+#' A synthetic aggregate unit wins when the frame has one (see
+#' [add_aggregate_units()]): having gone to the trouble of defining a pooled
+#' unit, that pooled effect is the headline, not whichever single unit happens
+#' to have the longest exposure. Otherwise the unit with the most
+#' post-treatment periods wins, ties broken by unit order.
+#'
 #' @param draws A `bpnmf_draws` frame.
 #' @export
 auto_detect_target <- function(draws) {
   treated <- draws[!is.na(draws$treatment) & draws$treatment == 1, ]
   if (nrow(treated) == 0) {
     return(NULL)
+  }
+  # A spec can resolve to nothing and be skipped, so go by the rows that are
+  # actually there rather than trusting the attribute alone.
+  aggregates <- intersect(aggregate_unit_names(draws), unique(treated$unit))
+  if (length(aggregates) > 0) {
+    return(aggregates[1])
   }
   counts <- tapply(treated$time, treated$unit, function(t) length(unique(t)))
   names(which.max(counts))

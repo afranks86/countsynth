@@ -45,6 +45,23 @@ test_that("separate_units puts named units in their own band", {
   )
 })
 
+test_that("aggregate units are split off by default, and can be opted out of", {
+  agg <- add_aggregate_units(
+    make_interval_draws(),
+    list(bpnmf_aggregate_unit(unit = "All treated", include_treated_units = TRUE))
+  )
+  # No separate_units argument at all: the frame names its own aggregates.
+  auto <- bpnmf_interval_plot(agg)
+  expect_s3_class(auto$facet, "FacetGrid")
+  expect_equal(
+    as.character(auto$data$.band[auto$data$unit == "All treated"]), "separate"
+  )
+  # character() ranks everything in one band.
+  flat <- bpnmf_interval_plot(agg, separate_units = character())
+  expect_s3_class(flat$facet, "FacetNull")
+  expect_true("All treated" %in% flat$data$unit)
+})
+
 test_that("separate_units is inert when it names no present unit", {
   draws <- make_interval_draws()
   expect_s3_class(bpnmf_interval_plot(draws, separate_units = "Nope")$facet, "FacetNull")
@@ -69,15 +86,53 @@ test_that("interval_aggregates gates whether the aggregate reaches the plot", {
   # The gate is on the plot data, which the PNG hides -- check it directly.
   agg <- add_aggregate_units(draws, spec)
   expect_false("All treated" %in% bpnmf_interval_plot(draws)$data$unit)
-  expect_true(
-    "All treated" %in%
-      bpnmf_interval_plot(agg, separate_units = "All treated")$data$unit
+  expect_true("All treated" %in% bpnmf_interval_plot(agg)$data$unit)
+})
+
+test_that("a configured aggregate unit becomes the default headline unit", {
+  # Reproduces the yearly-fertility setup: aggregate_units configured,
+  # target_unit left unset. C has the largest single-unit effect and D the
+  # longest name; neither should win over the pooled unit.
+  draws <- make_interval_draws()
+  spec <- list(
+    bpnmf_aggregate_unit(unit = "All treated", include_treated_units = TRUE)
   )
+  dir <- withr::local_tempdir()
+  res <- bpnmf_report(
+    draws, dir,
+    figures = character(), aggregate_units = spec, print_tables = FALSE
+  )
+  expect_equal(res$target_unit, "All treated")
+  expect_true("All treated" %in% res$per_unit$unit)
+  # ... and it reaches the by-unit table, not just post_treatment_summary.
+  by_unit <- utils::read.csv(file.path(dir, "figs", "summary_table_by_unit.csv"))
+  expect_true("All treated" %in% by_unit$Unit)
+
+  # Without any aggregate the old rule still applies: most treated periods.
+  plain <- bpnmf_report(
+    draws, withr::local_tempdir(),
+    figures = character(), print_tables = FALSE
+  )
+  expect_true(plain$target_unit %in% c("B", "C", "D"))
+})
+
+test_that("aggregate_unit_names round-trips and survives row subsetting", {
+  draws <- make_interval_draws()
+  expect_equal(aggregate_unit_names(draws), character())
+  agg <- add_aggregate_units(
+    draws,
+    list(bpnmf_aggregate_unit(unit = "All treated", include_treated_units = TRUE))
+  )
+  expect_equal(aggregate_unit_names(agg), "All treated")
+  # The report subsets to post-treatment rows before plotting, so the marker
+  # has to survive that.
+  expect_equal(aggregate_unit_names(agg[agg$treatment == 1, ]), "All treated")
+  expect_equal(aggregate_unit_names(dplyr::filter(agg, .data$unit != "A")), "All treated")
 })
 
 test_that("output opts and YAML carry interval_aggregates", {
-  expect_false(bpnmf_output_opts()$interval_aggregates)
-  expect_true(bpnmf_output_opts(interval_aggregates = TRUE)$interval_aggregates)
-  parsed <- parse_yaml_output(list(interval_aggregates = TRUE))
-  expect_true(parsed$interval_aggregates)
+  expect_true(bpnmf_output_opts()$interval_aggregates)
+  expect_false(bpnmf_output_opts(interval_aggregates = FALSE)$interval_aggregates)
+  expect_true(parse_yaml_output(list())$interval_aggregates)
+  expect_false(parse_yaml_output(list(interval_aggregates = FALSE))$interval_aggregates)
 })

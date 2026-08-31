@@ -64,8 +64,9 @@ compute_draw_effects <- function(df, estimand, method, rate_normalizer,
 #' @param color_group Optional column used to color/dodge points within a
 #'   row (defaults to `"group"` when more than one group is present).
 #' @param separate_units Units to split into their own band at the top of the
-#'   plot, above a gap, instead of being sorted in with the rest -- intended
-#'   for aggregate units from [add_aggregate_units()]. Units not present in
+#'   plot, above a gap, instead of being sorted in with the rest. Defaults to
+#'   the frame's own aggregate units (see [aggregate_unit_names()]); pass
+#'   `character()` to rank everything together instead. Units not present in
 #'   `draws` are ignored. Each band is still sorted by median effect.
 #' @return A ggplot object.
 #' @export
@@ -81,6 +82,7 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
     separate_units,
     any.missing = FALSE, null.ok = TRUE
   )
+  separate_units <- separate_units %||% aggregate_unit_names(draws)
   df <- draws
   if (!is.null(categories)) {
     df <- df[df$group %in% categories, ]
@@ -121,7 +123,7 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
 
   # Facet with free + proportional y so each band shows only its own units
   # and keeps one row's worth of height per unit.
-  split_units <- intersect(separate_units %||% character(), levels(plot_df$unit))
+  split_units <- intersect(separate_units, levels(plot_df$unit))
   faceted <- length(split_units) > 0
   if (faceted) {
     plot_df$.band <- factor(

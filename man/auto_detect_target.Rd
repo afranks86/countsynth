@@ -2,7 +2,7 @@
 % Please edit documentation in R/tables.R
 \name{auto_detect_target}
 \alias{auto_detect_target}
-\title{Pick the unit with the most post-treatment observations}
+\title{Pick the headline unit for reporting}
 \usage{
 auto_detect_target(draws)
 }
@@ -10,5 +10,9 @@ auto_detect_target(draws)
 \item{draws}{A \code{bpnmf_draws} frame.}
 }
 \description{
-Pick the unit with the most post-treatment observations
+A synthetic aggregate unit wins when the frame has one (see
+\code{\link[=add_aggregate_units]{add_aggregate_units()}}): having gone to the trouble of defining a pooled
+unit, that pooled effect is the headline, not whichever single unit happens
+to have the longest exposure. Otherwise the unit with the most
+post-treatment periods wins, ties broken by unit order.
 }
