@@ -1,10 +1,12 @@
-# Joint / baseline model fitting.
+# Joint / baseline model fitting. `method = "sample"` runs NUTS; `method =
+# "variational"` runs Stan's ADVI, which cut mode can use for stage 1 to trade
+# an exact posterior for a fast approximate one.
 
 #' Fit the joint (or baseline) bpnmf model
 #'
-#' Runs NUTS on the joint model via cmdstanr. With
-#' `config$model$model_treated = FALSE` this fits the untreated baseline
-#' model (the same model cut mode uses for stage 1).
+#' Runs NUTS (or, with `method = "variational"`, Stan's ADVI) on the joint
+#' model via cmdstanr. With `config$model$model_treated = FALSE` this fits the
+#' untreated baseline model (the same model cut mode uses for stage 1).
 #'
 #' @param data A `bpnmf_data` object from [bpnmf_data()].
 #' @param rank Factorization rank. Defaults to the first entry of the type's
@@ -24,14 +26,28 @@
 #'   occurrences are harmless, so the notes are suppressed by default; the
 #'   convergence gate (R-hat / ESS / divergences) is the real health signal.
 #'   Set to `TRUE` to see them, or read them later via `fit$fit$output()`.
-#' @param ... Additional arguments passed to `CmdStanModel$sample()`.
-#' @return A `bpnmf_fit` object.
+#' @param method `"sample"` (NUTS, the default) or `"variational"` (Stan's
+#'   ADVI). ADVI returns an approximation, not a posterior sample: it
+#'   understates variance, ignores posterior correlation, and has no R-hat /
+#'   ESS / divergence diagnostics, so [convergence_gate()] reports
+#'   `converged = NA` and [parameter_diagnostics()] errors. It is meant for
+#'   fast iteration -- most usefully as cut stage 1, via
+#'   `cut$stage1_method = "variational"`.
+#' @param variational Named list of ADVI tuning arguments forwarded to
+#'   `CmdStanModel$variational()` (`r toString(VARIATIONAL_KEYS)`).
+#'   Ignored when `method = "sample"`.
+#' @param ... Additional arguments passed to `CmdStanModel$sample()` (or
+#'   `$variational()`).
+#' @return A `bpnmf_fit` object; `fit_method` records which algorithm ran.
 #' @export
 bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
                       gen_ypred = TRUE, init = NULL,
-                      show_exceptions = FALSE, ...) {
+                      show_exceptions = FALSE,
+                      method = c("sample", "variational"),
+                      variational = NULL, ...) {
   checkmate::assert_class(data, "bpnmf_data")
   checkmate::assert_class(config, "bpnmf_config")
+  method <- match.arg(method)
   type_spec <- config$model$types[[data$type]]
   rank <- rank %||% type_spec$ranks_to_test[[1]]
   checkmate::assert_int(rank, lower = 1)
@@ -54,22 +70,38 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
   }
 
   mcmc <- config$mcmc
-  ch <- resolve_chains(mcmc)
   model <- bpnmf_stan_model("joint")
 
-  args <- list(
-    data = sd,
-    chains = ch$chains,
-    parallel_chains = ch$parallel_chains,
-    iter_warmup = mcmc$iter_warmup,
-    iter_sampling = mcmc$iter_sampling,
-    thin = mcmc$thin,
-    adapt_delta = mcmc$adapt_delta,
-    seed = mcmc$seed,
-    refresh = if (mcmc$progress) NULL else 0,
-    show_messages = mcmc$progress,
-    show_exceptions = show_exceptions
-  )
+  if (method == "variational") {
+    # ADVI has no chains, warmup, thinning or adapt_delta; the only MCMC
+    # option it shares is the seed, so stage 1 runs at the same seed either
+    # way and `stage1_variational` supplies the rest.
+    args <- list(
+      data = sd,
+      seed = mcmc$seed,
+      refresh = if (mcmc$progress) NULL else 0,
+      show_messages = mcmc$progress,
+      show_exceptions = show_exceptions
+    )
+    args <- c(args, check_variational_args(variational))
+    run <- model$variational
+  } else {
+    ch <- resolve_chains(mcmc)
+    args <- list(
+      data = sd,
+      chains = ch$chains,
+      parallel_chains = ch$parallel_chains,
+      iter_warmup = mcmc$iter_warmup,
+      iter_sampling = mcmc$iter_sampling,
+      thin = mcmc$thin,
+      adapt_delta = mcmc$adapt_delta,
+      seed = mcmc$seed,
+      refresh = if (mcmc$progress) NULL else 0,
+      show_messages = mcmc$progress,
+      show_exceptions = show_exceptions
+    )
+    run <- model$sample
+  }
   if (!is.null(init)) args$init <- init
   args <- args[!vapply(args, is.null, logical(1))]
   # Explicit `...` arguments win over the config-derived defaults.
@@ -77,7 +109,8 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
   named <- names(dots)
   if (!is.null(named)) args <- args[!(names(args) %in% named[nzchar(named)])]
   args <- c(args, dots)
-  fit <- do.call(model$sample, args)
+  fit <- do.call(run, args)
+  if (method == "variational") warn_advi_quality(fit)
 
   new_bpnmf_class(
     list(
@@ -88,8 +121,64 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
       rank = as.integer(rank),
       type = data$type,
       model_treated = model_treated,
-      inference_mode = "joint"
+      inference_mode = "joint",
+      fit_method = method
     ),
     "bpnmf_fit"
   )
+}
+
+#' Validate the ADVI tuning list against the settable knobs
+#'
+#' The seed is deliberately not settable: stage 1 runs at `mcmc$seed`
+#' whichever algorithm it uses, so a run stays reproducible from one field.
+#' @keywords internal
+check_variational_args <- function(variational) {
+  if (is.null(variational)) {
+    return(list())
+  }
+  checkmate::assert_list(variational, names = "unique")
+  unknown <- setdiff(names(variational), VARIATIONAL_KEYS)
+  if (length(unknown) > 0) {
+    cli::cli_abort(c(
+      "Unknown ADVI {cli::qty(length(unknown))}argument{?s} {.val {unknown}}.",
+      i = "Valid arguments: {.val {VARIATIONAL_KEYS}}.",
+      i = if ("seed" %in% unknown) {
+        "The seed comes from {.field mcmc.seed}."
+      }
+    ))
+  }
+  variational
+}
+
+# CmdStan reports a poor ADVI approximation on stdout rather than through the
+# exit status, so the console output is the only place the warning lives.
+# These are its run-specific complaints only -- deliberately NOT the
+# "EXPERIMENTAL ALGORITHM ... may be unstable" banner, which CmdStan prints on
+# every ADVI run and which would make this warning cry wolf.
+ADVI_TROUBLE <- paste(
+  "may be poor", "may not have converged", "MAY BE DIVERGING",
+  "Maximum number of iterations",
+  sep = "|"
+)
+
+#' Surface CmdStan's own complaints about an ADVI fit
+#' @keywords internal
+warn_advi_quality <- function(fit) {
+  out <- tryCatch(
+    utils::capture.output(fit$output()),
+    error = function(e) character()
+  )
+  hits <- unique(trimws(grep(ADVI_TROUBLE, out, value = TRUE)))
+  # CmdStan's text is data, not a glue template.
+  hits <- gsub("}", "}}", gsub("{", "{{", hits, fixed = TRUE), fixed = TRUE)
+  if (length(hits) > 0) {
+    cli::cli_warn(c(
+      "CmdStan flagged the ADVI approximation:",
+      stats::setNames(hits, rep("*", length(hits))),
+      i = "Re-fit with {.code method = \"sample\"} before trusting these
+           estimates."
+    ))
+  }
+  invisible(fit)
 }

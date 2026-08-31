@@ -23,6 +23,43 @@ convergence_status <- function(rhat, ess, thresholds) {
 # generated-quantities RNG draw, not a posterior parameter.
 DIAG_EXCLUDE <- c("lp__", "ypred")
 
+#' Was this fit produced by ADVI rather than NUTS?
+#'
+#' R-hat, ESS and divergences are all chain-based, and ADVI produces one
+#' stream of independent draws from an approximating family -- so none of them
+#' exist for a variational fit, and computing them anyway (split-R-hat over a
+#' single chain) would report a number that means nothing.
+#' @param fit A `bpnmf_fit` / `bpnmf_cut_fit`, or a raw CmdStan fit object.
+#' @keywords internal
+is_variational_fit <- function(fit) {
+  if (inherits(fit, "bpnmf_fit") || inherits(fit, "bpnmf_cut_fit")) {
+    fit <- fit$fit
+  }
+  inherits(fit, "CmdStanVB")
+}
+
+#' Human-readable name for a fit method
+#' @keywords internal
+fit_method_label <- function(method) {
+  if (identical(method, "variational")) "ADVI (variational)" else "NUTS (MCMC)"
+}
+
+# Gate-shaped result for a variational fit. The fields are kept so every
+# consumer -- manifests, the convergence JSON, printing -- sees one shape;
+# `converged = NA` means "not gated", which is distinct from FALSE ("gated
+# and failed") and must not be collapsed into it.
+variational_gate <- function() {
+  list(
+    method = "variational",
+    rhat_max = NA_real_,
+    ess_bulk_min = NA_real_,
+    ess_tail_min = NA_real_,
+    divergences = NA_integer_,
+    divergence_fraction = NA_real_,
+    converged = NA
+  )
+}
+
 diag_variables <- function(fit) {
   vars <- fit$metadata()$stan_variables
   setdiff(vars, DIAG_EXCLUDE)
@@ -92,13 +129,18 @@ divergence_summary <- function(fit) {
 #'   `mcmc$gate_params` when `fit` is a `bpnmf_fit`).
 #' @param thresholds A [bpnmf_convergence()] object.
 #' @return A list: `rhat_max`, `ess_bulk_min`, `ess_tail_min`, `divergences`,
-#'   `divergence_fraction`, `converged` (+ `gate_params` when set).
+#'   `divergence_fraction`, `converged` (+ `gate_params` when set). For a
+#'   variational (ADVI) fit none of those quantities exist, so they are `NA`
+#'   and `converged` is `NA` -- "not gated", not "failed".
 #' @export
 convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
   if (inherits(fit, "bpnmf_fit") || inherits(fit, "bpnmf_cut_fit")) {
     gate_params <- gate_params %||% fit$config$mcmc$gate_params
     thresholds <- thresholds %||% fit$config$mcmc$convergence
     fit <- fit$fit
+  }
+  if (is_variational_fit(fit)) {
+    return(variational_gate())
   }
   thresholds <- thresholds %||% bpnmf_convergence()
 
@@ -148,6 +190,14 @@ parameter_diagnostics <- function(fit, gate_params = NULL, thresholds = NULL) {
     gate_params <- gate_params %||% fit$config$mcmc$gate_params
     thresholds <- thresholds %||% fit$config$mcmc$convergence
     fit <- fit$fit
+  }
+  if (is_variational_fit(fit)) {
+    cli::cli_abort(c(
+      "Per-parameter R-hat / ESS diagnostics need multiple MCMC chains.",
+      i = "This fit came from ADVI ({.code method = \"variational\"}), which
+           has neither.",
+      i = "Re-fit with {.code method = \"sample\"} to diagnose convergence."
+    ))
   }
   thresholds <- thresholds %||% bpnmf_convergence()
 
@@ -230,6 +280,11 @@ print.bpnmf_diagnostics <- function(x, ...) {
 #' @param path Output file path.
 #' @export
 write_convergence_json <- function(gate, path) {
-  jsonlite::write_json(gate, path, auto_unbox = TRUE, pretty = TRUE, digits = 8)
+  # `na = "null"`: an ungated variational stage 1 carries NA fields, and JSON
+  # null reads as absent rather than as the string "NA".
+  jsonlite::write_json(
+    gate, path,
+    auto_unbox = TRUE, pretty = TRUE, digits = 8, na = "null"
+  )
   invisible(path)
 }

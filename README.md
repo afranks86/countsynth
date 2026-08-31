@@ -231,6 +231,12 @@ cut:
   # stage2_mcmc:                 # overrides merged over the mcmc block
   #   num_warmup: 500
   #   num_samples: 500
+  # stage1_method: variational   # sample (default, NUTS) | variational (ADVI)
+  # stage1_variational:          # ADVI knobs; only read under "variational"
+  #   algorithm: meanfield       # meanfield | fullrank
+  #   draws: 1000
+  #   iter: 10000
+  #   tol_rel_obj: 0.01
 ```
 
 Then:
@@ -410,6 +416,55 @@ configured much shorter than stage 1 via `cut.stage2_mcmc`. Retained draw
 counts must be equal across components so that pooling weights them equally.
 Seeds are derived from `mcmc.random_seed` unless you set `selection_seed` /
 `stage2_seed` explicitly; `cut.stage2_mcmc` may not set a seed of its own.
+
+### Fast stage 1 with ADVI
+
+Stage 1 is the expensive half — the full factorization over every control
+cell — and full MCMC on it can take hours. `stage1_method = "variational"`
+runs Stan's ADVI there instead, turning that into minutes. Everything
+downstream is unchanged: ADVI still yields draws of `mu_ctrl`, and the same
+seeded, stratified selection promotes some of them to cut components.
+
+```r
+cfg <- bpnmf_example_config(
+  model = bpnmf_model_opts(
+    types = list(total = bpnmf_type("total", 3)),
+    inference_mode = "cut"
+  ),
+  cut = bpnmf_cut_opts(
+    num_stage1_draws = 25,
+    stage1_method = "variational",
+    stage1_variational = list(algorithm = "meanfield", draws = 1000)
+  )
+)
+cfit <- bpnmf_cut_fit(bpnmf_data(cfg), config = cfg)
+```
+
+What you give up is real, and it is uncertainty rather than location.
+Mean-field ADVI fits a factorized Gaussian in the unconstrained space, so it
+understates marginal variance and drops posterior correlation between
+baseline parameters. In cut mode that error propagates in one direction: the
+stage-1 components span too narrow a range, so the pooled `te` posterior is
+too narrow too and its intervals under-cover. Point estimates are usually
+close; intervals are not trustworthy.
+
+There is also no convergence gate to lean on — R-hat, ESS and divergences
+are all chain-based quantities that ADVI simply does not have. The manifest
+records this rather than papering over it:
+
+- `manifest$stage1$converged` is `NA` (“not gated”), never `TRUE`/`FALSE`
+- `manifest$stage1_gated` is `FALSE`, and `manifest$converged` then reflects
+  only the stage-2 fits, which are still full MCMC and still gated
+- `parameter_diagnostics()` and `bpnmf_trace_plot()` error on a variational
+  fit instead of returning a meaningless single-chain R-hat
+
+CmdStan’s own run-specific complaints (“the variational approximation may be
+poor”, “maximum number of iterations is reached”) are surfaced as R warnings.
+
+Use ADVI to iterate on rank, priors, and data prep; re-run with
+`stage1_method = "sample"` for anything you intend to report. The same switch
+is available directly on a single fit as `bpnmf_fit(..., method =
+"variational")`.
 
 ## Parity with the Python implementation
 

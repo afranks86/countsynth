@@ -13,7 +13,10 @@ bpnmf_cut_fit(data, rank = NULL, config, parallel = c("none", "future"))
 \code{ranks_to_test}).}
 
 \item{config}{The \code{\link[=bpnmf_config]{bpnmf_config()}} object; \code{config$cut} supplies the cut
-settings (defaults from \code{\link[=bpnmf_cut_opts]{bpnmf_cut_opts()}} otherwise).}
+settings (defaults from \code{\link[=bpnmf_cut_opts]{bpnmf_cut_opts()}} otherwise). Set
+\code{config$cut$stage1_method = "variational"} to fit stage 1 with ADVI
+instead of NUTS -- much faster, but approximate and ungated; see
+\code{\link[=bpnmf_cut_opts]{bpnmf_cut_opts()}}.}
 
 \item{parallel}{\code{"none"} (sequential stage-2 loop, default) or \code{"future"}
 (requires \pkg{furrr}; stage-2 components run on the active future plan

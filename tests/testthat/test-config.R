@@ -38,6 +38,32 @@ test_that("stage2_mcmc seed is rejected", {
   )
 })
 
+test_that("stage1_method defaults to sampling and validates its ADVI knobs", {
+  expect_equal(bpnmf_cut_opts()$stage1_method, "sample")
+  expect_null(bpnmf_cut_opts()$stage1_variational)
+
+  opts <- bpnmf_cut_opts(
+    stage1_method = "variational",
+    stage1_variational = list(algorithm = "meanfield", draws = 500L)
+  )
+  expect_equal(opts$stage1_method, "variational")
+  expect_equal(opts$stage1_variational$draws, 500L)
+
+  expect_error(bpnmf_cut_opts(stage1_method = "advi"), "stage1_method")
+  # The seed is mcmc.seed's job, so it is not an ADVI knob.
+  expect_error(
+    bpnmf_cut_opts(
+      stage1_method = "variational", stage1_variational = list(seed = 1)
+    ),
+    "Unknown key"
+  )
+  # Tuning a method you are not using is a mistake worth flagging.
+  expect_warning(
+    bpnmf_cut_opts(stage1_variational = list(iter = 100)),
+    "ignored"
+  )
+})
+
 test_that("aggregate unit needs exactly one selector", {
   expect_error(bpnmf_aggregate_unit("All"), "exactly one")
   expect_error(
@@ -120,6 +146,34 @@ test_that("YAML loader accepts the Python schema and translates names", {
   expect_equal(cfg$cut$num_stage1_draws, 10L)
   expect_equal(cfg$cut$stage2_mcmc$num_warmup, 200)
   expect_equal(cfg$model$types$total$total_all, TRUE)
+})
+
+test_that("YAML loader reads the cut stage-1 method", {
+  yaml <- sub(
+    "  num_stage1_draws: 10",
+    paste(
+      "  num_stage1_draws: 10",
+      "  stage1_method: variational",
+      "  stage1_variational:",
+      "    algorithm: meanfield",
+      "    draws: 400",
+      sep = "\n"
+    ),
+    BASE_YAML,
+    fixed = TRUE
+  )
+  cfg <- read_bpnmf_config(write_yaml_config(yaml))
+  expect_equal(cfg$cut$stage1_method, "variational")
+  expect_equal(cfg$cut$stage1_variational$algorithm, "meanfield")
+  expect_equal(cfg$cut$stage1_variational$draws, 400)
+
+  expect_error(
+    read_bpnmf_config(write_yaml_config(sub(
+      "  stage1_variational:", "  stage1_variational:\n    bogus: 1",
+      yaml, fixed = TRUE
+    ))),
+    "Unknown config key"
+  )
 })
 
 test_that("unknown YAML keys are rejected at every level", {

@@ -14,6 +14,16 @@ FIGURE_NAMES <- c(
 
 AGGREGATION_PERIODS <- c("monthly", "bimonthly", "quarterly", "yearly")
 
+# Tuning knobs a variational (ADVI) stage-1 fit may set. cmdstanr's
+# `variational()` also takes data / seed / refresh / message flags, but those
+# are owned by the fitter (the seed comes from mcmc.seed) so they are not
+# settable here.
+VARIATIONAL_KEYS <- c(
+  "algorithm", "iter", "grad_samples", "elbo_samples", "eta",
+  "adapt_engaged", "adapt_iter", "tol_rel_obj", "eval_elbo",
+  "output_samples", "draws"
+)
+
 new_bpnmf_class <- function(x, class) {
   structure(x, class = c(class, "list"))
 }
@@ -470,22 +480,55 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
 #' @param stage2_mcmc Named list shallow-merged over the top-level MCMC options
 #'   for stage 2 (accepts both R and Python key names; must not set the seed --
 #'   `stage2_seed` is the authority).
+#' @param stage1_method How stage 1 is fit: `"sample"` (NUTS, the default) or
+#'   `"variational"` (Stan's ADVI). ADVI turns a stage-1 fit that takes hours
+#'   into one that takes minutes, at the cost of an approximation: mean-field
+#'   ADVI understates posterior variance and ignores posterior correlations,
+#'   so the stage-1 components it hands to stage 2 are drawn from too narrow a
+#'   spread and the pooled cut posterior for `te` comes out over-confident.
+#'   There is also no R-hat / ESS / divergence gate for a variational fit, so
+#'   `manifest$stage1$converged` is `NA` rather than `TRUE`/`FALSE`. Use it to
+#'   iterate; re-run with `"sample"` for results you intend to report.
+#' @param stage1_variational Named list of ADVI tuning arguments passed to
+#'   cmdstanr's `variational()` -- any of
+#'   `r toString(VARIATIONAL_KEYS)`. The seed is not settable here (stage 1
+#'   runs at `mcmc$seed`, as it does under `"sample"`). Ignored when
+#'   `stage1_method = "sample"`.
 #' @export
 bpnmf_cut_opts <- function(num_stage1_draws = 25,
                            stage2_draws_per_component = 100,
                            selection_seed = NULL, stage2_seed = NULL,
-                           stage2_mcmc = NULL) {
+                           stage2_mcmc = NULL, stage1_method = "sample",
+                           stage1_variational = NULL) {
   checkmate::assert_int(num_stage1_draws, lower = 1)
   checkmate::assert_int(stage2_draws_per_component, lower = 1, null.ok = TRUE)
   checkmate::assert_int(selection_seed, null.ok = TRUE)
   checkmate::assert_int(stage2_seed, null.ok = TRUE)
   checkmate::assert_list(stage2_mcmc, names = "unique", null.ok = TRUE)
+  checkmate::assert_choice(stage1_method, c("sample", "variational"))
+  checkmate::assert_list(stage1_variational, names = "unique", null.ok = TRUE)
   if (!is.null(stage2_mcmc) &&
     any(c("random_seed", "seed") %in% names(stage2_mcmc))) {
     cli::cli_abort(
       "cut.stage2_mcmc must not set the seed; {.field cut.stage2_seed} is the
        Stage-2 seed authority."
     )
+  }
+  if (!is.null(stage1_variational)) {
+    unknown <- setdiff(names(stage1_variational), VARIATIONAL_KEYS)
+    if (length(unknown) > 0) {
+      cli::cli_abort(c(
+        "Unknown {cli::qty(length(unknown))}key{?s} {.val {unknown}} in
+         {.field cut.stage1_variational}.",
+        i = "Valid keys: {.val {VARIATIONAL_KEYS}}."
+      ))
+    }
+    if (identical(stage1_method, "sample")) {
+      cli::cli_warn(
+        "{.field cut.stage1_variational} is ignored because
+         {.field cut.stage1_method} is {.val sample}."
+      )
+    }
   }
   new_bpnmf_class(
     list(
@@ -498,7 +541,9 @@ bpnmf_cut_opts <- function(num_stage1_draws = 25,
         },
       selection_seed = if (is.null(selection_seed)) NULL else as.integer(selection_seed),
       stage2_seed = if (is.null(stage2_seed)) NULL else as.integer(stage2_seed),
-      stage2_mcmc = stage2_mcmc
+      stage2_mcmc = stage2_mcmc,
+      stage1_method = stage1_method,
+      stage1_variational = stage1_variational
     ),
     "bpnmf_cut_opts"
   )
@@ -565,6 +610,9 @@ print.bpnmf_config <- function(x, ...) {
   cli::cli_li("distribution: {x$model$outcome_distribution}")
   mode <- x$model$inference_mode %||% "joint"
   cli::cli_li("inference mode: {mode}")
+  if (identical(mode, "cut")) {
+    cli::cli_li("cut stage 1: {fit_method_label(x$cut$stage1_method %||% 'sample')}")
+  }
   if (length(x$model$types) > 0) {
     for (nm in names(x$model$types)) {
       tp <- x$model$types[[nm]]

@@ -17,7 +17,9 @@ R-hat/ESS gate is restricted to (defaults to the config's
 }
 \value{
 A list: \code{rhat_max}, \code{ess_bulk_min}, \code{ess_tail_min}, \code{divergences},
-\code{divergence_fraction}, \code{converged} (+ \code{gate_params} when set).
+\code{divergence_fraction}, \code{converged} (+ \code{gate_params} when set). For a
+variational (ADVI) fit none of those quantities exist, so they are \code{NA}
+and \code{converged} is \code{NA} -- "not gated", not "failed".
 }
 \description{
 Port of \code{diagnostics.convergence_summary}: worst R-hat and smallest

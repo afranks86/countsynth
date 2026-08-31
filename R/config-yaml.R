@@ -247,7 +247,7 @@ parse_yaml_cut <- function(x, path = "cut") {
   check_known_keys(
     x,
     c("num_stage1_draws", "stage2_draws_per_component", "selection_seed",
-      "stage2_seed", "stage2_mcmc"),
+      "stage2_seed", "stage2_mcmc", "stage1_method", "stage1_variational"),
     path
   )
   if (!is.null(x$stage2_mcmc)) {
@@ -257,6 +257,18 @@ parse_yaml_cut <- function(x, path = "cut") {
         "progress_bar", "random_seed"),
       glue::glue("{path}.stage2_mcmc")
     )
+  }
+  # [[ ]], per the note in parse_yaml_schema: `$` partial matching would let
+  # a key resolve to a longer neighbour.
+  advi <- x[["stage1_variational"]]
+  if (!is.null(advi)) {
+    check_known_keys(advi, VARIATIONAL_KEYS, glue::glue("{path}.stage1_variational"))
+    if (!is.null(advi[["adapt_engaged"]])) {
+      advi[["adapt_engaged"]] <- yaml_flag(
+        advi[["adapt_engaged"]],
+        glue::glue("{path}.stage1_variational.adapt_engaged")
+      )
+    }
   }
   bpnmf_cut_opts(
     num_stage1_draws = x$num_stage1_draws %||% 25L,
@@ -268,7 +280,9 @@ parse_yaml_cut <- function(x, path = "cut") {
       },
     selection_seed = x$selection_seed,
     stage2_seed = x$stage2_seed,
-    stage2_mcmc = x$stage2_mcmc
+    stage2_mcmc = x$stage2_mcmc,
+    stage1_method = x[["stage1_method"]] %||% "sample",
+    stage1_variational = advi
   )
 }
 

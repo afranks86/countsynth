@@ -1,0 +1,86 @@
+data:
+  input_file: data/.csv
+  output_dir: results/infant_mortality
+  schema:
+    unit_col: state              # panel unit
+    time_col: time               # date column
+    treatment_col: exposed       # 0/1 indicator
+    # Option A: discover outcomes by column prefix
+    outcomes_from_prefixes:
+      outcome_prefix: deaths_    # births_total, births_nhblack, ...
+      denominator_prefix: births_   # must match label-for-label: pop_total, ...
+      include: [total]  # omit to take every matching column
+    # Option B (mutually exclusive with A): list them explicitly
+    # outcomes:
+    #   - {outcome_col: births_total, label: total, denominator_col: pop_total}
+
+  date_format: auto              # or an explicit strptime format
+  start_date: "2016-01-01"       # inclusive
+  end_date: "2024-01-01"         # EXCLUSIVE
+  time_aggregation:
+    enabled: false
+    period: bimonthly            # calendar bins: monthly | bimonthly | quarterly | yearly
+    # n_periods: 3               # ...or combine N consecutive periods (any resolution)
+  allow_unbalanced_panel: false
+  outcome: deaths                # label used in output filenames
+
+model:
+  outcome_distribution: Poisson       # NB | Poisson
+  adjust_for_missingness: true   # integrate over suppressed counts 1-9
+  model_treated: true            # false = baseline-only fit, no effects
+  inference_mode: cut          # joint | cut
+  types:
+    total:                       # name of the model type -> output subdirectory
+      groups: [total]            # which outcome labels this type models
+      ranks_to_test: [3]         # one fit per rank
+      # total_from: [nhblack, nhwhite, hisp]   # build a synthetic "total"
+      # total_all: false                       # ... or sum every label
+      # exclude_units: [Alaska]
+
+mcmc:
+  auto_parallelism: true         # pick chains/cores automatically
+  max_chains: 4
+  # num_chains: 4                # manual (with auto_parallelism: false)
+  # chain_method: parallel       # sequential | parallel
+  num_warmup: 200
+  num_samples: 200
+  thinning: 1                  # retain num_samples / thinning draws
+  target_accept: 0.8             # NUTS adapt_delta
+  random_seed: 8675309
+  progress_bar: true
+  # gate_params: [mu_ctrl, te]   # restrict the convergence gate
+  convergence:
+    rhat_warn: 1.05
+    rhat_fail: 1.1
+    ess_min: 50
+    ess_fail_fraction: 0.25
+
+output:
+  figures: true                 # true/all/none, or a list of figure names:
+                                 # unit_fit, unit_gap, raw_rate, interval,
+                                 # group_comparison, ppc
+  clean: false                   # wipe the type's output dir before writing
+  save_traces: false             # also save full draws as .rds
+  target_unit: Texas             # highlighted unit (default: auto-detected)
+  report_groups: [total]
+  fit_gap_per_unit: false        # fit/gap figure for every treated unit
+  print_tables: true
+  print_target_table: true
+  draws_format: csv              # csv | parquet
+  # ppc_units: [Texas]
+  # ppc_exclude_units: [Alaska]
+  # ppc_acf_lags: [6]
+  # ppc_unit_corr_max_time: "2022-01-01"
+  # aggregate_units:             # synthetic reporting-only units
+  #   - unit: "All treated"
+  #     include_treated_units: true   # or include_all_units / include_units
+
+# Only read when model.inference_mode is "cut":
+cut:
+  num_stage1_draws: 10
+  stage2_draws_per_component: 100
+  # selection_seed: 8675311      # default: random_seed + 2
+  # stage2_seed: 8675312         # default: random_seed + 3
+  # stage2_mcmc:                 # overrides merged over the mcmc block
+  #   num_warmup: 500
+  #   num_samples: 500
