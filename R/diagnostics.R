@@ -276,49 +276,82 @@ print.bpnmf_diagnostics <- function(x, ...) {
 }
 
 # Why a gate came back FALSE, as cli bullets. A bare "FAILED" leaves the user
-# to go dig the numbers out of the JSON; naming the tripped criterion and the
-# worst offending parameters answers the question on the spot.
+# to go dig the numbers out of the JSON; naming the tripped criterion, the
+# threshold it tripped, and the worst offending parameters answers the
+# question on the spot.
+#
+# The gate demands a clean PASS (see convergence_gate()), so a WARN-level
+# R-hat or ESS fails it just as a FAIL-level one does. Reporting only the
+# FAIL thresholds would then print "FAILED" next to an R-hat of 1.05 and
+# explain nothing, so each criterion reports the level it actually reached.
 gate_failure_bullets <- function(gate, thresholds = NULL, fit = NULL,
                                  max_params = 3L) {
   thresholds <- thresholds %||% bpnmf_convergence()
   bullets <- character()
+  warn_only <- TRUE
 
-  ess_min <- min(gate$ess_bulk_min, gate$ess_tail_min, na.rm = TRUE)
+  rhat <- gate$rhat_max
+  if (isTRUE(rhat >= thresholds$rhat_fail)) {
+    warn_only <- FALSE
+    bullets <- c(bullets, sprintf(
+      "max R-hat %.3g, at or above the fail threshold %.3g",
+      rhat, thresholds$rhat_fail
+    ))
+  } else if (isTRUE(rhat >= thresholds$rhat_warn)) {
+    bullets <- c(bullets, sprintf(
+      "max R-hat %.3g, at or above the warn threshold %.3g",
+      rhat, thresholds$rhat_warn
+    ))
+  }
+
+  ess <- suppressWarnings(min(gate$ess_bulk_min, gate$ess_tail_min, na.rm = TRUE))
   ess_floor <- thresholds$ess_min * thresholds$ess_fail_fraction
-  if (isTRUE(gate$rhat_max >= thresholds$rhat_fail)) {
+  if (isTRUE(ess < ess_floor)) {
+    warn_only <- FALSE
     bullets <- c(bullets, sprintf(
-      "max R-hat %.3g (fails at %.3g)", gate$rhat_max, thresholds$rhat_fail
+      "min ESS %.3g, below the fail floor %.3g (ess_min %.3g x ess_fail_fraction %.3g)",
+      ess, ess_floor, thresholds$ess_min, thresholds$ess_fail_fraction
+    ))
+  } else if (isTRUE(ess < thresholds$ess_min)) {
+    bullets <- c(bullets, sprintf(
+      "min ESS %.3g, below ess_min %.3g", ess, thresholds$ess_min
     ))
   }
-  if (isTRUE(ess_min < ess_floor)) {
-    bullets <- c(bullets, sprintf(
-      "min ESS %.3g (fails below %.3g = ess_min %.3g x ess_fail_fraction %.3g)",
-      ess_min, ess_floor, thresholds$ess_min, thresholds$ess_fail_fraction
-    ))
-  }
+
   if (isTRUE(gate$divergence_fraction > thresholds$divergence_fail_fraction)) {
+    warn_only <- FALSE
     bullets <- c(bullets, sprintf(
-      "%d divergence%s = %.2f%% (fails above %.2f%%)",
-      gate$divergences, if (gate$divergences == 1) "" else "s",
+      "%d divergence%s = %.2f%%, above divergence_fail_fraction %.2f%%",
+      gate$divergences, if (isTRUE(gate$divergences == 1)) "" else "s",
+      100 * gate$divergence_fraction,
+      100 * thresholds$divergence_fail_fraction
+    ))
+  } else if (isTRUE(gate$divergences > 0)) {
+    bullets <- c(bullets, sprintf(
+      "%d divergence%s = %.2f%%, within the %.2f%% allowance",
+      gate$divergences, if (isTRUE(gate$divergences == 1)) "" else "s",
       100 * gate$divergence_fraction,
       100 * thresholds$divergence_fail_fraction
     ))
   }
-  # A gate can fail on a WARN-level R-hat combined with low ESS, in which case
-  # neither branch above fires; report the numbers rather than nothing.
+
+  # A cut manifest has no top-level R-hat/ESS, so nothing above fires.
   if (length(bullets) == 0) {
-    bullets <- sprintf(
-      "max R-hat %.3g, min ESS %.3g, %d divergence%s",
-      gate$rhat_max, ess_min, gate$divergences,
-      if (gate$divergences == 1) "" else "s"
-    )
+    return("the gate reported no passing status; see the convergence JSON")
+  }
+  if (warn_only) {
+    bullets <- c(bullets, paste(
+      "nothing reached a fail threshold -- the gate requires a clean PASS,",
+      "so a WARN-level criterion fails it"
+    ))
   }
 
   worst <- gate_worst_parameters(fit, max_params)
   if (length(worst) > 0) {
-    bullets <- c(bullets, sprintf("worst gated parameter%s: %s",
-                                  if (length(worst) == 1) "" else "s",
-                                  paste(worst, collapse = ", ")))
+    bullets <- c(bullets, sprintf(
+      "worst gated parameter%s: %s",
+      if (length(worst) == 1) "" else "s", paste(worst, collapse = ", ")
+    ))
   }
   bullets
 }

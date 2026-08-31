@@ -130,46 +130,52 @@ test_that("only run-specific ADVI complaints warn, not CmdStan's standard banner
   expect_warning(warn_advi_quality(noisy), "may be poor")
 })
 
-test_that("gate failure bullets name the criterion that tripped", {
+test_that("gate failure bullets name the criterion and the level it reached", {
   th <- bpnmf_convergence(
     rhat_warn = 1.1, rhat_fail = 1.5, ess_min = 100,
     ess_fail_fraction = 0.25, divergence_fail_fraction = 0.01
   )
-  # The fertility_yearly failure: R-hat and ESS both blown, no divergences.
-  gate <- list(
-    rhat_max = 1.8258, ess_bulk_min = 5.865, ess_tail_min = 15.886,
-    divergences = 0, divergence_fraction = 0, converged = FALSE
-  )
-  b <- gate_failure_bullets(gate, th)
-  expect_length(b, 2)
-  expect_match(b[1], "max R-hat 1.83 \\(fails at 1.5\\)")
-  expect_match(b[2], "min ESS 5.87 \\(fails below 25")
+  gate <- function(rhat, bulk, tail, div, frac) {
+    list(rhat_max = rhat, ess_bulk_min = bulk, ess_tail_min = tail,
+         divergences = div, divergence_fraction = frac, converged = FALSE)
+  }
 
-  # Divergences alone.
-  div <- list(
-    rhat_max = 1.01, ess_bulk_min = 900, ess_tail_min = 900,
-    divergences = 40L, divergence_fraction = 0.02, converged = FALSE
-  )
-  db <- gate_failure_bullets(div, th)
-  expect_length(db, 1)
-  expect_match(db, "40 divergences = 2.00% \\(fails above 1.00%\\)")
+  # fertility_yearly: both criteria blown past their fail thresholds.
+  hard <- gate_failure_bullets(gate(1.8258, 5.865, 15.886, 0L, 0), th)
+  expect_match(hard[1], "max R-hat 1.83, at or above the fail threshold 1.5")
+  expect_match(hard[2], "min ESS 5.87, below the fail floor 25")
+  expect_false(any(grepl("clean PASS", hard)))
 
-  # A WARN-level R-hat with ESS above the fail floor trips no branch; the
-  # numbers still have to be reported rather than an empty bullet list.
-  edge <- list(
-    rhat_max = 1.2, ess_bulk_min = 60, ess_tail_min = 60,
-    divergences = 0, divergence_fraction = 0, converged = FALSE
-  )
-  eb <- gate_failure_bullets(edge, th)
-  expect_length(eb, 1)
-  expect_match(eb, "max R-hat 1.2, min ESS 60, 0 divergences")
+  # infant_mortality/total: nothing reaches a fail threshold, but ESS is under
+  # ess_min, and the gate demands a clean PASS -- so it fails. Saying only
+  # "FAILED" next to an R-hat of 1.05 explains nothing.
+  soft <- gate_failure_bullets(gate(1.0531, 71.05, 506.8, 2L, 0.0005), th)
+  expect_false(any(grepl("R-hat", soft))) # 1.05 is under the warn threshold
+  expect_match(soft[1], "min ESS 71, below ess_min 100")
+  expect_match(soft[2], "2 divergences = 0.05%, within the 1.00% allowance")
+  expect_match(soft[3], "requires a clean PASS")
+
+  # infant_mortality/race: R-hat exactly at the warn threshold.
+  warn <- gate_failure_bullets(gate(1.1029, 27.21, 118.5, 0L, 0), th)
+  expect_match(warn[1], "max R-hat 1.1, at or above the warn threshold 1.1")
+  expect_match(warn[2], "min ESS 27.2, below ess_min 100")
+  expect_match(warn[3], "requires a clean PASS")
+
+  # Divergences past their own threshold are a fail, not a warn.
+  div <- gate_failure_bullets(gate(1.01, 900, 900, 40L, 0.02), th)
+  expect_match(div[1], "40 divergences = 2.00%, above divergence_fail_fraction 1.00%")
+  expect_false(any(grepl("clean PASS", div)))
 
   # ESS uses the smaller of bulk and tail.
-  tail_bad <- list(
-    rhat_max = 1.01, ess_bulk_min = 900, ess_tail_min = 10,
-    divergences = 0, divergence_fraction = 0, converged = FALSE
+  expect_match(
+    gate_failure_bullets(gate(1.01, 900, 10, 0L, 0), th)[1], "min ESS 10"
   )
-  expect_match(gate_failure_bullets(tail_bad, th), "min ESS 10")
+
+  # A cut manifest carries no top-level R-hat/ESS; say so rather than nothing.
+  expect_match(
+    gate_failure_bullets(list(converged = FALSE), th),
+    "no passing status"
+  )
 })
 
 test_that("gate_worst_parameters is silent without a fit", {
