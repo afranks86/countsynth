@@ -256,3 +256,83 @@ test_that("time_aggregation parses, and the old `aggregation` key still loads", 
     "Unknown"
   )
 })
+
+test_that("plain named lists work anywhere a bpnmf_* object is expected", {
+  cfg <- bpnmf_config(
+    input_file = "data.csv", output_dir = "results",
+    schema = list(
+      unit_col = "state", time_col = "time", treatment_col = "exposed",
+      outcomes_from_prefixes = list(
+        outcome_prefix = "births_", denominator_prefix = "pop_"
+      )
+    ),
+    model = list(types = list(total = list(groups = "total", ranks_to_test = 3))),
+    mcmc = list(iter_warmup = 500, convergence = list(ess_min = 200)),
+    output = list(
+      figures = TRUE,
+      aggregate_units = list(
+        list(unit = "All treated", include_treated_units = TRUE)
+      )
+    ),
+    time_aggregation = list(enabled = TRUE, n_periods = 3)
+  )
+  # Every level is coerced through its real constructor, so the result is
+  # indistinguishable from the object-built form.
+  expect_s3_class(cfg$schema, "bpnmf_schema")
+  expect_s3_class(cfg$schema$outcomes_from_prefixes, "bpnmf_prefixes")
+  expect_s3_class(cfg$model$types$total, "bpnmf_type")
+  expect_s3_class(cfg$mcmc$convergence, "bpnmf_convergence")
+  expect_s3_class(cfg$output$aggregate_units[[1]], "bpnmf_aggregate_unit")
+  expect_s3_class(cfg$time_aggregation, "bpnmf_time_aggregation")
+  expect_equal(cfg$mcmc$convergence$ess_min, 200)
+  expect_equal(cfg$time_aggregation$n_periods, 3)
+  # Defaults the list did not mention are still filled in.
+  expect_identical(cfg$mcmc$gate_params, c("mu_ctrl", "te"))
+})
+
+test_that("list form and constructor form produce identical configs", {
+  args <- list(input_file = "d.csv", output_dir = "o")
+  built <- do.call(bpnmf_config, c(args, list(
+    schema = bpnmf_schema(
+      "state", "time", "exposed",
+      outcomes_from_prefixes = bpnmf_prefixes("births_", "pop_")
+    ),
+    model = bpnmf_model_opts(types = list(total = bpnmf_type("total", 3)))
+  )))
+  listed <- do.call(bpnmf_config, c(args, list(
+    schema = list(
+      unit_col = "state", time_col = "time", treatment_col = "exposed",
+      outcomes_from_prefixes = list(
+        outcome_prefix = "births_", denominator_prefix = "pop_"
+      )
+    ),
+    model = list(types = list(total = list(groups = "total", ranks_to_test = 3)))
+  )))
+  expect_equal(built, listed)
+})
+
+test_that("coercion catches typos and still runs the real validators", {
+  schema <- bpnmf_schema("u", "t", "x", outcomes_from_prefixes = bpnmf_prefixes("b_"))
+  expect_error(
+    bpnmf_config("d", "o", schema = list(
+      unit_col = "u", time_col = "t", treatment_col = "x", unit_column = "oops"
+    )),
+    'Unknown name "unit_column" in schema'
+  )
+  expect_error(
+    bpnmf_model_opts(types = list(a = list(groups = "g", ranks = 3))),
+    'Unknown name "ranks" in types\\$a'
+  )
+  # A named list must not become a way to skip validation.
+  expect_error(
+    bpnmf_config("d", "o", schema = schema, mcmc = list(adapt_delta = 1.5)),
+    "strictly between 0 and 1"
+  )
+  expect_error(
+    bpnmf_mcmc_opts(convergence = list(ess_min = -5)), "not >= 0"
+  )
+  expect_error(
+    bpnmf_config("d", "o", schema = list("u", "t", "x")),
+    "must be a .*bpnmf_schema.* object or a named list"
+  )
+})

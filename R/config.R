@@ -24,6 +24,55 @@ VARIATIONAL_KEYS <- c(
   "output_samples", "draws"
 )
 
+# Every option group is its own constructor, which keeps 80-odd arguments from
+# collapsing into one unreadable signature -- but it also meant an R script had
+# to build objects the YAML loader lets you write as plain nested maps. These
+# coercions close that gap: a named list is passed through the very same
+# constructor, so nothing skips validation, and `bpnmf_type(...)` and
+# `list(...)` are interchangeable wherever one is expected.
+coerce_bpnmf <- function(x, ctor_name, class, field) {
+  if (is.null(x) || inherits(x, class)) {
+    return(x)
+  }
+  ctor <- get(ctor_name, envir = asNamespace("bpnmf"))
+  if (!is.list(x) || (length(x) > 0 && is.null(names(x)))) {
+    cli::cli_abort(
+      "{.field {field}} must be a {.fn {ctor_name}} object or a named list of
+       its arguments."
+    )
+  }
+  unknown <- setdiff(names(x), names(formals(ctor)))
+  if (length(unknown) > 0) {
+    cli::cli_abort(c(
+      "Unknown {cli::qty(length(unknown))}name{?s} {.val {unknown}} in
+       {.field {field}}.",
+      i = "Valid arguments: {.val {setdiff(names(formals(ctor)), '...')}}."
+    ))
+  }
+  do.call(ctor, x)
+}
+
+# The same, for a list of them (model types, outcomes, aggregate units).
+coerce_bpnmf_list <- function(x, ctor_name, class, field) {
+  if (is.null(x)) {
+    return(x)
+  }
+  if (!is.list(x)) {
+    cli::cli_abort("{.field {field}} must be a list.")
+  }
+  nms <- names(x) %||% rep("", length(x))
+  out <- lapply(seq_along(x), function(i) {
+    label <- if (nzchar(nms[i])) {
+      sprintf("%s$%s", field, nms[i])
+    } else {
+      sprintf("%s[[%d]]", field, i)
+    }
+    coerce_bpnmf(x[[i]], ctor_name, class, label)
+  })
+  names(out) <- names(x)
+  out
+}
+
 new_bpnmf_class <- function(x, class) {
   structure(x, class = c(class, "list"))
 }
@@ -95,9 +144,14 @@ bpnmf_schema <- function(unit_col, time_col, treatment_col,
     )
   }
   if (!is.null(outcomes)) {
+    outcomes <- coerce_bpnmf_list(outcomes, "bpnmf_outcome", "bpnmf_outcome", "outcomes")
     checkmate::assert_list(outcomes, min.len = 1, types = "bpnmf_outcome")
   }
   if (!is.null(outcomes_from_prefixes)) {
+    outcomes_from_prefixes <- coerce_bpnmf(
+      outcomes_from_prefixes, "bpnmf_prefixes", "bpnmf_prefixes",
+      "outcomes_from_prefixes"
+    )
     checkmate::assert_class(outcomes_from_prefixes, "bpnmf_prefixes")
   }
   new_bpnmf_class(
@@ -204,6 +258,7 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
                              adjust_for_missingness = TRUE,
                              model_treated = TRUE, inference_mode = NULL) {
   checkmate::assert_choice(outcome_distribution, c("NB", "Poisson"))
+  types <- coerce_bpnmf_list(types, "bpnmf_type", "bpnmf_type", "types")
   checkmate::assert_list(types, types = "bpnmf_type")
   if (length(types) > 0) {
     checkmate::assert_names(names(types), type = "unique")
@@ -318,6 +373,9 @@ bpnmf_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
   # explicit NULL skips an R default.
   gate_params <- gate_params %||% DEFAULT_GATE_PARAMS
   checkmate::assert_character(gate_params, min.len = 1, any.missing = FALSE)
+  convergence <- coerce_bpnmf(
+    convergence, "bpnmf_convergence", "bpnmf_convergence", "convergence"
+  )
   checkmate::assert_class(convergence, "bpnmf_convergence")
   new_bpnmf_class(
     list(
@@ -447,6 +505,10 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
   checkmate::assert_flag(print_tables)
   checkmate::assert_flag(print_target_table)
   checkmate::assert_flag(html_tables)
+  aggregate_units <- coerce_bpnmf_list(
+    aggregate_units, "bpnmf_aggregate_unit", "bpnmf_aggregate_unit",
+    "aggregate_units"
+  )
   checkmate::assert_list(
     aggregate_units,
     types = "bpnmf_aggregate_unit", null.ok = TRUE
@@ -563,17 +625,27 @@ bpnmf_cut_opts <- function(num_stage1_draws = 25,
 
 #' Top-level bpnmf configuration
 #'
+#' Anywhere a `bpnmf_*` options object is expected -- here and in
+#' [bpnmf_schema()], [bpnmf_model_opts()], [bpnmf_mcmc_opts()] and
+#' [bpnmf_output_opts()] -- a plain **named list** of that constructor's
+#' arguments is accepted and passed through the constructor itself. Validation
+#' and defaults are identical either way, and an unrecognized name is an error
+#' rather than a silently ignored option, so the list form is a shorthand
+#' rather than a way around the checks. Use the constructors for argument
+#' completion, or lists for a single call shaped like the YAML config.
+#'
 #' @param input_file Path to the input CSV.
 #' @param output_dir Directory run artifacts are written to.
-#' @param schema A [bpnmf_schema()] object.
-#' @param model A [bpnmf_model_opts()] object.
-#' @param mcmc A [bpnmf_mcmc_opts()] object.
-#' @param output A [bpnmf_output_opts()] object.
-#' @param cut A [bpnmf_cut_opts()] object, or `NULL`.
+#' @param schema A [bpnmf_schema()] object, or a named list of its arguments.
+#' @param model A [bpnmf_model_opts()] object, or a named list of its arguments.
+#' @param mcmc A [bpnmf_mcmc_opts()] object, or a named list of its arguments.
+#' @param output A [bpnmf_output_opts()] object, or a named list of its arguments.
+#' @param cut A [bpnmf_cut_opts()] object, a named list, or `NULL`.
 #' @param date_format `"auto"` or a `strptime` format for the time column.
 #' @param start_date,end_date Optional date filter; `start_date` inclusive,
 #'   `end_date` **exclusive**.
-#' @param time_aggregation A [bpnmf_time_aggregation()] object.
+#' @param time_aggregation A [bpnmf_time_aggregation()] object, or a named
+#'   list of its arguments.
 #' @param allow_unbalanced_panel Treat structurally absent (unit, time) cells
 #'   as missing instead of erroring.
 #' @param outcome Optional label used in draws filenames (falls back to the
@@ -591,6 +663,11 @@ bpnmf_config <- function(input_file, output_dir, schema,
                          allow_unbalanced_panel = FALSE, outcome = NULL) {
   checkmate::assert_string(input_file, min.chars = 1)
   checkmate::assert_string(output_dir, min.chars = 1)
+  schema <- coerce_bpnmf(schema, "bpnmf_schema", "bpnmf_schema", "schema")
+  model <- coerce_bpnmf(model, "bpnmf_model_opts", "bpnmf_model_opts", "model")
+  mcmc <- coerce_bpnmf(mcmc, "bpnmf_mcmc_opts", "bpnmf_mcmc_opts", "mcmc")
+  output <- coerce_bpnmf(output, "bpnmf_output_opts", "bpnmf_output_opts", "output")
+  cut <- coerce_bpnmf(cut, "bpnmf_cut_opts", "bpnmf_cut_opts", "cut")
   checkmate::assert_class(schema, "bpnmf_schema")
   checkmate::assert_class(model, "bpnmf_model_opts")
   checkmate::assert_class(mcmc, "bpnmf_mcmc_opts")
@@ -599,6 +676,10 @@ bpnmf_config <- function(input_file, output_dir, schema,
   checkmate::assert_string(date_format, min.chars = 1)
   checkmate::assert_string(start_date, null.ok = TRUE)
   checkmate::assert_string(end_date, null.ok = TRUE)
+  time_aggregation <- coerce_bpnmf(
+    time_aggregation, "bpnmf_time_aggregation", "bpnmf_time_aggregation",
+    "time_aggregation"
+  )
   checkmate::assert_class(time_aggregation, "bpnmf_time_aggregation")
   checkmate::assert_flag(allow_unbalanced_panel)
   checkmate::assert_string(outcome, min.chars = 1, null.ok = TRUE)

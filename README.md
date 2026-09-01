@@ -279,6 +279,41 @@ cfg <- bpnmf_config(
 )
 ```
 
+Each option group has its own constructor so that ~80 options do not collapse
+into one unreadable signature. You do not have to call them, though: anywhere
+a `bpnmf_*` object is expected you can pass a **plain named list** of the same
+arguments, which is then run through that very constructor — same validation,
+same defaults, same result. So the config above can be written as one call
+with the same shape as the YAML:
+
+```r
+cfg <- bpnmf_config(
+  input_file = "data/my_panel.csv",
+  output_dir = "results/my_panel",
+  schema = list(
+    unit_col = "state", time_col = "time", treatment_col = "exposed",
+    outcomes_from_prefixes = list(
+      outcome_prefix = "births_", denominator_prefix = "pop_",
+      include = c("total", "nhblack")
+    )
+  ),
+  model = list(
+    outcome_distribution = "NB",
+    types = list(total = list(groups = "total", ranks_to_test = 3))
+  ),
+  mcmc = list(iter_warmup = 1000, iter_sampling = 2500, thin = 10),
+  output = list(figures = TRUE, target_unit = "Texas"),
+  start_date = "2016-01-01", end_date = "2024-01-01",
+  time_aggregation = list(enabled = TRUE, period = "bimonthly")
+)
+```
+
+Mix the two freely. A misspelled name in a list is an error naming the field
+and listing the valid arguments, so the list form is not a way to smuggle a
+typo past validation. Reach for the constructors when you want argument
+completion and `?bpnmf_model_opts` at your fingertips; reach for lists when
+you want one call that mirrors the YAML.
+
 Note that the R constructors use cmdstanr's MCMC names while the YAML uses
 the Python package's: `num_warmup` → `iter_warmup`, `num_samples` →
 `iter_sampling`, `thinning` → `thin`, `target_accept` → `adapt_delta`,
