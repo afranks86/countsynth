@@ -55,6 +55,39 @@ test_that("gate_params prefix matching errors on zero matches", {
   expect_identical(gated, c(TRUE, TRUE, FALSE))
 })
 
+test_that("the gate defaults to mu_ctrl and te, with an 'all' opt-out", {
+  # Every real Stan variable, so an over-matching prefix would show up here.
+  bases <- c(
+    "mu_ctrl", "te", "time_fac", "time_fe", "unit_weight", "disp", "phi_unit",
+    "state_fe_mu", "state_fe_sigma", "state_fe_z", "state_category_scale",
+    "treatment_it_scale", "treatment_state_scale", "treatment_category_scale",
+    "treatment_kt_z", "state_treatment_effect_z", "state_category_te_z",
+    "category_treatment_effect"
+  )
+  gated <- match_gate_params(bases, DEFAULT_GATE_PARAMS)
+  # "te" must not reach treatment_* (which begins "tr"), or the default would
+  # silently pull the factor-adjacent scales back into the gate.
+  expect_identical(bases[gated], c("mu_ctrl", "te"))
+
+  expect_true(all(match_gate_params(bases, "all")))
+  expect_true(all(match_gate_params(bases, NULL)))
+})
+
+test_that("every config path lands on the default gate_params", {
+  expect_identical(bpnmf_mcmc_opts()$gate_params, c("mu_ctrl", "te"))
+  # The YAML loader passes NULL explicitly when the key is absent, which would
+  # otherwise skip the signature default.
+  expect_identical(bpnmf_mcmc_opts(gate_params = NULL)$gate_params, c("mu_ctrl", "te"))
+  expect_identical(bpnmf_mcmc_opts(gate_params = "all")$gate_params, "all")
+  expect_identical(bpnmf_mcmc_opts(gate_params = "te")$gate_params, "te")
+  expect_identical(parse_yaml_mcmc(NULL)$gate_params, c("mu_ctrl", "te"))
+  expect_identical(parse_yaml_mcmc(list())$gate_params, c("mu_ctrl", "te"))
+  expect_identical(
+    parse_yaml_mcmc(list(gate_params = list("te")))$gate_params, "te"
+  )
+  expect_identical(parse_yaml_mcmc(list(gate_params = "all"))$gate_params, "all")
+})
+
 test_that("a variational fit is reported as ungated, not as failed", {
   # `converged = NA` is the whole point: ADVI produces one stream of draws
   # from an approximating family, so R-hat / ESS / divergences do not exist

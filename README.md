@@ -191,7 +191,8 @@ mcmc:
   target_accept: 0.8             # NUTS adapt_delta
   random_seed: 8675309
   progress_bar: true
-  # gate_params: [mu_ctrl, te]   # restrict the convergence gate
+  gate_params: [mu_ctrl, te]     # gate on these prefixes (this is the default;
+                                 # "all" gates on every sampled variable)
   convergence:
     rhat_warn: 1.01
     rhat_fail: 1.05
@@ -347,16 +348,20 @@ divergences. `converged` requires a PASS on both R-hat and ESS *and* a
 divergent-transition rate at or below `divergence_fail_fraction` — 1% of the
 retained draws by default, with 0 demanding none at all. The gate uses the
 rate rather than a raw count so that the threshold means the same thing
-however long you sample. Note that the factorization is
-rotation-non-identifiable by design: the individual factors (`time_fac`,
-`unit_weight`) are not expected to mix well, and it is the combined
-quantities — the baseline log-rate surface `mu_ctrl` and the treatment
-effects `te`, which the draws frame reports as `mu` and `mu_treated` — that
-are identified and interpretable. If the gate is dominated by the factor
-parameters rather than by anything you report, restrict it with
-`gate_params: [mu_ctrl, te]`; divergences still count run-wide.
-`parameter_diagnostics(fit)` shows the per-parameter breakdown behind the
-gate verdict.
+however long you sample.
+
+**The gate covers `mu_ctrl` and `te` by default**, not every sampled
+variable. The factorization is rotation-non-identifiable by design: the
+individual factors (`time_fac`, `unit_weight`) are not expected to mix well,
+because chains that settle on different factor labelings give them an
+enormous R-hat while nothing you report has moved. The identified,
+interpretable quantities are the baseline log-rate surface `mu_ctrl` and the
+treatment effects `te` — which the draws frame reports as `mu` and
+`mu_treated` — so those are what the verdict is built from. Widen it by
+listing more prefixes, or set `gate_params: all` to gate on every sampled
+variable. Divergences always count run-wide, whatever the gate covers, and
+`parameter_diagnostics(fit)` reports every variable with a `gated` column
+showing which ones counted.
 
 **Target unit.** `target_unit` selects the unit highlighted in tables and
 per-unit figures. For a summary across treated units, add an

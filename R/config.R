@@ -284,15 +284,21 @@ bpnmf_convergence <- function(rhat_warn = 1.01, rhat_fail = 1.05,
 #' @param adapt_delta NUTS target acceptance probability in (0, 1).
 #' @param seed Base RNG seed (cut-mode stage seeds derive from it).
 #' @param progress Show sampler progress.
-#' @param gate_params Optional character vector of parameter-name prefixes the
-#'   convergence gate is restricted to (divergences always count run-wide).
+#' @param gate_params Parameter-name prefixes the convergence gate is
+#'   restricted to (divergences always count run-wide). Defaults to
+#'   `c("mu_ctrl", "te")` -- the counterfactual surface and the treatment
+#'   effect, which is what the reported estimands are built from. Pass a wider
+#'   vector to gate on more, or `"all"` to gate on every diagnosable variable
+#'   (the behaviour before this became a default). [parameter_diagnostics()]
+#'   always reports every variable regardless.
 #' @param convergence A [bpnmf_convergence()] object.
 #' @export
 bpnmf_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
                             chains = NULL, parallel_chains = NULL,
                             iter_warmup = 1000, iter_sampling = 2500,
                             thin = 10, adapt_delta = 0.8, seed = 8675309,
-                            progress = TRUE, gate_params = NULL,
+                            progress = TRUE,
+                            gate_params = DEFAULT_GATE_PARAMS,
                             convergence = bpnmf_convergence()) {
   checkmate::assert_flag(auto_parallelism)
   checkmate::assert_int(max_chains, lower = 1)
@@ -307,10 +313,11 @@ bpnmf_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
   }
   checkmate::assert_int(seed)
   checkmate::assert_flag(progress)
-  checkmate::assert_character(
-    gate_params,
-    min.len = 1, any.missing = FALSE, null.ok = TRUE
-  )
+  # Resolve here rather than relying on the signature default: the YAML
+  # loader passes gate_params = NULL explicitly when the key is absent, and an
+  # explicit NULL skips an R default.
+  gate_params <- gate_params %||% DEFAULT_GATE_PARAMS
+  checkmate::assert_character(gate_params, min.len = 1, any.missing = FALSE)
   checkmate::assert_class(convergence, "bpnmf_convergence")
   new_bpnmf_class(
     list(

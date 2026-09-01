@@ -15,7 +15,7 @@ bpnmf_mcmc_opts(
   adapt_delta = 0.8,
   seed = 8675309,
   progress = TRUE,
-  gate_params = NULL,
+  gate_params = DEFAULT_GATE_PARAMS,
   convergence = bpnmf_convergence()
 )
 }
@@ -37,8 +37,13 @@ iterations and retain \code{iter_sampling / thin}).}
 
 \item{progress}{Show sampler progress.}
 
-\item{gate_params}{Optional character vector of parameter-name prefixes the
-convergence gate is restricted to (divergences always count run-wide).}
+\item{gate_params}{Parameter-name prefixes the convergence gate is
+restricted to (divergences always count run-wide). Defaults to
+\code{c("mu_ctrl", "te")} -- the counterfactual surface and the treatment
+effect, which is what the reported estimands are built from. Pass a wider
+vector to gate on more, or \code{"all"} to gate on every diagnosable variable
+(the behaviour before this became a default). \code{\link[=parameter_diagnostics]{parameter_diagnostics()}}
+always reports every variable regardless.}
 
 \item{convergence}{A \code{\link[=bpnmf_convergence]{bpnmf_convergence()}} object.}
 }

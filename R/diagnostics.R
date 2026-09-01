@@ -23,6 +23,20 @@ convergence_status <- function(rhat, ess, thresholds) {
 # generated-quantities RNG draw, not a posterior parameter.
 DIAG_EXCLUDE <- c("lp__", "ypred")
 
+# Gated by default: the counterfactual log-rate surface and the treatment
+# effect -- the two quantities every reported estimand is built from. The
+# factor parameters (time_fac, unit_weight, state_fe_*) are deliberately left
+# out: an NMF is invariant to permuting and rescaling its factors, so chains
+# that settle on different labelings give those parameters an enormous R-hat
+# while mu_ctrl and te are converged. Gating on them measures label
+# disagreement, not convergence of anything reported.
+#
+# Matching is by prefix over base names, and neither prefix over-matches:
+# "te" does not reach `treatment_*` (which begins "tr"), and "mu_ctrl" is
+# exact. parameter_diagnostics() still reports every variable, so the
+# ungated ones stay visible.
+DEFAULT_GATE_PARAMS <- c("mu_ctrl", "te")
+
 #' Was this fit produced by ADVI rather than NUTS?
 #'
 #' R-hat, ESS and divergences are all chain-based, and ADVI produces one
@@ -83,7 +97,9 @@ element_diagnostics <- function(fit, variables) {
 #' Match gate_params prefixes against base variable names
 #' @keywords internal
 match_gate_params <- function(base_names, gate_params) {
-  if (is.null(gate_params)) {
+  # NULL for a direct call with no config; "all" is the opt-out that restores
+  # gating on every diagnosable variable.
+  if (is.null(gate_params) || identical(gate_params, "all")) {
     return(rep(TRUE, length(base_names)))
   }
   gated <- Reduce(
@@ -143,6 +159,7 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
     return(variational_gate())
   }
   thresholds <- thresholds %||% bpnmf_convergence()
+  gate_params <- gate_params %||% DEFAULT_GATE_PARAMS
 
   summ <- element_diagnostics(fit, diag_variables(fit))
   # Fixed elements (zero posterior span) carry no convergence information.
@@ -200,6 +217,7 @@ parameter_diagnostics <- function(fit, gate_params = NULL, thresholds = NULL) {
     ))
   }
   thresholds <- thresholds %||% bpnmf_convergence()
+  gate_params <- gate_params %||% DEFAULT_GATE_PARAMS
 
   summ <- element_diagnostics(fit, diag_variables(fit))
   gated_by_base <- match_gate_params(summ$base, gate_params)
