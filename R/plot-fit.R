@@ -32,7 +32,9 @@ first_treated_time <- function(df, unit) {
 #'
 #' Observed counts as points, posterior-predictive mean as a line, with the
 #' equal-tailed 95% interval ribbon and a dashed vertical line at the unit's
-#' first treated period.
+#' first treated period. Cells where a source unit's suppressed count was
+#' filled in by [add_aggregate_units()] (e.g. a synthetic "all treated"
+#' unit) are ringed in orange.
 #'
 #' @param x A `bpnmf_draws` frame or [compute_quantiles()] output.
 #' @param unit Unit to plot.
@@ -46,6 +48,8 @@ bpnmf_unit_fit_plot <- function(x, unit, group = NULL) {
   if (nrow(sub) == 0) {
     cli::cli_abort("No rows for unit {.val {unit}}, group {.val {group}}.")
   }
+  if (!"outcome_imputed" %in% names(sub)) sub$outcome_imputed <- FALSE
+  imputed <- sub[sub$outcome_imputed, ]
   vline <- first_treated_time(sub, unit)
   p <- ggplot2::ggplot(sub, ggplot2::aes(x = .data$time)) +
     ggplot2::geom_ribbon(
@@ -60,10 +64,18 @@ bpnmf_unit_fit_plot <- function(x, unit, group = NULL) {
       ggplot2::aes(y = .data$outcome),
       size = 1.4, alpha = 0.8
     ) +
+    ggplot2::geom_point(
+      data = imputed, ggplot2::aes(y = .data$outcome),
+      shape = 1, size = 3, color = "#E6550D", stroke = 1
+    ) +
     ggplot2::labs(
       title = sprintf("Model fit: %s (%s)", unit, group),
       x = "Time", y = "Count",
-      subtitle = "Points: observed. Line/ribbon: posterior predictive mean and 95% CI."
+      subtitle = if (nrow(imputed) > 0) {
+        "Points: observed. Orange circles: a source unit's suppressed count was imputed from the model. Line/ribbon: posterior predictive mean and 95% CI."
+      } else {
+        "Points: observed. Line/ribbon: posterior predictive mean and 95% CI."
+      }
     ) +
     theme_bpnmf()
   if (!is.null(vline)) {
@@ -92,6 +104,7 @@ bpnmf_unit_gap_plot <- function(x, unit, group = NULL) {
   if (nrow(sub) == 0) {
     cli::cli_abort("No usable rows for unit {.val {unit}}, group {.val {group}}.")
   }
+  if (!"outcome_imputed" %in% names(sub)) sub$outcome_imputed <- FALSE
   sub$gap <- sub$outcome / sub$ypred_mean - 1
   sub$gap_lower <- sub$outcome / sub$ypred_upper - 1
   sub$gap_upper <- sub$outcome / sub$ypred_lower - 1
@@ -101,6 +114,7 @@ bpnmf_unit_gap_plot <- function(x, unit, group = NULL) {
   } else {
     ifelse(sub$time < vline, "pre", "post")
   }
+  imputed <- sub[sub$outcome_imputed, ]
 
   ggplot2::ggplot(sub, ggplot2::aes(x = .data$time, group = .data$phase)) +
     ggplot2::geom_ribbon(
@@ -110,6 +124,10 @@ bpnmf_unit_gap_plot <- function(x, unit, group = NULL) {
     ggplot2::geom_line(
       ggplot2::aes(y = .data$gap),
       color = "#C44E52", linewidth = 0.8
+    ) +
+    ggplot2::geom_point(
+      data = imputed, ggplot2::aes(y = .data$gap),
+      shape = 1, size = 3, color = "#E6550D", stroke = 1
     ) +
     ggplot2::geom_hline(yintercept = 0, linetype = "dashed") +
     {
@@ -124,7 +142,12 @@ bpnmf_unit_gap_plot <- function(x, unit, group = NULL) {
     ) +
     ggplot2::labs(
       title = sprintf("Relative gap: %s (%s)", unit, group),
-      x = "Time", y = "Observed / predicted - 1"
+      x = "Time", y = "Observed / predicted - 1",
+      subtitle = if (nrow(imputed) > 0) {
+        "Orange circles: a source unit's suppressed count was imputed from the model."
+      } else {
+        NULL
+      }
     ) +
     theme_bpnmf()
 }

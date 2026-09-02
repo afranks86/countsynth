@@ -65,11 +65,14 @@ extract_var_matrix <- function(fit, var) {
 }
 
 chain_iteration_vectors <- function(fit) {
-  n_chains <- fit$num_chains()
-  # Read the retained count from the draws themselves: Stan retains
-  # ceil(iter_sampling / thin), so dividing metadata values would be wrong
-  # whenever thin does not divide iter_sampling evenly.
-  per_chain <- posterior::niterations(fit$draws(variables = "lp__"))
+  # Read both counts from the draws themselves rather than from metadata:
+  # Stan retains ceil(iter_sampling / thin), so dividing metadata values would
+  # be wrong whenever thin does not divide iter_sampling evenly -- and a
+  # variational fit has no `num_chains()` at all, just one stream of draws,
+  # which `nchains()` correctly reports as a single chain.
+  lp <- fit$draws(variables = "lp__")
+  n_chains <- posterior::nchains(lp)
+  per_chain <- posterior::niterations(lp)
   list(
     chain = rep(seq_len(n_chains), each = per_chain),
     iteration = rep(seq_len(per_chain), times = n_chains),

@@ -4,6 +4,13 @@
 # subset of its draws becomes the cut components; stage 2 runs one small MCMC
 # per component with that draw's mu_ctrl frozen as data, so exposed outcomes
 # can never feed back into the baseline.
+#
+# Stage 1 is the expensive half (the full factorization over every control
+# cell), so `cut$stage1_method = "variational"` swaps its NUTS run for ADVI.
+# Everything downstream is unchanged: ADVI still yields a set of draws of
+# mu_ctrl, and the same seeded selection promotes some of them to components.
+# What changes is what those components mean -- see the warning in
+# `warn_variational_stage1()`.
 
 resolve_cut_settings <- function(config) {
   cut <- config$cut %||% bpnmf_cut_opts()
@@ -49,8 +56,32 @@ resolve_cut_settings <- function(config) {
     stage2_draws_per_component = cut$stage2_draws_per_component,
     selection_seed = as.integer(selection_seed),
     stage2_seed = as.integer(stage2_seed),
-    stage2_mcmc = stage2_mcmc
+    stage2_mcmc = stage2_mcmc,
+    stage1_method = cut$stage1_method %||% "sample",
+    stage1_variational = cut$stage1_variational
   )
+}
+
+#' Warn that an ADVI stage 1 changes what the cut posterior means
+#'
+#' Mean-field ADVI fits a factorized Gaussian in the unconstrained space. It
+#' therefore understates marginal variance and drops posterior correlation
+#' between baseline parameters. In cut mode that error propagates in a
+#' specific direction: the stage-1 components are drawn from too narrow a
+#' spread, so the pooled `te` posterior is too narrow too, and its intervals
+#' under-cover. Point estimates are usually close; uncertainty is not.
+#' @keywords internal
+warn_variational_stage1 <- function() {
+  cli::cli_warn(c(
+    "Cut stage 1 is an ADVI approximation, not a posterior sample.",
+    "!" = "Mean-field ADVI understates posterior variance and ignores
+           posterior correlation, so the stage-1 components span too narrow a
+           range and the pooled treatment-effect intervals will be too tight.",
+    i = "Stage-1 R-hat / ESS / divergence gating does not apply; the manifest
+         records {.code stage1$converged = NA}, not a pass.",
+    i = "Use this to iterate, then re-run with
+         {.code cut$stage1_method = \"sample\"} for results you report."
+  ))
 }
 
 #' Chain-stratified stage-1 draw selection
@@ -136,7 +167,10 @@ run_stage2_component <- function(model, sd2, stage2_mcmc, seed_i, quiet = TRUE) 
 #' @param rank Factorization rank (defaults to the type's first
 #'   `ranks_to_test`).
 #' @param config The [bpnmf_config()] object; `config$cut` supplies the cut
-#'   settings (defaults from [bpnmf_cut_opts()] otherwise).
+#'   settings (defaults from [bpnmf_cut_opts()] otherwise). Set
+#'   `config$cut$stage1_method = "variational"` to fit stage 1 with ADVI
+#'   instead of NUTS -- much faster, but approximate and ungated; see
+#'   [bpnmf_cut_opts()].
 #' @param parallel `"none"` (sequential stage-2 loop, default) or `"future"`
 #'   (requires \pkg{furrr}; stage-2 components run on the active future plan
 #'   with one parallel chain each).
@@ -165,10 +199,15 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
 
   # Stage 1: baseline model on control cells, with the counterfactual
   # predictive emitted for the stage-1 PPC frame.
-  cli::cli_alert_info("Cut stage 1: fitting baseline model (rank {rank})")
+  stage1_method <- settings$stage1_method
+  if (stage1_method == "variational") warn_variational_stage1()
+  cli::cli_alert_info(
+    "Cut stage 1: fitting baseline model (rank {rank}, {fit_method_label(stage1_method)})"
+  )
   stage1 <- bpnmf_fit(
     data,
-    rank = rank, config = config, model_treated = FALSE, gen_ypred = TRUE
+    rank = rank, config = config, model_treated = FALSE, gen_ypred = TRUE,
+    method = stage1_method, variational = settings$stage1_variational
   )
   stage1_gate <- convergence_gate(stage1)
   ci <- chain_iteration_vectors(stage1$fit)
@@ -343,9 +382,15 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
   }
 
   all_converged <- all(vapply(component_records, function(r) isTRUE(r$converged), logical(1)))
+  # An ungated (variational) stage 1 must not silently count as a pass, but
+  # it must not fail the run either -- the run-level flag then reports only
+  # what was actually gated, and `stage1_gated` says so.
+  stage1_gated <- !is.na(stage1_gate$converged)
   manifest <- list(
     inference_mode = "cut",
-    converged = isTRUE(stage1_gate$converged) && all_converged,
+    stage1_method = stage1_method,
+    stage1_gated = stage1_gated,
+    converged = all_converged && (!stage1_gated || isTRUE(stage1_gate$converged)),
     stage1 = stage1_gate,
     stage2 = list(
       all_converged = all_converged,
@@ -369,6 +414,7 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
       rank = as.integer(rank),
       type = data$type,
       inference_mode = "cut",
+      stage1_method = stage1_method,
       fit = stage1$fit
     ),
     "bpnmf_cut_fit"
@@ -381,10 +427,11 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
 cut_component_table <- function(x) {
   checkmate::assert_class(x, "bpnmf_cut_fit")
   recs <- x$component_records
-  fmt <- "%9s %8s %10s %12s %5s  %s"
+  fmt <- "%9s %8s %10s %12s %5s %8s  %s"
   cli::cli_h1("Cut stage-2 components")
   cli::cli_verbatim(sprintf(
-    fmt, "component", "s1 chain", "max R-hat", "min bulk ESS", "div", "status"
+    fmt, "component", "s1 chain", "max R-hat", "min bulk ESS", "div",
+    "div rate", "status"
   ))
   n_pass <- 0L
   for (r in recs) {
@@ -393,6 +440,7 @@ cut_component_table <- function(x) {
     line <- sprintf(
       fmt, r$component, r$stage1_chain, sprintf("%.4f", r$rhat_max),
       sprintf("%.0f", r$ess_bulk_min), r$divergences,
+      sprintf("%.2f%%", 100 * (r$divergence_fraction %||% 0)),
       if (ok) "PASS" else "FAIL"
     )
     if (ok) cli::cli_verbatim(line) else cli::cli_verbatim(cli::col_red(line))

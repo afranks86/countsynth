@@ -11,8 +11,10 @@ bpnmf_output_opts(
   target_unit = NULL,
   report_groups = NULL,
   fit_gap_per_unit = FALSE,
+  interval_aggregates = TRUE,
   print_tables = TRUE,
-  print_target_table = TRUE,
+  print_target_table = FALSE,
+  html_tables = TRUE,
   aggregate_units = NULL,
   ppc_units = NULL,
   ppc_exclude_units = NULL,
@@ -36,7 +38,11 @@ figure names from unit_fit, unit_gap, raw_rate, interval, group_comparison, ppc,
 \item{fit_gap_per_unit}{Also render fit/gap for every treated unit
 (restricted to the \code{"total"} group).}
 
-\item{print_tables, print_target_table}{Terminal-table switches.}
+\item{print_tables, print_target_table}{Terminal-table switches.
+\code{print_target_table} adds the target unit's own table above the by-unit
+one; its rows are already in the by-unit table, so it defaults to off.}
+
+\item{html_tables}{Also write the \code{gt} HTML summary tables.}
 
 \item{aggregate_units}{List of \code{\link[=bpnmf_aggregate_unit]{bpnmf_aggregate_unit()}} specs.}
 

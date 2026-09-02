@@ -159,9 +159,10 @@ data:
   date_format: auto              # or an explicit strptime format
   start_date: "2016-01-01"       # inclusive
   end_date: "2024-01-01"         # EXCLUSIVE
-  aggregation:
+  time_aggregation:
     enabled: false
-    period: bimonthly            # monthly | bimonthly | quarterly | yearly
+    period: bimonthly            # calendar bins: monthly | bimonthly | quarterly | yearly
+    # n_periods: 3               # ...or combine N consecutive periods (any resolution)
   allow_unbalanced_panel: false
   outcome: births                # label used in output filenames
 
@@ -191,12 +192,14 @@ mcmc:
   target_accept: 0.8             # NUTS adapt_delta
   random_seed: 8675309
   progress_bar: true
-  # gate_params: [mu_ctrl, te]   # restrict the convergence gate
+  gate_params: [mu_ctrl, te]     # gate on these prefixes (this is the default;
+                                 # "all" gates on every sampled variable)
   convergence:
     rhat_warn: 1.01
     rhat_fail: 1.05
     ess_min: 400
     ess_fail_fraction: 0.25
+    divergence_fail_fraction: 0.01   # share of retained draws; 0 = allow none
 
 output:
   figures: false                 # true/all/none, or a list of figure names:
@@ -204,16 +207,20 @@ output:
                                  # group_comparison, ppc, te_regression
   clean: false                   # wipe the type's output dir before writing
   save_traces: false             # also save full draws as .rds
-  target_unit: Texas             # highlighted unit (default: auto-detected)
+  target_unit: Texas             # highlighted unit
+                                 # (default: the aggregate unit, else the
+                                 #  treated unit with the most periods)
   report_groups: [total]
   fit_gap_per_unit: false        # fit/gap figure for every treated unit
-  print_tables: true
-  print_target_table: true
+  print_tables: true             # by-unit summary table in the terminal
+  print_target_table: false      # also print the target unit's own table
+  html_tables: true              # write gt HTML tables (needs the gt package)
   draws_format: csv              # csv | parquet
   # ppc_units: [Texas]
   # ppc_exclude_units: [Alaska]
   # ppc_acf_lags: [6]
   # ppc_unit_corr_max_time: "2022-01-01"
+  interval_aggregates: true      # show aggregate units in interval.png
   # aggregate_units:             # synthetic reporting-only units
   #   - unit: "All treated"
   #     include_treated_units: true   # or include_all_units / include_units
@@ -235,6 +242,12 @@ cut:
   # stage2_mcmc:                 # overrides merged over the mcmc block
   #   num_warmup: 500
   #   num_samples: 500
+  # stage1_method: variational   # sample (default, NUTS) | variational (ADVI)
+  # stage1_variational:          # ADVI knobs; only read under "variational"
+  #   algorithm: meanfield       # meanfield | fullrank
+  #   draws: 1000
+  #   iter: 10000
+  #   tol_rel_obj: 0.01
 ```
 
 Then:
@@ -271,9 +284,44 @@ cfg <- bpnmf_config(
   mcmc = bpnmf_mcmc_opts(iter_warmup = 1000, iter_sampling = 2500, thin = 10),
   output = bpnmf_output_opts(figures = TRUE, target_unit = "Texas"),
   start_date = "2016-01-01", end_date = "2024-01-01",
-  aggregation = bpnmf_aggregation(enabled = TRUE, period = "bimonthly")
+  time_aggregation = bpnmf_time_aggregation(enabled = TRUE, period = "bimonthly")
 )
 ```
+
+Each option group has its own constructor so that ~80 options do not collapse
+into one unreadable signature. You do not have to call them, though: anywhere
+a `bpnmf_*` object is expected you can pass a **plain named list** of the same
+arguments, which is then run through that very constructor — same validation,
+same defaults, same result. So the config above can be written as one call
+with the same shape as the YAML:
+
+```r
+cfg <- bpnmf_config(
+  input_file = "data/my_panel.csv",
+  output_dir = "results/my_panel",
+  schema = list(
+    unit_col = "state", time_col = "time", treatment_col = "exposed",
+    outcomes_from_prefixes = list(
+      outcome_prefix = "births_", denominator_prefix = "pop_",
+      include = c("total", "nhblack")
+    )
+  ),
+  model = list(
+    outcome_distribution = "NB",
+    types = list(total = list(groups = "total", ranks_to_test = 3))
+  ),
+  mcmc = list(iter_warmup = 1000, iter_sampling = 2500, thin = 10),
+  output = list(figures = TRUE, target_unit = "Texas"),
+  start_date = "2016-01-01", end_date = "2024-01-01",
+  time_aggregation = list(enabled = TRUE, period = "bimonthly")
+)
+```
+
+Mix the two freely. A misspelled name in a list is an error naming the field
+and listing the valid arguments, so the list form is not a way to smuggle a
+typo past validation. Reach for the constructors when you want argument
+completion and `?bpnmf_model_opts` at your fingertips; reach for lists when
+you want one call that mirrors the YAML.
 
 Note that the R constructors use cmdstanr's MCMC names while the YAML uses
 the Python package's: `num_warmup` → `iter_warmup`, `num_samples` →
@@ -320,27 +368,83 @@ within each period — so a period that is partly exposed counts as exposed.
 Choose the period to balance signal and length: coarser periods mean less
 noise per cell but fewer time points for the factorization to work with.
 
+`time_aggregation` bins the time axis one of two ways, and you set exactly one
+of them. `period` bins by the **calendar** — rows are grouped into calendar
+months, two-month blocks, quarters, or years, so bins land on calendar
+boundaries (Q1 is always Jan–Mar) whatever date the panel starts on. It
+assumes monthly-or-finer input, since it bins on year and month.
+
+`n_periods` bins by **position**: every N consecutive time points in the panel
+are combined, at whatever resolution the panel actually has. Daily data over a
+single month has no calendar bin to fall back on — `period: monthly` would
+collapse it to one point — but `n_periods: 7` turns it into weeks. Blocks are
+cut from the panel's sorted distinct times rather than per unit, so units stay
+aligned even when one is missing a period, and a short trailing block is kept
+with its real (shorter) exposure recorded in `start_date`/`end_date`, so
+person-year rates stay correct.
+
+The older key name `aggregation` still loads, with a deprecation warning.
+
 **Sampling and the convergence gate.** The defaults (1000 warmup, 2500
 sampling, thin 10) are a real run, not a smoke test; expect a substantial
 wait on a full panel. Raise `target_accept` toward 0.95 if you see
-divergences. The gate is deliberately strict — `converged` requires a PASS
-on both R-hat and ESS *and* zero divergences. Note that the factorization is
-rotation-non-identifiable by design: the individual factors (`time_fac`,
-`unit_weight`) are not expected to mix well, and it is the combined
-quantities — the baseline log-rate surface `mu_ctrl` and the treatment
-effects `te`, which the draws frame reports as `mu` and `mu_treated` — that
-are identified and interpretable. If the gate is dominated by the factor
-parameters rather than by anything you report, restrict it with
-`gate_params: [mu_ctrl, te]`; divergences still count run-wide.
-`parameter_diagnostics(fit)` shows the per-parameter breakdown behind the
-gate verdict.
+divergences. `converged` requires a PASS on both R-hat and ESS *and* a
+divergent-transition rate at or below `divergence_fail_fraction` — 1% of the
+retained draws by default, with 0 demanding none at all. The gate uses the
+rate rather than a raw count so that the threshold means the same thing
+however long you sample.
+
+**The gate covers `mu_ctrl` and `te` by default**, not every sampled
+variable. The factorization is rotation-non-identifiable by design: the
+individual factors (`time_fac`, `unit_weight`) are not expected to mix well,
+because chains that settle on different factor labelings give them an
+enormous R-hat while nothing you report has moved. The identified,
+interpretable quantities are the baseline log-rate surface `mu_ctrl` and the
+treatment effects `te` — which the draws frame reports as `mu` and
+`mu_treated` — so those are what the verdict is built from. Widen it by
+listing more prefixes, or set `gate_params: all` to gate on every sampled
+variable. Divergences always count run-wide, whatever the gate covers, and
+`parameter_diagnostics(fit)` reports every variable with a `gated` column
+showing which ones counted.
 
 **Target unit.** `target_unit` selects the unit highlighted in tables and
-per-unit figures. Left unset, it is auto-detected as the treated unit with
-the most treated periods. For a summary across treated units, add an
+per-unit figures. For a summary across treated units, add an
 `aggregate_units` entry with `include_treated_units: true` — these are
 reporting-only synthetic units, computed from draws after fitting, so they do
 not change the model.
+
+Left unset, `target_unit` is auto-detected: **a configured aggregate unit wins
+when there is one**, on the reasoning that if you defined a pooled unit, the
+pooled effect is the headline. Failing that, it falls back to the treated unit
+with the most treated periods. So a config with `aggregate_units` and no
+`target_unit` reports "All treated", not whichever single state happens to
+have the longest exposure.
+
+Aggregate units also appear in `interval.png`, in their own band above the
+individual units — they pool the same draws as the units they cover, so
+ranking them together would read as a peer comparison when it is not. Set
+`interval_aggregates: false` to plot only the real units.
+
+**Tables.** Every run writes `summary_table_by_unit.csv` (display-formatted:
+counts, rates per 1,000 person-years, pre-formatted CIs, `*` for a two-sided
+posterior p < 0.05) and `post_treatment_summary.csv` (the same estimands as
+plain numeric columns, for joining and plotting). With the `gt` package
+installed you also get `summary_table.html` and `summary_table_by_unit.html`,
+which are the display tables rendered for publication — counts and rates under
+their own spanners, one row group per unit.
+
+Build one yourself from a draws frame:
+
+```r
+draws <- bpnmf_draws(fit)
+bpnmf_gt_table(draws)                  # headline unit, one row per group
+bpnmf_gt_table(draws, by_unit = TRUE)  # every treated unit, grouped
+gt::gtsave(bpnmf_gt_table(draws, by_unit = TRUE), "summary.html")
+```
+
+The terminal prints the by-unit table only. `print_target_table: true` adds
+the target unit's own table above it — its rows are already in the by-unit
+table, so it is off by default.
 
 ## 5. What lands on disk
 
@@ -352,7 +456,12 @@ is requested):
   df_<type>.csv                              # the standardized long panel
   {NB|Poisson}_{outcome}_{type}_{rank}.csv   # tidy draws (or .parquet)
   ..._convergence.json                       # gate: R-hat, ESS, divergences
-  [rank_<rank>/]figs/...                     # figures, if output.figures
+  [rank_<rank>/]figs/
+    summary_table_by_unit.csv                # display-formatted, per unit
+    summary_table*.html                      # the same, via gt
+    post_treatment_summary.csv               # numeric estimands + CIs
+    expected_vs_observed.csv                 # per (unit, time, group) detail
+    *.png                                    # figures, if output.figures
 ```
 
 A failed gate is a warning, not a stop — artifacts are still written so you
@@ -383,6 +492,55 @@ configured much shorter than stage 1 via `cut.stage2_mcmc`. Retained draw
 counts must be equal across components so that pooling weights them equally.
 Seeds are derived from `mcmc.random_seed` unless you set `selection_seed` /
 `stage2_seed` explicitly; `cut.stage2_mcmc` may not set a seed of its own.
+
+### Fast stage 1 with ADVI
+
+Stage 1 is the expensive half — the full factorization over every control
+cell — and full MCMC on it can take hours. `stage1_method = "variational"`
+runs Stan's ADVI there instead, turning that into minutes. Everything
+downstream is unchanged: ADVI still yields draws of `mu_ctrl`, and the same
+seeded, stratified selection promotes some of them to cut components.
+
+```r
+cfg <- bpnmf_example_config(
+  model = bpnmf_model_opts(
+    types = list(total = bpnmf_type("total", 3)),
+    inference_mode = "cut"
+  ),
+  cut = bpnmf_cut_opts(
+    num_stage1_draws = 25,
+    stage1_method = "variational",
+    stage1_variational = list(algorithm = "meanfield", draws = 1000)
+  )
+)
+cfit <- bpnmf_cut_fit(bpnmf_data(cfg), config = cfg)
+```
+
+What you give up is real, and it is uncertainty rather than location.
+Mean-field ADVI fits a factorized Gaussian in the unconstrained space, so it
+understates marginal variance and drops posterior correlation between
+baseline parameters. In cut mode that error propagates in one direction: the
+stage-1 components span too narrow a range, so the pooled `te` posterior is
+too narrow too and its intervals under-cover. Point estimates are usually
+close; intervals are not trustworthy.
+
+There is also no convergence gate to lean on — R-hat, ESS and divergences
+are all chain-based quantities that ADVI simply does not have. The manifest
+records this rather than papering over it:
+
+- `manifest$stage1$converged` is `NA` (“not gated”), never `TRUE`/`FALSE`
+- `manifest$stage1_gated` is `FALSE`, and `manifest$converged` then reflects
+  only the stage-2 fits, which are still full MCMC and still gated
+- `parameter_diagnostics()` and `bpnmf_trace_plot()` error on a variational
+  fit instead of returning a meaningless single-chain R-hat
+
+CmdStan’s own run-specific complaints (“the variational approximation may be
+poor”, “maximum number of iterations is reached”) are surfaced as R warnings.
+
+Use ADVI to iterate on rank, priors, and data prep; re-run with
+`stage1_method = "sample"` for anything you intend to report. The same switch
+is available directly on a single fit as `bpnmf_fit(..., method =
+"variational")`.
 
 ## Treatment-effect covariates
 

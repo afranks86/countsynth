@@ -70,3 +70,30 @@ write_test_csv <- function(df, path) {
   utils::write.csv(wide, path, row.names = FALSE)
   path
 }
+
+# 2 units (A control, B treated in periods 2-3), 1 group, 3 times, 4 draws.
+make_draws_frame <- function() {
+  # 2 units (A control, B treated in periods 2-3), 1 group, 3 times, 4 draws
+  units <- c("A", "B")
+  times <- seq(as.Date("2021-01-01"), by = "month", length.out = 3)
+  grid <- expand.grid(
+    unit = units, time = times,
+    stringsAsFactors = FALSE
+  )
+  grid$group <- "total"
+  grid$treatment <- as.integer(grid$unit == "B" & grid$time >= times[2])
+  grid$outcome <- c(100, 110, 100, 120, 100, 130)
+  grid$denominator <- 1000
+  draws <- dplyr::bind_rows(lapply(1:4, function(d) {
+    g <- grid
+    g$.draw <- d
+    g$.chain <- 1L
+    g$.iteration <- d
+    g$mu <- log(100 + d)             # untreated log-count
+    g$mu_treated <- log(100 + d) + ifelse(g$treatment == 1, log(1.2), 0)
+    g$ypred <- 100 + d
+    g
+  }))
+  class(draws) <- c("bpnmf_draws", class(draws))
+  draws
+}

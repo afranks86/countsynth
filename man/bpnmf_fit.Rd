@@ -12,6 +12,8 @@ bpnmf_fit(
   gen_ypred = TRUE,
   init = NULL,
   show_exceptions = FALSE,
+  method = c("sample", "variational"),
+  variational = NULL,
   ...
 )
 }
@@ -41,13 +43,26 @@ occurrences are harmless, so the notes are suppressed by default; the
 convergence gate (R-hat / ESS / divergences) is the real health signal.
 Set to \code{TRUE} to see them, or read them later via \code{fit$fit$output()}.}
 
-\item{...}{Additional arguments passed to \code{CmdStanModel$sample()}.}
+\item{method}{\code{"sample"} (NUTS, the default) or \code{"variational"} (Stan's
+ADVI). ADVI returns an approximation, not a posterior sample: it
+understates variance, ignores posterior correlation, and has no R-hat /
+ESS / divergence diagnostics, so \code{\link[=convergence_gate]{convergence_gate()}} reports
+\code{converged = NA} and \code{\link[=parameter_diagnostics]{parameter_diagnostics()}} errors. It is meant for
+fast iteration -- most usefully as cut stage 1, via
+\code{cut$stage1_method = "variational"}.}
+
+\item{variational}{Named list of ADVI tuning arguments forwarded to
+\code{CmdStanModel$variational()} (algorithm, iter, grad_samples, elbo_samples, eta, adapt_engaged, adapt_iter, tol_rel_obj, eval_elbo, output_samples, draws).
+Ignored when \code{method = "sample"}.}
+
+\item{...}{Additional arguments passed to \code{CmdStanModel$sample()} (or
+\verb{$variational()}).}
 }
 \value{
-A \code{bpnmf_fit} object.
+A \code{bpnmf_fit} object; \code{fit_method} records which algorithm ran.
 }
 \description{
-Runs NUTS on the joint model via cmdstanr. With
-\code{config$model$model_treated = FALSE} this fits the untreated baseline
-model (the same model cut mode uses for stage 1).
+Runs NUTS (or, with \code{method = "variational"}, Stan's ADVI) on the joint
+model via cmdstanr. With \code{config$model$model_treated = FALSE} this fits the
+untreated baseline model (the same model cut mode uses for stage 1).
 }

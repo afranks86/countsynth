@@ -1,30 +1,5 @@
-# Table math on a hand-built draws frame with known answers.
-
-make_draws_frame <- function() {
-  # 2 units (A control, B treated in periods 2-3), 1 group, 3 times, 4 draws
-  units <- c("A", "B")
-  times <- seq(as.Date("2021-01-01"), by = "month", length.out = 3)
-  grid <- expand.grid(
-    unit = units, time = times,
-    stringsAsFactors = FALSE
-  )
-  grid$group <- "total"
-  grid$treatment <- as.integer(grid$unit == "B" & grid$time >= times[2])
-  grid$outcome <- c(100, 110, 100, 120, 100, 130)
-  grid$denominator <- 1000
-  draws <- dplyr::bind_rows(lapply(1:4, function(d) {
-    g <- grid
-    g$.draw <- d
-    g$.chain <- 1L
-    g$.iteration <- d
-    g$mu <- log(100 + d)             # untreated log-count
-    g$mu_treated <- log(100 + d) + ifelse(g$treatment == 1, log(1.2), 0)
-    g$ypred <- 100 + d
-    g
-  }))
-  class(draws) <- c("bpnmf_draws", class(draws))
-  draws
-}
+# Table math on a hand-built draws frame with known answers
+# (make_draws_frame(), in setup.R).
 
 test_that("auto_detect_target picks the unit with most treated periods", {
   expect_equal(auto_detect_target(make_draws_frame()), "B")
@@ -144,4 +119,27 @@ test_that("interval plot effects are exact for the synthetic frame", {
   expect_equal(unique(round(eff$causal_effect, 10)), 20)
   p <- bpnmf_interval_plot(draws, estimand = "ratio", method = "mu")
   expect_s3_class(p, "ggplot")
+})
+
+test_that("dodged interval segments stay horizontal and track their points", {
+  # geom_segment + position_dodge dodges y but not yend, slanting every
+  # interval; the linerange layers must sit at the same y as the median point.
+  draws <- make_draws_frame()
+  g2 <- draws
+  g2$group <- "other"
+  g2$mu_treated <- g2$mu + ifelse(g2$treatment == 1, log(1.5), 0)
+  draws <- dplyr::bind_rows(draws, g2)
+  class(draws) <- c("bpnmf_draws", class(draws))
+
+  layers <- ggplot2::ggplot_build(
+    bpnmf_interval_plot(draws, estimand = "ratio", method = "mu")
+  )$data
+  ci_95 <- layers[[2]]
+  ci_67 <- layers[[3]]
+  points <- layers[[4]]
+
+  expect_gt(length(unique(points$y)), 1) # groups really are dodged apart
+  expect_equal(ci_95$y, points$y)
+  expect_equal(ci_67$y, points$y)
+  expect_false("yend" %in% names(ci_95))
 })

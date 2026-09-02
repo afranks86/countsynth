@@ -38,6 +38,32 @@ test_that("stage2_mcmc seed is rejected", {
   )
 })
 
+test_that("stage1_method defaults to sampling and validates its ADVI knobs", {
+  expect_equal(bpnmf_cut_opts()$stage1_method, "sample")
+  expect_null(bpnmf_cut_opts()$stage1_variational)
+
+  opts <- bpnmf_cut_opts(
+    stage1_method = "variational",
+    stage1_variational = list(algorithm = "meanfield", draws = 500L)
+  )
+  expect_equal(opts$stage1_method, "variational")
+  expect_equal(opts$stage1_variational$draws, 500L)
+
+  expect_error(bpnmf_cut_opts(stage1_method = "advi"), "stage1_method")
+  # The seed is mcmc.seed's job, so it is not an ADVI knob.
+  expect_error(
+    bpnmf_cut_opts(
+      stage1_method = "variational", stage1_variational = list(seed = 1)
+    ),
+    "Unknown key"
+  )
+  # Tuning a method you are not using is a mistake worth flagging.
+  expect_warning(
+    bpnmf_cut_opts(stage1_variational = list(iter = 100)),
+    "ignored"
+  )
+})
+
 test_that("aggregate unit needs exactly one selector", {
   expect_error(bpnmf_aggregate_unit("All"), "exactly one")
   expect_error(
@@ -122,6 +148,34 @@ test_that("YAML loader accepts the Python schema and translates names", {
   expect_equal(cfg$model$types$total$total_all, TRUE)
 })
 
+test_that("YAML loader reads the cut stage-1 method", {
+  yaml <- sub(
+    "  num_stage1_draws: 10",
+    paste(
+      "  num_stage1_draws: 10",
+      "  stage1_method: variational",
+      "  stage1_variational:",
+      "    algorithm: meanfield",
+      "    draws: 400",
+      sep = "\n"
+    ),
+    BASE_YAML,
+    fixed = TRUE
+  )
+  cfg <- read_bpnmf_config(write_yaml_config(yaml))
+  expect_equal(cfg$cut$stage1_method, "variational")
+  expect_equal(cfg$cut$stage1_variational$algorithm, "meanfield")
+  expect_equal(cfg$cut$stage1_variational$draws, 400)
+
+  expect_error(
+    read_bpnmf_config(write_yaml_config(sub(
+      "  stage1_variational:", "  stage1_variational:\n    bogus: 1",
+      yaml, fixed = TRUE
+    ))),
+    "Unknown config key"
+  )
+})
+
 test_that("unknown YAML keys are rejected at every level", {
   expect_error(
     read_bpnmf_config(write_yaml_config(sub(
@@ -161,4 +215,124 @@ test_that("the Python repo's shipped configs load when present", {
     cfg <- read_bpnmf_config(path)
     expect_s3_class(cfg, "bpnmf_config")
   }
+})
+
+test_that("time_aggregation parses, and the old `aggregation` key still loads", {
+  with_data <- function(block) {
+    sub("  schema:", paste0(block, "\n  schema:"), BASE_YAML, fixed = TRUE)
+  }
+
+  n <- read_bpnmf_config(write_yaml_config(with_data(
+    "  time_aggregation:\n    enabled: true\n    n_periods: 7"
+  )))
+  expect_equal(n$time_aggregation$n_periods, 7L)
+  expect_null(n$time_aggregation$period)
+
+  p <- read_bpnmf_config(write_yaml_config(with_data(
+    "  time_aggregation:\n    enabled: true\n    period: quarterly"
+  )))
+  expect_equal(p$time_aggregation$period, "quarterly")
+  expect_null(p$time_aggregation$n_periods)
+
+  expect_warning(
+    old <- read_bpnmf_config(write_yaml_config(with_data(
+      "  aggregation:\n    enabled: true\n    period: yearly"
+    ))),
+    "deprecated"
+  )
+  expect_equal(old$time_aggregation$period, "yearly")
+
+  expect_error(
+    read_bpnmf_config(write_yaml_config(with_data(
+      paste0("  aggregation:\n    enabled: true\n",
+             "  time_aggregation:\n    enabled: true")
+    ))),
+    "both"
+  )
+  expect_error(
+    read_bpnmf_config(write_yaml_config(with_data(
+      "  time_aggregation:\n    enabled: true\n    periods: 7"
+    ))),
+    "Unknown"
+  )
+})
+
+test_that("plain named lists work anywhere a bpnmf_* object is expected", {
+  cfg <- bpnmf_config(
+    input_file = "data.csv", output_dir = "results",
+    schema = list(
+      unit_col = "state", time_col = "time", treatment_col = "exposed",
+      outcomes_from_prefixes = list(
+        outcome_prefix = "births_", denominator_prefix = "pop_"
+      )
+    ),
+    model = list(types = list(total = list(groups = "total", ranks_to_test = 3))),
+    mcmc = list(iter_warmup = 500, convergence = list(ess_min = 200)),
+    output = list(
+      figures = TRUE,
+      aggregate_units = list(
+        list(unit = "All treated", include_treated_units = TRUE)
+      )
+    ),
+    time_aggregation = list(enabled = TRUE, n_periods = 3)
+  )
+  # Every level is coerced through its real constructor, so the result is
+  # indistinguishable from the object-built form.
+  expect_s3_class(cfg$schema, "bpnmf_schema")
+  expect_s3_class(cfg$schema$outcomes_from_prefixes, "bpnmf_prefixes")
+  expect_s3_class(cfg$model$types$total, "bpnmf_type")
+  expect_s3_class(cfg$mcmc$convergence, "bpnmf_convergence")
+  expect_s3_class(cfg$output$aggregate_units[[1]], "bpnmf_aggregate_unit")
+  expect_s3_class(cfg$time_aggregation, "bpnmf_time_aggregation")
+  expect_equal(cfg$mcmc$convergence$ess_min, 200)
+  expect_equal(cfg$time_aggregation$n_periods, 3)
+  # Defaults the list did not mention are still filled in.
+  expect_identical(cfg$mcmc$gate_params, c("mu_ctrl", "te"))
+})
+
+test_that("list form and constructor form produce identical configs", {
+  args <- list(input_file = "d.csv", output_dir = "o")
+  built <- do.call(bpnmf_config, c(args, list(
+    schema = bpnmf_schema(
+      "state", "time", "exposed",
+      outcomes_from_prefixes = bpnmf_prefixes("births_", "pop_")
+    ),
+    model = bpnmf_model_opts(types = list(total = bpnmf_type("total", 3)))
+  )))
+  listed <- do.call(bpnmf_config, c(args, list(
+    schema = list(
+      unit_col = "state", time_col = "time", treatment_col = "exposed",
+      outcomes_from_prefixes = list(
+        outcome_prefix = "births_", denominator_prefix = "pop_"
+      )
+    ),
+    model = list(types = list(total = list(groups = "total", ranks_to_test = 3)))
+  )))
+  expect_equal(built, listed)
+})
+
+test_that("coercion catches typos and still runs the real validators", {
+  schema <- bpnmf_schema("u", "t", "x", outcomes_from_prefixes = bpnmf_prefixes("b_"))
+  expect_error(
+    bpnmf_config("d", "o", schema = list(
+      unit_col = "u", time_col = "t", treatment_col = "x", unit_column = "oops"
+    )),
+    'Unknown name "unit_column" in schema'
+  )
+  expect_error(
+    bpnmf_model_opts(types = list(a = list(groups = "g", ranks = 3))),
+    'Unknown name "ranks" in types\\$a'
+  )
+  # A named list must not become a way to skip validation.
+  expect_error(
+    bpnmf_config("d", "o", schema = schema, mcmc = list(adapt_delta = 1.5)),
+    "strictly between 0 and 1"
+  )
+  expect_error(
+    bpnmf_mcmc_opts(convergence = list(ess_min = -5)), "not >= 0"
+  )
+  expect_error(
+    bpnmf_config("d", "o", schema = list("u", "t", "x")),
+    "must be a .*bpnmf_schema.* object or a named list"
+  )
 })

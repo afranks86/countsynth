@@ -17,7 +17,10 @@ bpnmf_report(
   ppc_acf_lags = NULL,
   ppc_unit_corr_max_time = NULL,
   fit_gap_per_unit = FALSE,
+  interval_aggregates = TRUE,
   print_tables = TRUE,
+  print_target_table = FALSE,
+  html_tables = TRUE,
   fit = NULL
 )
 }
@@ -44,7 +47,19 @@ the stage-1 PPC frame).}
 \item{fit_gap_per_unit}{Also render fit/gap for every treated unit
 (restricted to the \code{"total"} group).}
 
-\item{print_tables}{Print summary tables to the terminal.}
+\item{interval_aggregates}{Include the \code{aggregate_units} in \code{interval.png},
+split off into their own band above the individual units. Set \code{FALSE} to
+plot only the real units. No effect when \code{aggregate_units} is \code{NULL}.}
+
+\item{print_tables}{Print the by-unit summary table to the terminal.}
+
+\item{print_target_table}{Also print the target unit's own table. Its rows
+are the target unit's slice of the by-unit table, so this is off by
+default when \code{target_unit} is not set explicitly.}
+
+\item{html_tables}{Also write \code{summary_table.html} and
+\code{summary_table_by_unit.html} via \code{\link[=bpnmf_gt_table]{bpnmf_gt_table()}}. Needs the \code{gt}
+package; warns and skips when it is missing.}
 
 \item{fit}{Optional \code{bpnmf_fit} / \code{bpnmf_cut_fit} the draws came from.
 Required for the \code{"te_regression"} figures, which read the

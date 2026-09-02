@@ -17,7 +17,7 @@ reference:
   - bpnmf_output_opts
   - bpnmf_cut_opts
   - bpnmf_te_opts
-  - bpnmf_aggregation
+  - bpnmf_time_aggregation
   - bpnmf_aggregate_unit
 - title: Data
   contents:
@@ -47,6 +47,8 @@ reference:
 - title: Tables
   contents:
   - bpnmf_summary_table
+  - bpnmf_summary_table_by_unit
+  - bpnmf_gt_table
   - bpnmf_post_treatment_summary
   - bpnmf_expected_vs_observed
   - bpnmf_te_coef_table

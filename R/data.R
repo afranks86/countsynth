@@ -194,7 +194,24 @@ wide_to_long <- function(df, schema, outcomes, groups, total_from_labels) {
   dplyr::arrange(df_long, .data$unit, .data$time, .data$group)
 }
 
-aggregate_temporal <- function(df, period) {
+# Cell-level aggregation rule, shared by both binning strategies: counts sum,
+# denominators average (they are stocks, not flows), and treatment is max'd so
+# a partly exposed block counts as exposed.
+summarise_blocks <- function(df, block_cols) {
+  has_denom <- "denominator" %in% names(df)
+  df |>
+    dplyr::group_by(dplyr::across(dplyr::all_of(block_cols))) |>
+    dplyr::summarise(
+      outcome = sum(.data$outcome),
+      treatment = max(.data$treatment),
+      denominator = if (has_denom) mean(.data$denominator) else 1,
+      .groups = "drop"
+    )
+}
+
+# Calendar binning: bins land on calendar boundaries regardless of when the
+# panel starts. Assumes monthly-or-finer input, since it bins on year+month.
+aggregate_calendar <- function(df, period) {
   months_per_period <- switch(period,
     monthly = 1L, bimonthly = 2L, quarterly = 3L, yearly = 12L,
     cli::cli_abort(
@@ -203,34 +220,78 @@ aggregate_temporal <- function(df, period) {
     )
   )
   month <- as.integer(format(df$time, "%m"))
-  period_code <- if (period == "yearly") {
+  df$.year <- as.integer(format(df$time, "%Y"))
+  df$.period <- if (period == "yearly") {
     rep(1L, nrow(df))
   } else {
     (month - 1L) %/% months_per_period + 1L
   }
-  df$.year <- as.integer(format(df$time, "%Y"))
-  df$.period <- period_code
-  has_denom <- "denominator" %in% names(df)
 
-  df_agg <- df |>
-    dplyr::group_by(.data$unit, .data$.year, .data$.period, .data$group) |>
-    dplyr::summarise(
-      outcome = sum(.data$outcome),
-      treatment = max(.data$treatment),
-      denominator = if (has_denom) mean(.data$denominator) else 1,
-      .groups = "drop"
-    )
+  df_agg <- summarise_blocks(df, c("unit", ".year", ".period", "group"))
 
   first_month <- (df_agg$.period - 1L) * months_per_period + 1L
-  df_agg$time <- as.Date(
-    sprintf("%d-%02d-01", df_agg$.year, first_month)
-  )
+  df_agg$time <- as.Date(sprintf("%d-%02d-01", df_agg$.year, first_month))
   df_agg$start_date <- df_agg$time
   df_agg$end_date <- add_months(df_agg$time, months_per_period) - 1L
 
   df_agg$.year <- NULL
   df_agg$.period <- NULL
   dplyr::arrange(df_agg, .data$unit, .data$time, .data$group)
+}
+
+# Positional binning: combine every `n` consecutive time points, whatever the
+# panel's native resolution is. Blocks are cut from the panel's sorted
+# distinct times (not per unit), so every unit lands in the same blocks even
+# when some unit is missing a period.
+aggregate_n_periods <- function(df, n) {
+  times <- sort(unique(df$time))
+  n_blocks <- ceiling(length(times) / n)
+  remainder <- length(times) %% n
+  if (remainder != 0) {
+    cli::cli_warn(
+      "{length(times)} time point{?s} does not divide evenly into blocks of
+       {n}; the final block holds {remainder} period{?s}. Its shorter
+       exposure is carried in {.field start_date}/{.field end_date}."
+    )
+  }
+  # A block runs up to the start of the next input period, which is exact and
+  # needs no assumption about period width -- important for calendar months,
+  # which are not all the same length. Only the very last period has no
+  # successor; extend it by the final observed gap.
+  nt <- length(times)
+  next_start <- c(
+    times[-1],
+    times[nt] + if (nt > 1) (times[nt] - times[nt - 1]) else 0
+  )
+  df$.block <- (match(df$time, times) - 1L) %/% n + 1L
+
+  df_agg <- summarise_blocks(df, c("unit", ".block", "group"))
+  is_date <- inherits(times, "Date")
+  last_idx <- pmin(seq_len(n_blocks) * n, nt)
+  bounds <- data.frame(
+    .block = seq_len(n_blocks),
+    .start = times[(seq_len(n_blocks) - 1L) * n + 1L],
+    # Inclusive last day for dates; exclusive right edge otherwise.
+    .end = next_start[last_idx] - if (is_date) 1 else 0
+  )
+  df_agg <- dplyr::left_join(df_agg, bounds, by = ".block")
+
+  df_agg$time <- df_agg$.start
+  df_agg$start_date <- df_agg$.start
+  df_agg$end_date <- df_agg$.end
+
+  df_agg$.block <- NULL
+  df_agg$.start <- NULL
+  df_agg$.end <- NULL
+  dplyr::arrange(df_agg, .data$unit, .data$time, .data$group)
+}
+
+aggregate_temporal <- function(df, spec) {
+  if (!is.null(spec$n_periods)) {
+    aggregate_n_periods(df, spec$n_periods)
+  } else {
+    aggregate_calendar(df, spec$period)
+  }
 }
 
 # Add whole months to a Date (day-of-month is always 1 here).
@@ -310,8 +371,8 @@ bpnmf_data <- function(config, type = NULL, df = NULL) {
     df_long <- df_long[!df_long$unit %in% type_spec$exclude_units, ]
   }
 
-  if (config$aggregation$enabled) {
-    df_long <- aggregate_temporal(df_long, config$aggregation$period)
+  if (config$time_aggregation$enabled) {
+    df_long <- aggregate_temporal(df_long, config$time_aggregation)
   }
 
   arrays <- build_model_arrays(

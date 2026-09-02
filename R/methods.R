@@ -4,6 +4,7 @@
 print.bpnmf_fit <- function(x, ...) {
   cli::cli_h1("bpnmf fit ({x$type}, rank {x$rank})")
   cli::cli_li("model: {if (x$model_treated) 'joint (treated)' else 'baseline (untreated)'}")
+  cli::cli_li("method: {fit_method_label(x$fit_method %||% 'sample')}")
   cli::cli_li(
     "distribution: {x$config$model$outcome_distribution}, censoring adjustment:
      {x$config$model$adjust_for_missingness}"
@@ -19,10 +20,15 @@ print.bpnmf_fit <- function(x, ...) {
 summary.bpnmf_fit <- function(object, ...) {
   print(object)
   gate <- convergence_gate(object)
+  if (is.na(gate$converged)) {
+    cli::cli_li("gate: not applicable -- ADVI has no R-hat, ESS or divergences")
+    return(invisible(gate))
+  }
   status <- if (isTRUE(gate$converged)) "PASS" else "FAIL"
   cli::cli_li(
     "gate: {status} (max R-hat {round(gate$rhat_max, 4)}, min bulk ESS
-     {round(gate$ess_bulk_min)}, {gate$divergences} divergence{?s})"
+     {round(gate$ess_bulk_min)}, {gate$divergences} divergence{?s} =
+     {sprintf('%.2f%%', 100 * gate$divergence_fraction)})"
   )
   invisible(gate)
 }
@@ -35,10 +41,15 @@ print.bpnmf_cut_fit <- function(x, ...) {
     x$component_records, function(r) isTRUE(r$converged), logical(1)
   ))
   cli::cli_li("{n_comp} stage-2 component{?s}, {n_pass} converged")
-  cli::cli_li(
-    "stage 1: {if (isTRUE(x$manifest$stage1$converged)) 'PASS' else 'FAIL'}
-     (max R-hat {round(x$manifest$stage1$rhat_max, 4)})"
-  )
+  s1 <- x$manifest$stage1
+  if (is.na(s1$converged)) {
+    cli::cli_li("stage 1: {fit_method_label('variational')}, not gated")
+  } else {
+    cli::cli_li(
+      "stage 1: {if (isTRUE(s1$converged)) 'PASS' else 'FAIL'}
+       (max R-hat {round(s1$rhat_max, 4)})"
+    )
+  }
   cli::cli_li("{nrow(x$draws)} pooled draw row{?s}")
   invisible(x)
 }

@@ -16,6 +16,35 @@ filter_ppc_units <- function(df, treated_units, ppc_units, ppc_exclude_units) {
   df
 }
 
+# A (unit, group) whose control-period outcome is missing everywhere -- a
+# subgroup suppressed in every pre-treatment period, say -- has no residual to
+# check. Left in, `max(abs(obs_diff), na.rm = TRUE)` over an all-NA vector
+# warns once per draw and returns -Inf, which then beats every predicted
+# statistic and reports a clean p = 1 for a cell holding no data at all. The
+# RMSE check turns the same cell into NaN, and the histograms drop the rows
+# with a "non-finite values" warning. Drop the cells up front instead, once,
+# by name.
+drop_empty_ppc_cells <- function(df) {
+  if (nrow(df) == 0) {
+    return(df)
+  }
+  cells <- df |>
+    dplyr::group_by(.data$unit, .data$group) |>
+    dplyr::summarise(has_obs = any(!is.na(.data$obs_diff)), .groups = "drop")
+  empty <- cells[!cells$has_obs, c("unit", "group")]
+  if (nrow(empty) == 0) {
+    return(df)
+  }
+  labels <- sprintf("%s/%s", empty$unit, empty$group)
+  cli::cli_warn(c(
+    "Skipping {nrow(empty)} PPC cell{?s} with no observed control-period data:
+     {.val {labels}}.",
+    i = "Every residual there is missing, so the check has nothing to compare
+         and would report a p-value built from no data."
+  ))
+  dplyr::anti_join(df, empty, by = c("unit", "group"))
+}
+
 #' Shared residual prep for the PPC checks
 #' @keywords internal
 prepare_ppc_residuals <- function(draws, categories = NULL, ppc_units = NULL,
@@ -29,6 +58,7 @@ prepare_ppc_residuals <- function(draws, categories = NULL, ppc_units = NULL,
   df <- filter_ppc_units(df, treated_units, ppc_units, ppc_exclude_units)
   df$pred_diff <- df$ypred - exp(df$mu)
   df$obs_diff <- df$outcome - exp(df$mu)
+  df <- drop_empty_ppc_cells(df)
   if (sort_by_time) {
     df <- dplyr::arrange(df, .data$unit, .data$group, .data$.draw, .data$time)
   }

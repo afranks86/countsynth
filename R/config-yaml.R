@@ -149,14 +149,16 @@ parse_yaml_mcmc <- function(x, path = "mcmc") {
   if (!is.null(x$convergence)) {
     cv <- x$convergence
     check_known_keys(
-      cv, c("rhat_warn", "rhat_fail", "ess_min", "ess_fail_fraction"),
+      cv, c("rhat_warn", "rhat_fail", "ess_min", "ess_fail_fraction",
+            "divergence_fail_fraction"),
       glue::glue("{path}.convergence")
     )
     convergence <- bpnmf_convergence(
       rhat_warn = cv$rhat_warn %||% 1.01,
       rhat_fail = cv$rhat_fail %||% 1.05,
       ess_min = cv$ess_min %||% 400,
-      ess_fail_fraction = cv$ess_fail_fraction %||% 0.25
+      ess_fail_fraction = cv$ess_fail_fraction %||% 0.25,
+      divergence_fail_fraction = cv$divergence_fail_fraction %||% 0.01
     )
   }
   chains <- x$num_chains
@@ -200,7 +202,8 @@ parse_yaml_output <- function(x, path = "output") {
   check_known_keys(
     x,
     c("figures", "clean", "save_traces", "target_unit", "report_groups",
-      "fit_gap_per_unit", "print_tables", "print_target_table",
+      "fit_gap_per_unit", "interval_aggregates",
+      "print_tables", "print_target_table", "html_tables",
       "aggregate_units", "ppc_units", "ppc_exclude_units", "ppc_acf_lags",
       "ppc_unit_corr_max_time", "draws_format"),
     path
@@ -245,9 +248,12 @@ parse_yaml_output <- function(x, path = "output") {
     report_groups = yaml_chr(x$report_groups),
     fit_gap_per_unit =
       yaml_flag(x$fit_gap_per_unit, glue::glue("{path}.fit_gap_per_unit"), FALSE),
+    interval_aggregates =
+      yaml_flag(x$interval_aggregates, glue::glue("{path}.interval_aggregates"), TRUE),
     print_tables = yaml_flag(x$print_tables, glue::glue("{path}.print_tables"), TRUE),
     print_target_table =
-      yaml_flag(x$print_target_table, glue::glue("{path}.print_target_table"), TRUE),
+      yaml_flag(x$print_target_table, glue::glue("{path}.print_target_table"), FALSE),
+    html_tables = yaml_flag(x$html_tables, glue::glue("{path}.html_tables"), TRUE),
     aggregate_units = aggregate_units,
     ppc_units = yaml_chr(x$ppc_units),
     ppc_exclude_units = yaml_chr(x$ppc_exclude_units),
@@ -265,7 +271,7 @@ parse_yaml_cut <- function(x, path = "cut") {
   check_known_keys(
     x,
     c("num_stage1_draws", "stage2_draws_per_component", "selection_seed",
-      "stage2_seed", "stage2_mcmc"),
+      "stage2_seed", "stage2_mcmc", "stage1_method", "stage1_variational"),
     path
   )
   if (!is.null(x$stage2_mcmc)) {
@@ -275,6 +281,18 @@ parse_yaml_cut <- function(x, path = "cut") {
         "progress_bar", "random_seed"),
       glue::glue("{path}.stage2_mcmc")
     )
+  }
+  # [[ ]], per the note in parse_yaml_schema: `$` partial matching would let
+  # a key resolve to a longer neighbour.
+  advi <- x[["stage1_variational"]]
+  if (!is.null(advi)) {
+    check_known_keys(advi, VARIATIONAL_KEYS, glue::glue("{path}.stage1_variational"))
+    if (!is.null(advi[["adapt_engaged"]])) {
+      advi[["adapt_engaged"]] <- yaml_flag(
+        advi[["adapt_engaged"]],
+        glue::glue("{path}.stage1_variational.adapt_engaged")
+      )
+    }
   }
   bpnmf_cut_opts(
     num_stage1_draws = x$num_stage1_draws %||% 25L,
@@ -286,7 +304,9 @@ parse_yaml_cut <- function(x, path = "cut") {
       },
     selection_seed = x$selection_seed,
     stage2_seed = x$stage2_seed,
-    stage2_mcmc = x$stage2_mcmc
+    stage2_mcmc = x$stage2_mcmc,
+    stage1_method = x[["stage1_method"]] %||% "sample",
+    stage1_variational = advi
   )
 }
 
@@ -315,18 +335,36 @@ read_bpnmf_config <- function(path) {
   check_known_keys(
     d,
     c("input_file", "output_dir", "schema", "date_format", "start_date",
-      "end_date", "aggregation", "allow_unbalanced_panel", "outcome"),
+      "end_date", "time_aggregation", "aggregation",
+      "allow_unbalanced_panel", "outcome"),
     "data"
   )
   if (is.null(d$schema)) {
     cli::cli_abort("Config must define {.field data.schema}.")
   }
-  aggregation <- bpnmf_aggregation()
+  # `aggregation` was the key's name before it was made specific; still read
+  # so existing configs keep loading, but only one of the two may be set.
   if (!is.null(d$aggregation)) {
-    check_known_keys(d$aggregation, c("enabled", "period"), "data.aggregation")
-    aggregation <- bpnmf_aggregation(
-      enabled = yaml_flag(d$aggregation$enabled, "data.aggregation.enabled", FALSE),
-      period = d$aggregation$period %||% "bimonthly"
+    if (!is.null(d$time_aggregation)) {
+      cli::cli_abort(
+        "Config sets both {.field data.time_aggregation} and the deprecated
+         {.field data.aggregation}; keep only {.field data.time_aggregation}."
+      )
+    }
+    cli::cli_warn(
+      "{.field data.aggregation} is deprecated; rename it to
+       {.field data.time_aggregation}."
+    )
+    d$time_aggregation <- d$aggregation
+  }
+  time_aggregation <- bpnmf_time_aggregation()
+  if (!is.null(d$time_aggregation)) {
+    ta <- d$time_aggregation
+    check_known_keys(ta, c("enabled", "period", "n_periods"), "data.time_aggregation")
+    time_aggregation <- bpnmf_time_aggregation(
+      enabled = yaml_flag(ta$enabled, "data.time_aggregation.enabled", FALSE),
+      period = ta$period,
+      n_periods = ta$n_periods
     )
   }
   bpnmf_config(
@@ -340,7 +378,7 @@ read_bpnmf_config <- function(path) {
     date_format = d$date_format %||% "auto",
     start_date = d$start_date,
     end_date = d$end_date,
-    aggregation = aggregation,
+    time_aggregation = time_aggregation,
     allow_unbalanced_panel =
       yaml_flag(d$allow_unbalanced_panel, "data.allow_unbalanced_panel", FALSE),
     outcome = d$outcome

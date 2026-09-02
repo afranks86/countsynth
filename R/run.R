@@ -110,7 +110,16 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
         gate, file.path(type_dir, paste0(stem, "_convergence.json"))
       )
       if (isFALSE(gate$converged)) {
-        cli::cli_warn("Convergence gate FAILED for {stem}; artifacts still written.")
+        reasons <- gate_failure_bullets(
+          gate, config$mcmc$convergence, if (is_cut) NULL else fit
+        )
+        cli::cli_warn(c(
+          "Convergence gate FAILED for {stem}; artifacts still written.",
+          stats::setNames(reasons, rep("*", length(reasons))),
+          i = "Gated on {.val {config$mcmc$gate_params}}; widen or narrow with
+               {.field mcmc.gate_params}.",
+          i = "Per-parameter detail: {.code parameter_diagnostics(fit)}."
+        ))
       }
       if (out$save_traces) {
         saveRDS(
@@ -133,7 +142,10 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
           ppc_acf_lags = out$ppc_acf_lags,
           ppc_unit_corr_max_time = out$ppc_unit_corr_max_time,
           fit_gap_per_unit = out$fit_gap_per_unit,
+          interval_aggregates = out$interval_aggregates,
           print_tables = out$print_tables,
+          print_target_table = out$print_target_table,
+          html_tables = out$html_tables,
           fit = fit
         )
       }

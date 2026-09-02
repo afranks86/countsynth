@@ -55,6 +55,34 @@ aggregate_one <- function(source_df, unit_name, sources) {
     c(".draw", ".chain", ".iteration", "time", "group"), names(sub)
   )
   has <- function(col) col %in% names(sub)
+  # A single source unit's suppressed/missing count would otherwise NA out
+  # the whole summed cell (and everything downstream that sums it), even
+  # when every other source unit has real data -- e.g. one small state
+  # missing a subgroup blanks the entire "all treated states" total for
+  # every period it's missing. Fill it with the model's factual expectation
+  # instead: mu_treated already equals mu on control cells and mu + te on
+  # exposed ones, so exp(mu_treated) is E[Y(1)] where the cell is exposed
+  # and E[Y(0)] otherwise -- whichever actually happened there -- and flag
+  # the cell as imputed so reporting can mark it. The fill must be constant
+  # across draws (the posterior mean, not the per-draw mu_treated): outcome
+  # is supposed to be fixed data, and downstream code (compute_quantiles)
+  # groups by it to carry it through summaries, assuming it never varies
+  # within a (unit, time, group) cell -- a per-draw fill would silently
+  # split every draw into its own group.
+  outcome_imputed <- FALSE
+  if (has("outcome")) {
+    outcome_imputed <- is.na(sub$outcome)
+    if (has("mu_treated") && any(outcome_imputed)) {
+      cell_key <- intersect(c("unit", "time", "group"), names(sub))
+      fill <- sub |>
+        dplyr::group_by(dplyr::across(dplyr::all_of(cell_key))) |>
+        dplyr::summarise(.fill = mean(exp(.data$mu_treated)), .groups = "drop")
+      sub <- dplyr::left_join(sub, fill, by = cell_key)
+      sub$outcome[outcome_imputed] <- sub$.fill[outcome_imputed]
+      sub$.fill <- NULL
+    }
+  }
+  sub$outcome_imputed <- outcome_imputed
   agg <- sub |>
     dplyr::group_by(dplyr::across(dplyr::all_of(group_cols))) |>
     dplyr::summarise(
@@ -62,6 +90,7 @@ aggregate_one <- function(source_df, unit_name, sources) {
         dplyr::any_of(c("outcome", "ypred", "denominator")), sum
       ),
       dplyr::across(dplyr::any_of("treatment"), max),
+      outcome_imputed = any(.data$outcome_imputed),
       dplyr::across(dplyr::any_of(c("start_date", "end_date")), dplyr::first),
       dplyr::across(dplyr::any_of(c("mu", "mu_treated")), logsumexp_narm),
       .groups = "drop"
@@ -77,6 +106,11 @@ aggregate_one <- function(source_df, unit_name, sources) {
 #' Each spec aggregates from the *original* frame, so chaining multiple specs
 #' never double-counts. An aggregate colliding with an existing unit is an
 #' error unless the spec sets `overwrite`.
+#'
+#' The names of the units actually created are recorded in an
+#' `aggregate_units` attribute on the result, so downstream reporting can tell
+#' a pooled unit from a real one -- they are otherwise ordinary rows. Read it
+#' with [aggregate_unit_names()].
 #'
 #' @param draws A `bpnmf_draws` frame.
 #' @param specs A list of [bpnmf_aggregate_unit()] specs.
@@ -120,12 +154,31 @@ add_aggregate_units <- function(draws, specs) {
     existing_units <- c(existing_units, unit_name)
   }
 
+  if (length(aggregate_frames) > 0 && !"outcome_imputed" %in% names(result_df)) {
+    result_df$outcome_imputed <- FALSE
+  }
   out <- dplyr::bind_rows(c(list(result_df), unname(aggregate_frames)))
   for (nm in names(attrs)) {
     attr(out, nm) <- attrs[[nm]]
   }
+  attr(out, "aggregate_units") <- unique(c(
+    aggregate_unit_names(draws), names(aggregate_frames)
+  ))
   if (!inherits(out, "bpnmf_draws")) {
     class(out) <- c("bpnmf_draws", class(out))
   }
   out
+}
+
+#' Names of the synthetic aggregate units in a draws frame
+#'
+#' Reads the `aggregate_units` attribute stamped by [add_aggregate_units()],
+#' which survives row subsetting and `dplyr` verbs. Returns `character(0)` for
+#' a frame that never had any.
+#'
+#' @param draws A `bpnmf_draws` frame.
+#' @return Character vector of unit names.
+#' @export
+aggregate_unit_names <- function(draws) {
+  attr(draws, "aggregate_units") %||% character()
 }

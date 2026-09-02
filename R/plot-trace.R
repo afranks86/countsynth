@@ -17,6 +17,14 @@ bpnmf_trace_plot <- function(fit, variables = NULL, max_elements = 20) {
   if (inherits(fit, "bpnmf_fit") || inherits(fit, "bpnmf_cut_fit")) {
     fit <- fit$fit
   }
+  if (is_variational_fit(fit)) {
+    cli::cli_abort(c(
+      "Trace plots need MCMC chains.",
+      i = "This fit came from ADVI ({.code method = \"variational\"}); its
+           draws are independent samples from the fitted approximation, so a
+           trace over them shows nothing about convergence."
+    ))
+  }
   all_vars <- setdiff(fit$metadata()$stan_variables, DIAG_EXCLUDE)
   defaults <- intersect(
     c("disp", "treatment_it_scale", "treatment_state_scale",

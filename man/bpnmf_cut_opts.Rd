@@ -9,7 +9,9 @@ bpnmf_cut_opts(
   stage2_draws_per_component = 100,
   selection_seed = NULL,
   stage2_seed = NULL,
-  stage2_mcmc = NULL
+  stage2_mcmc = NULL,
+  stage1_method = "sample",
+  stage1_variational = NULL
 )
 }
 \arguments{
@@ -28,6 +30,22 @@ component \code{i} runs at \code{stage2_seed + i}).}
 \item{stage2_mcmc}{Named list shallow-merged over the top-level MCMC options
 for stage 2 (accepts both R and Python key names; must not set the seed --
 \code{stage2_seed} is the authority).}
+
+\item{stage1_method}{How stage 1 is fit: \code{"sample"} (NUTS, the default) or
+\code{"variational"} (Stan's ADVI). ADVI turns a stage-1 fit that takes hours
+into one that takes minutes, at the cost of an approximation: mean-field
+ADVI understates posterior variance and ignores posterior correlations,
+so the stage-1 components it hands to stage 2 are drawn from too narrow a
+spread and the pooled cut posterior for \code{te} comes out over-confident.
+There is also no R-hat / ESS / divergence gate for a variational fit, so
+\code{manifest$stage1$converged} is \code{NA} rather than \code{TRUE}/\code{FALSE}. Use it to
+iterate; re-run with \code{"sample"} for results you intend to report.}
+
+\item{stage1_variational}{Named list of ADVI tuning arguments passed to
+cmdstanr's \code{variational()} -- any of
+algorithm, iter, grad_samples, elbo_samples, eta, adapt_engaged, adapt_iter, tol_rel_obj, eval_elbo, output_samples, draws. The seed is not settable here (stage 1
+runs at \code{mcmc$seed}, as it does under \code{"sample"}). Ignored when
+\code{stage1_method = "sample"}.}
 }
 \description{
 Two-stage cut-posterior settings

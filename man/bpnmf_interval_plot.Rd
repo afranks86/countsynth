@@ -11,7 +11,8 @@ bpnmf_interval_plot(
   estimand = c("ratio", "diff"),
   method = c("mu", "pred"),
   rate_normalizer = 1000,
-  color_group = NULL
+  color_group = NULL,
+  separate_units = NULL
 )
 }
 \arguments{
@@ -31,6 +32,12 @@ counts).}
 
 \item{color_group}{Optional column used to color/dodge points within a
 row (defaults to \code{"group"} when more than one group is present).}
+
+\item{separate_units}{Units to split into their own band at the top of the
+plot, above a gap, instead of being sorted in with the rest. Defaults to
+the frame's own aggregate units (see \code{\link[=aggregate_unit_names]{aggregate_unit_names()}}); pass
+\code{character()} to rank everything together instead. Units not present in
+\code{draws} are ignored. Each band is still sorted by median effect.}
 }
 \value{
 A ggplot object.

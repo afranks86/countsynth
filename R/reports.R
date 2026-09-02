@@ -1,16 +1,51 @@
 # Figure/table orchestration with artifact-layout parity: figures and tables
 # under <output_dir>/figs/ with the same filenames the Python package writes
 # (fit_<unit>.png, gap_<unit>.png, raw_rate.png, interval.png,
-# group_comparison.png, ppc/ppc_*.png + ppc_pvalues.csv, summary_table.csv,
-# summary_table_<unit>.csv, expected_vs_observed.csv,
+# group_comparison.png, ppc/ppc_*.png + ppc_pvalues.csv,
+# summary_table_by_unit.csv, expected_vs_observed.csv,
 # post_treatment_summary.csv). Tables ALWAYS write; only figures are gated by
-# the `figures` selection.
+# the `figures` selection. The target unit's headline table is not written
+# separately: it is the `Unit == target_unit` subset of
+# summary_table_by_unit.csv.
+
+# write.csv serializes doubles at full 15-17 significant digits, which makes
+# the tables unreadable and implies precision the posterior does not have.
+# Round to 6 significant digits on the way out; integer/character columns
+# pass through untouched.
+write_table_csv <- function(df, path, digits = 6) {
+  num <- vapply(df, function(x) is.double(x) && !inherits(x, "Date"), logical(1))
+  df[num] <- lapply(df[num], signif, digits = digits)
+  utils::write.csv(df, path, row.names = FALSE)
+}
+
+# The `Imputed` flag only means something once a cell has actually been
+# imputed; an all-FALSE column is a wasted column in an already-wide table.
+# It stays in the CSV either way, where a stable schema matters more.
+drop_unused_imputed <- function(tbl) {
+  if ("Imputed" %in% names(tbl) && !any(tbl$Imputed)) tbl$Imputed <- NULL
+  tbl
+}
 
 save_plot <- function(plot, path, width = 10, height = 6) {
   dev <- if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png else "png"
   ggplot2::ggsave(
     path, plot,
     width = width, height = height, dpi = 150, device = dev
+  )
+}
+
+# PPC plots facet by (unit, group) or, for unit_corr, by group alone (see
+# ppc_histogram()'s ncol logic in plot-ppc.R). A fixed canvas size squashes
+# every row once unit/group counts grow past what fits at that size, so scale
+# the canvas to the facet grid instead.
+ppc_plot_dims <- function(n_facets, ncol,
+                          per_facet_width = 3.6, per_facet_height = 1.9,
+                          min_width = 9, min_height = 5) {
+  n_facets <- max(n_facets, 1L)
+  facet_nrow <- ceiling(n_facets / ncol)
+  list(
+    width = max(min_width, ncol * per_facet_width),
+    height = max(min_height, facet_nrow * per_facet_height)
   )
 }
 
@@ -34,7 +69,16 @@ save_plot <- function(plot, path, width = 10, height = 6) {
 #'   PPC options (see [bpnmf_output_opts()]).
 #' @param fit_gap_per_unit Also render fit/gap for every treated unit
 #'   (restricted to the `"total"` group).
-#' @param print_tables Print summary tables to the terminal.
+#' @param interval_aggregates Include the `aggregate_units` in `interval.png`,
+#'   split off into their own band above the individual units. Set `FALSE` to
+#'   plot only the real units. No effect when `aggregate_units` is `NULL`.
+#' @param print_tables Print the by-unit summary table to the terminal.
+#' @param print_target_table Also print the target unit's own table. Its rows
+#'   are the target unit's slice of the by-unit table, so this is off by
+#'   default when `target_unit` is not set explicitly.
+#' @param html_tables Also write `summary_table.html` and
+#'   `summary_table_by_unit.html` via [bpnmf_gt_table()]. Needs the `gt`
+#'   package; warns and skips when it is missing.
 #' @param fit Optional `bpnmf_fit` / `bpnmf_cut_fit` the draws came from.
 #'   Required for the `"te_regression"` figures, which read the
 #'   treatment-effect design and coefficient draws rather than the draws
@@ -47,7 +91,9 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
                          ppc_draws = NULL, ppc_units = NULL,
                          ppc_exclude_units = NULL, ppc_acf_lags = NULL,
                          ppc_unit_corr_max_time = NULL,
-                         fit_gap_per_unit = FALSE, print_tables = TRUE,
+                         fit_gap_per_unit = FALSE,
+                         interval_aggregates = TRUE, print_tables = TRUE,
+                         print_target_table = FALSE, html_tables = TRUE,
                          fit = NULL) {
   selected <- figures %||% FIGURE_NAMES
   unknown <- setdiff(selected, FIGURE_NAMES)
@@ -66,7 +112,9 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     draws
   }
 
-  target_unit <- target_unit %||% auto_detect_target(draws)
+  # Detect on `reporting`, not `draws`: an aggregate unit exists only in the
+  # former, and when one is configured it is the headline unit by default.
+  target_unit <- target_unit %||% auto_detect_target(reporting)
   if (is.null(target_unit)) {
     cli::cli_abort("No treated units in draws and no target_unit specified.")
   }
@@ -80,7 +128,9 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     )
   }
 
-  treated_units <- identify_treated_units(draws)
+  # From `reporting` so the aggregate unit appears in the by-unit table
+  # alongside post_treatment_summary.csv, which is built from the same frame.
+  treated_units <- identify_treated_units(reporting)
   fit_gap_units <- function(grp) {
     if (fit_gap_per_unit && grp == "total") {
       unique(c(target_unit, treated_units))
@@ -124,8 +174,15 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
 
   # Cross-group figures.
   if ("interval" %in% selected) {
+    # An aggregate unit pools the same draws as the units it covers, so it is
+    # shown in its own band rather than ranked among them; `interval_aggregates
+    # = FALSE` drops it from the figure entirely.
     save_plot(
-      bpnmf_interval_plot(draws, estimand = "ratio", method = "mu"),
+      bpnmf_interval_plot(
+        if (interval_aggregates) reporting else draws,
+        estimand = "ratio", method = "mu",
+        separate_units = if (interval_aggregates) NULL else character()
+      ),
       file.path(figs_dir, "interval.png"),
       width = 10, height = 8
     )
@@ -147,9 +204,8 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
         width = 10, height = 6
       )
     }
-    utils::write.csv(
-      bpnmf_te_coef_table(fit), file.path(te_dir, "te_coefficients.csv"),
-      row.names = FALSE
+    write_table_csv(
+      bpnmf_te_coef_table(fit), file.path(te_dir, "te_coefficients.csv")
     )
   }
   if ("ppc" %in% selected) {
@@ -167,47 +223,51 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
       ppc_exclude_units = ppc_exclude_units
     )
     for (nm in names(ppc$plots)) {
-      save_plot(ppc$plots[[nm]], file.path(ppc_dir, paste0(nm, ".png")),
-        width = 11, height = 8
+      is_unit_corr <- identical(nm, "ppc_unit_corr")
+      check_type <- if (identical(nm, "ppc_abs_residual")) "abs" else sub("^ppc_", "", nm)
+      n_facets <- sum(ppc$pvals$check_type == check_type)
+      dims <- ppc_plot_dims(n_facets, ncol = if (is_unit_corr) 2L else 3L)
+      save_plot(
+        ppc$plots[[nm]], file.path(ppc_dir, paste0(nm, ".png")),
+        width = dims$width, height = dims$height
       )
     }
-    utils::write.csv(
-      ppc$pvals, file.path(ppc_dir, "ppc_pvalues.csv"),
-      row.names = FALSE
+    write_table_csv(
+      ppc$pvals, file.path(ppc_dir, "ppc_pvalues.csv")
     )
   }
 
   # Tables: always written, never gated by `figures`.
+  # Returned (and printed) but not written: its rows are the target unit's
+  # slice of summary_table_by_unit.csv below.
   summary_tbl <- bpnmf_summary_table(reporting, target_unit)
-  utils::write.csv(
-    summary_tbl, file.path(figs_dir, "summary_table.csv"),
-    row.names = FALSE
+  by_unit_tbl <- bpnmf_summary_table_by_unit(reporting, treated_units)
+  write_table_csv(
+    by_unit_tbl, file.path(figs_dir, "summary_table_by_unit.csv")
   )
-  for (tu in treated_units) {
-    utils::write.csv(
-      bpnmf_summary_table(reporting, tu),
-      file.path(figs_dir, sprintf("summary_table_%s.csv", unit_slug(tu))),
-      row.names = FALSE
-    )
-  }
   detail <- bpnmf_expected_vs_observed(reporting, target_unit)
-  utils::write.csv(
-    detail, file.path(figs_dir, "expected_vs_observed.csv"),
-    row.names = FALSE
+  write_table_csv(
+    detail, file.path(figs_dir, "expected_vs_observed.csv")
   )
   per_unit <- bpnmf_post_treatment_summary(reporting)
-  utils::write.csv(
-    per_unit, file.path(figs_dir, "post_treatment_summary.csv"),
-    row.names = FALSE
+  write_table_csv(
+    per_unit, file.path(figs_dir, "post_treatment_summary.csv")
   )
+  if (html_tables) {
+    write_gt_tables(reporting, target_unit, figs_dir)
+  }
 
-  if (print_tables && nrow(summary_tbl) > 0) {
-    cli::cli_h1("{target_unit} \u2014 Observed vs Expected")
-    print(as.data.frame(summary_tbl))
-    if (nrow(per_unit) > 0) {
-      cli::cli_h1("Post-treatment totals by unit (ranked by % excess)")
-      print(as.data.frame(per_unit), digits = 4)
+  if (print_tables && nrow(by_unit_tbl) > 0) {
+    # One formatted table, not two: the by-unit table is the target table plus
+    # every other unit, so printing both repeats the headline rows. The raw
+    # post_treatment_summary frame is 14 numeric columns wide and unreadable
+    # in a terminal -- it stays a CSV, for joining and plotting.
+    if (print_target_table && nrow(summary_tbl) > 0) {
+      cli::cli_h1("{target_unit} \u2014 observed vs expected")
+      print(as.data.frame(drop_unused_imputed(summary_tbl)))
     }
+    cli::cli_h1("Post-treatment effect by unit")
+    print(as.data.frame(drop_unused_imputed(by_unit_tbl)), row.names = FALSE)
   }
 
   invisible(list(
