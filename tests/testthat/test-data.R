@@ -131,6 +131,71 @@ test_that("non-positive denominators are a hard error", {
   expect_error(bpnmf_data(cfg, df = wide), "non-positive denominator")
 })
 
+test_that("a bad denominator outside the analysis window is not an error", {
+  # Reported case: a 0 denominator in a period the config's end_date excludes.
+  # Those rows never reach the model, so failing on them rejects a good run.
+  wide <- make_wide_df()
+  last <- max(as.Date(wide$time))
+  wide$pop_g1[as.Date(wide$time) == last] <- 0
+  types <- list(both = bpnmf_type(groups = c("g1", "g2"), ranks_to_test = 2))
+
+  expect_error(bpnmf_data(wide_config(types), df = wide), "non-positive denominator")
+  # end_date is exclusive, so this drops exactly the offending period.
+  ok <- bpnmf_data(
+    wide_config(types, end_date = format(last)), df = wide
+  )
+  expect_false(last %in% as.Date(ok$df$time))
+  expect_true(all(ok$df$denominator > 0))
+
+  # ... and start_date on the other end.
+  first <- min(as.Date(wide$time))
+  wide2 <- make_wide_df()
+  wide2$pop_g1[as.Date(wide2$time) == first] <- 0
+  expect_error(bpnmf_data(wide_config(types), df = wide2), "non-positive denominator")
+  expect_silent(
+    bpnmf_data(wide_config(types, start_date = format(first + 1)), df = wide2)
+  )
+})
+
+test_that("a bad denominator in an excluded unit or unmodeled group is ignored", {
+  wide <- make_wide_df()
+  wide$pop_g1[wide$unit == "C"] <- 0
+  # Excluded units are dropped before the check.
+  expect_silent(bpnmf_data(
+    wide_config(list(both = bpnmf_type(
+      groups = c("g1", "g2"), ranks_to_test = 2, exclude_units = "C"
+    ))),
+    df = wide
+  ))
+  # Same rows, unit not excluded: still a hard error.
+  expect_error(
+    bpnmf_data(
+      wide_config(list(both = bpnmf_type(c("g1", "g2"), ranks_to_test = 2))),
+      df = wide
+    ),
+    "non-positive denominator"
+  )
+  # A group the type does not model is never validated.
+  expect_silent(bpnmf_data(
+    wide_config(list(one = bpnmf_type(groups = "g2", ranks_to_test = 2))),
+    df = wide
+  ))
+})
+
+test_that("the denominator error names the periods and units involved", {
+  wide <- make_wide_df()
+  bad_time <- sort(unique(as.Date(wide$time)))[2]
+  wide$pop_g1[as.Date(wide$time) == bad_time & wide$unit == "B"] <- 0
+  expect_error(
+    bpnmf_data(
+      wide_config(list(both = bpnmf_type(c("g1", "g2"), ranks_to_test = 2))),
+      df = wide
+    ),
+    format(bad_time),
+    fixed = TRUE
+  )
+})
+
 test_that("duplicate (group, unit, time) rows are a hard error", {
   wide <- make_wide_df()
   wide <- rbind(wide, wide[1, ])

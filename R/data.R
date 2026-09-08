@@ -123,22 +123,48 @@ validate_and_resolve_total <- function(groups, outcomes, type_spec) {
   )
 }
 
-validate_denominators <- function(df, outcomes, unit_col) {
-  for (o in outcomes) {
-    denom_col <- o$denominator_col
-    if (!is.null(denom_col) && denom_col %in% names(df)) {
-      vals <- df[[denom_col]]
-      bad <- is.na(vals) | vals <= 0
-      if (any(bad)) {
-        bad_units <- unique(df[[unit_col]][bad])
-        cli::cli_abort(
-          "NaN or non-positive denominator in column {.field {denom_col}}:
-           {sum(bad)} row{?s} affected (units: {.val {bad_units}})."
-        )
-      }
-    }
+# Source column behind each group's denominator, for error messages. A
+# synthetic "total" built from `total_from` has no single column, so it maps
+# to NA and is reported by group name instead.
+denominator_columns <- function(outcomes) {
+  stats::setNames(
+    vapply(outcomes, function(o) o$denominator_col %||% NA_character_, character(1)),
+    vapply(outcomes, `[[`, character(1), "label")
+  )
+}
+
+# Checked on the long frame *after* the date window, unit exclusions and group
+# selection have been applied. A zero or missing denominator only matters for
+# rows the model actually sees: stan_data computes log(denominator), so a zero
+# inside the window is genuinely fatal (-Inf), while one in a row the config
+# already discarded is not a problem at all. Validating the raw wide frame
+# instead used to reject a perfectly good run because of a row outside
+# `end_date`, an excluded unit, or an outcome column belonging to a group that
+# was never modeled.
+validate_denominators <- function(df_long, outcomes) {
+  if (!"denominator" %in% names(df_long) || nrow(df_long) == 0) {
+    return(invisible(NULL))
   }
-  invisible(NULL)
+  bad <- is.na(df_long$denominator) | df_long$denominator <= 0
+  if (!any(bad)) {
+    return(invisible(NULL))
+  }
+  rows <- df_long[bad, ]
+  cols <- denominator_columns(outcomes)
+  sources <- unique(vapply(unique(rows$group), function(g) {
+    col <- if (g %in% names(cols)) cols[[g]] else NA_character_
+    if (is.na(col)) sprintf("group %s", g) else sprintf("column %s", col)
+  }, character(1)))
+  times <- sort(unique(rows$time))
+  cli::cli_abort(c(
+    "Missing or non-positive denominator in {sources}: {sum(bad)} row{?s}
+     affected (unit{?s}: {.val {unique(rows$unit)}}).",
+    i = "Period{?s}: {.val {format(times)}}.",
+    i = "The model uses log(denominator), so these cells have no defined
+         exposure. Rows outside the configured date window, excluded units,
+         and unmodeled groups are already dropped before this check, so every
+         row named here is one the fit would have used."
+  ))
 }
 
 wide_to_long <- function(df, schema, outcomes, groups, total_from_labels) {
@@ -343,7 +369,6 @@ bpnmf_data <- function(config, type = NULL, df = NULL) {
   if (length(missing_cols) > 0) {
     cli::cli_abort("Missing column{?s} in input data: {.val {sort(missing_cols)}}.")
   }
-  validate_denominators(df, outcomes, schema$unit_col)
   df[[schema$time_col]] <- parse_time_column(
     df[[schema$time_col]], config$date_format, schema$time_col
   )
@@ -370,6 +395,8 @@ bpnmf_data <- function(config, type = NULL, df = NULL) {
   if (!is.null(type_spec$exclude_units) && length(type_spec$exclude_units) > 0) {
     df_long <- df_long[!df_long$unit %in% type_spec$exclude_units, ]
   }
+
+  validate_denominators(df_long, outcomes)
 
   if (config$time_aggregation$enabled) {
     df_long <- aggregate_temporal(df_long, config$time_aggregation)
