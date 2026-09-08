@@ -173,6 +173,9 @@ model:
   adjust_for_missingness: true   # integrate over suppressed counts 1-9
   model_treated: true            # false = baseline-only fit, no effects
   inference_mode: joint          # joint | cut
+  # factor_variation_pct: 25     # expected multiplicative swing of the latent
+                                 # temporal factors; unset = 25%-equivalent
+                                 # (the historical Gamma(20, 20))
   types:
     total:                       # name of the model type -> output subdirectory
       groups: [total]            # which outcome labels this type models
@@ -353,6 +356,31 @@ any overdispersion; `Poisson` is a good deal faster if the mean-variance
 relationship really holds. `nb_disp` fixes the dispersion (concentration
 `1/nb_disp`); `sample_disp: true` estimates it per unit instead, which costs
 sampling time and needs `NB`.
+
+**Latent factor scale.** `time_fac`, the rank-`R` temporal basis, has a
+`Gamma(shape, shape)` prior: mean 1, entering the log-rate as
+`log(time_fac)`, so `sd(log time_fac) ≈ 1/√shape`. It sets how far the
+low-rank temporal structure may swing multiplicatively away from a unit's own
+level — the *unit × time interaction*, since unit levels are carried by
+`state_fe` and the common trend by `time_fe`.
+
+`factor_variation_pct` sets it in interpretable units: an expected swing of
+`p` percent means `shape = 1 / log(1 + p/100)²`.
+
+| `factor_variation_pct` | shape | central 95% multiplier |
+|---|---|---|
+| 10 | 110 | ×0.83 – ×1.20 |
+| 25 | 20 | ×0.61 – ×1.48 |
+| 50 | 6.1 | ×0.40 – ×2.05 |
+| 100 | 2.1 | ×0.13 – ×2.75 |
+
+Left unset it is `shape = 20`, the value carried over from the fertility
+application — about a ±25% swing. That is deliberately loose: on the bundled
+fertility panel the *observed* unit × time interaction is only about 3%
+(`shape` ≈ 1000), so the prior admits far more temporal movement than the data
+shows. Raise `factor_variation_pct` for panels with strong seasonality or
+volatility; lower it for smooth series where the default lets the
+factorization chase noise.
 
 **Missingness.** `adjust_for_missingness: true` is meaningful only for data
 that suppresses small counts, i.e. where a blank cell means "somewhere in

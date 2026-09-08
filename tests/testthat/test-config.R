@@ -336,3 +336,42 @@ test_that("coercion catches typos and still runs the real validators", {
     "must be a .*bpnmf_schema.* object or a named list"
   )
 })
+
+test_that("factor_variation_pct maps to the Gamma shape and defaults to 20", {
+  # time_fac ~ Gamma(a, a) enters the log-rate as log(time_fac), so
+  # sd(log) ~ 1/sqrt(a); asking for a p% swing means sd(log) = log1p(p/100).
+  expect_equal(time_fac_shape_from_pct(NULL), 20)
+  expect_equal(time_fac_shape_from_pct(25), 1 / log1p(0.25)^2)
+  # ~25% is the historical Gamma(20, 20), which is why that is the default.
+  expect_equal(time_fac_shape_from_pct(25), 20, tolerance = 0.005)
+  # Monotone: a wider expected swing is a looser (smaller-shape) prior.
+  shapes <- vapply(c(5, 10, 25, 50, 100), time_fac_shape_from_pct, numeric(1))
+  expect_true(all(diff(shapes) < 0))
+  expect_error(time_fac_shape_from_pct(0), "not >= ")
+  expect_error(time_fac_shape_from_pct(-5), "not >= ")
+
+  expect_null(bpnmf_model_opts()$factor_variation_pct)
+  expect_equal(bpnmf_model_opts(factor_variation_pct = 50)$factor_variation_pct, 50)
+  expect_error(bpnmf_model_opts(factor_variation_pct = -1), "not >= ")
+})
+
+test_that("factor_variation_pct round-trips through YAML", {
+  with_model <- function(block) {
+    sub("model:", paste0("model:\n", block), BASE_YAML, fixed = TRUE)
+  }
+  absent <- read_bpnmf_config(write_yaml_config(BASE_YAML))
+  expect_null(absent$model$factor_variation_pct)
+
+  set <- read_bpnmf_config(write_yaml_config(
+    with_model("  factor_variation_pct: 60")
+  ))
+  expect_equal(set$model$factor_variation_pct, 60)
+  expect_equal(
+    time_fac_shape_from_pct(set$model$factor_variation_pct),
+    1 / log1p(0.6)^2
+  )
+  expect_error(
+    read_bpnmf_config(write_yaml_config(with_model("  factor_variation: 60"))),
+    "Unknown"
+  )
+})

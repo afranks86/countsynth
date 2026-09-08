@@ -13,7 +13,8 @@ stan_data_joint(
   sample_disp = FALSE,
   adjust_for_missingness = TRUE,
   gen_ypred = TRUE,
-  te_design = NULL
+  te_design = NULL,
+  time_fac_shape = DEFAULT_TIME_FAC_SHAPE
 )
 }
 \arguments{

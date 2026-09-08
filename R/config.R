@@ -15,6 +15,31 @@ FIGURE_NAMES <- c(
   "te_regression"
 )
 
+# Historical shape of the Gamma(shape, shape) prior on the temporal basis,
+# carried over from the fertility application. Kept as the exact default so a
+# config that does not mention the prior reproduces earlier runs bitwise.
+DEFAULT_TIME_FAC_SHAPE <- 20
+
+#' Gamma shape implied by an expected multiplicative swing
+#'
+#' `time_fac` has a `Gamma(shape, shape)` prior -- mean 1, and it enters the
+#' log-rate as `log(time_fac)`, so `sd(log time_fac) ~ 1/sqrt(shape)`. Asking
+#' for a swing of `pct` percent means `sd(log) = log1p(pct / 100)`, hence
+#' `shape = 1 / log1p(pct / 100)^2`. About 25 percent recovers the historical
+#' shape of 20.
+#'
+#' @param pct Expected multiplicative variation, in percent (`NULL` returns
+#'   the historical default).
+#' @return The Gamma shape (and rate; they are equal).
+#' @export
+time_fac_shape_from_pct <- function(pct) {
+  if (is.null(pct)) {
+    return(DEFAULT_TIME_FAC_SHAPE)
+  }
+  checkmate::assert_number(pct, lower = 1e-6, finite = TRUE)
+  1 / log1p(pct / 100)^2
+}
+
 AGGREGATION_PERIODS <- c("monthly", "bimonthly", "quarterly", "yearly")
 
 # Tuning knobs a variational (ADVI) stage-1 fit may set. cmdstanr's
@@ -259,12 +284,19 @@ bpnmf_type <- function(groups, ranks_to_test, total_from = NULL,
 #'   default treatment-effect hierarchy with a covariate regression surface
 #'   (applies to both joint inference and cut stage 2). `NULL` keeps the
 #'   legacy `(1 | group) + (1 | unit) + (1 | group:unit)` model.
+#' @param factor_variation_pct Expected multiplicative variation of the
+#'   low-rank temporal basis, in percent, setting the `Gamma(shape, shape)`
+#'   prior on `time_fac` via [time_fac_shape_from_pct()]. `NULL` (default)
+#'   keeps the historical shape of 20, which corresponds to about 25 percent.
+#'   Raise it for panels whose within-unit seasonality or volatility is larger
+#'   than that; lower it for smooth series.
 #' @export
 bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
                              nb_disp = 1e-4, sample_disp = FALSE,
                              adjust_for_missingness = TRUE,
                              model_treated = TRUE, inference_mode = NULL,
-                             treatment_effects = NULL) {
+                             treatment_effects = NULL,
+                             factor_variation_pct = NULL) {
   checkmate::assert_choice(outcome_distribution, c("NB", "Poisson"))
   types <- coerce_bpnmf_list(types, "bpnmf_type", "bpnmf_type", "types")
   checkmate::assert_list(types, types = "bpnmf_type")
@@ -287,6 +319,10 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
       "{.field model.sample_disp}=TRUE requires {.field outcome_distribution}='NB'."
     )
   }
+  checkmate::assert_number(
+    factor_variation_pct,
+    lower = 1e-6, finite = TRUE, null.ok = TRUE
+  )
   checkmate::assert_class(treatment_effects, "bpnmf_te_opts", null.ok = TRUE)
   if (!is.null(treatment_effects) && !is.null(treatment_effects$formula) &&
     !model_treated) {
@@ -300,7 +336,8 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
       nb_disp = nb_disp, sample_disp = sample_disp,
       adjust_for_missingness = adjust_for_missingness,
       model_treated = model_treated, inference_mode = inference_mode,
-      treatment_effects = treatment_effects
+      treatment_effects = treatment_effects,
+      factor_variation_pct = factor_variation_pct
     ),
     "bpnmf_model_opts"
   )

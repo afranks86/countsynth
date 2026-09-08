@@ -70,7 +70,8 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
     sample_disp = config$model$sample_disp,
     adjust_for_missingness = config$model$adjust_for_missingness,
     gen_ypred = gen_ypred,
-    te_design = te_design
+    te_design = te_design,
+    time_fac_shape = time_fac_shape_from_pct(config$model$factor_variation_pct)
   )
   if (model_treated && sd$n_exposed == 0) {
     cli::cli_abort(

@@ -77,7 +77,7 @@ parse_yaml_model <- function(x, path = "model") {
     x,
     c("outcome_distribution", "types", "nb_disp", "sample_disp",
       "adjust_for_missingness", "model_treated", "inference_mode",
-      "treatment_effects"),
+      "treatment_effects", "factor_variation_pct"),
     path
   )
   treatment_effects <- NULL
@@ -130,7 +130,8 @@ parse_yaml_model <- function(x, path = "model") {
       yaml_flag(x$adjust_for_missingness, glue::glue("{path}.adjust_for_missingness"), TRUE),
     model_treated = yaml_flag(x$model_treated, glue::glue("{path}.model_treated"), TRUE),
     inference_mode = x$inference_mode,
-    treatment_effects = treatment_effects
+    treatment_effects = treatment_effects,
+    factor_variation_pct = x$factor_variation_pct
   )
 }
 

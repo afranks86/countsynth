@@ -45,6 +45,11 @@ data {
   int<lower=0, upper=1> adjust_missing;
   real<lower=0> nb_disp;                 // fixed dispersion (phi = 1/nb_disp)
   int<lower=0, upper=1> gen_ypred;       // emit counterfactual predictive
+  // Gamma(shape, shape) on the temporal basis: mean 1, and sd(log) ~
+  // 1/sqrt(shape), so this sets how far the low-rank temporal structure may
+  // swing multiplicatively away from a unit's own level. 20 is the historical
+  // default (about a +/-25% swing).
+  real<lower=0> time_fac_shape;
 
   // Optional treatment-effect regression (te_reg == 1, requires
   // model_treated == 1): the legacy group/unit/group:unit hierarchy is
@@ -84,7 +89,7 @@ transformed data {
   vector[9] b_fixed = nb_censor_coeff(phi_fixed, sup, lgamma_sup1);
 }
 parameters {
-  array[K] matrix<lower=0>[N, R] time_fac;   // Gamma(20, 20), logged in use
+  array[K] matrix<lower=0>[N, R] time_fac;   // Gamma(shape, shape), logged
   vector[K] state_fe_mu;                     // improper flat (no statement)
   vector<lower=0>[K] state_fe_sigma;         // HalfNormal(0.5)
   matrix[D, K] state_fe_z;                   // std normal (non-centered)
@@ -176,7 +181,7 @@ model {
 
   // Baseline priors (joint.py:32-63).
   for (k in 1 : K) {
-    to_vector(time_fac[k]) ~ gamma(20, 20);
+    to_vector(time_fac[k]) ~ gamma(time_fac_shape, time_fac_shape);
   }
   state_fe_sigma ~ normal(0, 0.5);           // half-normal via <lower=0>
   to_vector(state_fe_z) ~ std_normal();

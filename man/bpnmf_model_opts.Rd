@@ -12,7 +12,8 @@ bpnmf_model_opts(
   adjust_for_missingness = TRUE,
   model_treated = TRUE,
   inference_mode = NULL,
-  treatment_effects = NULL
+  treatment_effects = NULL,
+  factor_variation_pct = NULL
 )
 }
 \arguments{
@@ -36,6 +37,13 @@ counts (values 1-9 suppressed in the source data).}
 default treatment-effect hierarchy with a covariate regression surface
 (applies to both joint inference and cut stage 2). \code{NULL} keeps the
 legacy \code{(1 | group) + (1 | unit) + (1 | group:unit)} model.}
+
+\item{factor_variation_pct}{Expected multiplicative variation of the
+low-rank temporal basis, in percent, setting the \code{Gamma(shape, shape)}
+prior on \code{time_fac} via \code{\link[=time_fac_shape_from_pct]{time_fac_shape_from_pct()}}. \code{NULL} (default)
+keeps the historical shape of 20, which corresponds to about 25 percent.
+Raise it for panels whose within-unit seasonality or volatility is larger
+than that; lower it for smooth series.}
 }
 \description{
 Model options: likelihood family, model types, dispersion, treatment

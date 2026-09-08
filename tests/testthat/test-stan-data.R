@@ -91,3 +91,21 @@ test_that("validate_cut_data catches empty stage likelihoods", {
   all_control$control_idx_array[] <- TRUE
   expect_error(validate_cut_data(all_control), "stage 2")
 })
+
+test_that("time_fac_shape reaches the Stan data with the historical default", {
+  data <- fixture_data()$data
+  expect_equal(stan_data_joint(data, rank = 2)$time_fac_shape, 20)
+  expect_equal(
+    stan_data_joint(data, rank = 2, time_fac_shape = 6.08)$time_fac_shape, 6.08
+  )
+  # The config route: model opts -> shape, default and explicit.
+  expect_equal(
+    time_fac_shape_from_pct(bpnmf_model_opts()$factor_variation_pct), 20
+  )
+  expect_equal(
+    time_fac_shape_from_pct(
+      bpnmf_model_opts(factor_variation_pct = 50)$factor_variation_pct
+    ),
+    1 / log1p(0.5)^2
+  )
+})
