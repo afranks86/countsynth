@@ -396,14 +396,16 @@ likelihood sees only `log(time_fe) + unit_fe_mu`, so the two trade off exactly
 and this prior is the *only* thing separating them. On the bundled example
 their posterior correlation is −0.99, and they are the worst-mixing parameters
 in the model. Tightening `time_level_variation_pct` narrows that ridge: at a
-50% swing (shape 6.6) the correlation falls to about −0.91, `unit_fe_mu`'s
+50% swing (shape 6.6) the correlation falls to about −0.91 — and keeps
+falling as you tighten further, to about −0.82 at 25% — while `unit_fe_mu`'s
 worst R-hat drops from ~1.27 to ~1.02, and `time_fe`'s from ~1.24 to ~1.10
 with bulk ESS improving by something between 1.5× and 3×. Those figures come
 from short two-chain runs and move around a fair bit between replicates — the
 direction is reliable, the magnitudes are not.
 
-What it does *not* do is change the answer. `mu_ctrl`'s worst R-hat is the
-same to within replicate noise either way (~1.16–1.19), because only the sum
+What it does *not* do is change the answer. `mu_ctrl`'s worst R-hat does not
+improve materially at any setting — across replicates it wanders between
+about 1.10 and 1.19 with no clear relation to the prior — because only the sum
 was ever identified — tightening reallocates
 it between two parameters rather than learning anything new. So this knob
 buys cleaner diagnostics on the nuisance parameters, not a better posterior,
