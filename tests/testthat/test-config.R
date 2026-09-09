@@ -340,15 +340,29 @@ test_that("coercion catches typos and still runs the real validators", {
 test_that("factor_variation_pct maps to the Gamma shape and defaults to 20", {
   # time_fac ~ Gamma(a, a) enters the log-rate as log(time_fac), so
   # sd(log) ~ 1/sqrt(a); asking for a p% swing means sd(log) = log1p(p/100).
-  expect_equal(time_fac_shape_from_pct(NULL), 20)
-  expect_equal(time_fac_shape_from_pct(25), 1 / log1p(0.25)^2)
+  expect_equal(gamma_shape_from_pct(NULL), 20)
+  expect_equal(gamma_shape_from_pct(NULL, DEFAULT_TIME_FE_SHAPE), 1)
+  # Exact inversion: Var[log x] = trigamma(shape) = log1p(pct/100)^2.
+  for (p in c(5, 25, 100, 300)) {
+    expect_equal(trigamma(gamma_shape_from_pct(p)), log1p(p / 100)^2,
+                 tolerance = 1e-8)
+  }
   # ~25% is the historical Gamma(20, 20), which is why that is the default.
-  expect_equal(time_fac_shape_from_pct(25), 20, tolerance = 0.005)
+  expect_equal(gamma_shape_from_pct(25), 20, tolerance = 0.05)
+  # The historical time_fe prior, Gamma(1, 1), is a ~260% swing -- the
+  # delta-method 1/sd^2 approximation would have called it 100%.
+  expect_equal(gamma_shape_from_pct(100 * (exp(sqrt(trigamma(1))) - 1)), 1,
+               tolerance = 1e-6)
   # Monotone: a wider expected swing is a looser (smaller-shape) prior.
-  shapes <- vapply(c(5, 10, 25, 50, 100), time_fac_shape_from_pct, numeric(1))
+  shapes <- vapply(c(5, 10, 25, 50, 100), gamma_shape_from_pct, numeric(1))
   expect_true(all(diff(shapes) < 0))
-  expect_error(time_fac_shape_from_pct(0), "not >= ")
-  expect_error(time_fac_shape_from_pct(-5), "not >= ")
+  expect_error(gamma_shape_from_pct(0), "not >= ")
+  expect_error(gamma_shape_from_pct(-5), "not >= ")
+
+  expect_null(bpnmf_model_opts()$time_level_variation_pct)
+  expect_equal(
+    bpnmf_model_opts(time_level_variation_pct = 80)$time_level_variation_pct, 80
+  )
 
   expect_null(bpnmf_model_opts()$factor_variation_pct)
   expect_equal(bpnmf_model_opts(factor_variation_pct = 50)$factor_variation_pct, 50)
@@ -366,9 +380,13 @@ test_that("factor_variation_pct round-trips through YAML", {
     with_model("  factor_variation_pct: 60")
   ))
   expect_equal(set$model$factor_variation_pct, 60)
+  lvl <- read_bpnmf_config(write_yaml_config(
+    with_model("  time_level_variation_pct: 80")
+  ))
+  expect_equal(lvl$model$time_level_variation_pct, 80)
   expect_equal(
-    time_fac_shape_from_pct(set$model$factor_variation_pct),
-    1 / log1p(0.6)^2
+    trigamma(gamma_shape_from_pct(set$model$factor_variation_pct)),
+    log1p(0.6)^2
   )
   expect_error(
     read_bpnmf_config(write_yaml_config(with_model("  factor_variation: 60"))),

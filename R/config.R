@@ -15,29 +15,40 @@ FIGURE_NAMES <- c(
   "te_regression"
 )
 
-# Historical shape of the Gamma(shape, shape) prior on the temporal basis,
-# carried over from the fertility application. Kept as the exact default so a
-# config that does not mention the prior reproduces earlier runs bitwise.
-DEFAULT_TIME_FAC_SHAPE <- 20
+# Historical shapes of the Gamma(shape, shape) priors, carried over from the
+# fertility application. Kept exact as defaults so a config that does not
+# mention either prior reproduces earlier runs.
+DEFAULT_TIME_FAC_SHAPE <- 20   # unit-specific temporal basis
+DEFAULT_TIME_FE_SHAPE <- 1     # common time level (Gamma(1, 1))
 
 #' Gamma shape implied by an expected multiplicative swing
 #'
-#' `time_fac` has a `Gamma(shape, shape)` prior -- mean 1, and it enters the
-#' log-rate as `log(time_fac)`, so `sd(log time_fac) ~ 1/sqrt(shape)`. Asking
-#' for a swing of `pct` percent means `sd(log) = log1p(pct / 100)`, hence
-#' `shape = 1 / log1p(pct / 100)^2`. About 25 percent recovers the historical
-#' shape of 20.
+#' Both temporal priors are `Gamma(shape, shape)`: mean 1, entering the
+#' log-rate as `log(x)`, with `Var[log x] = trigamma(shape)` exactly. Asking
+#' for a swing of `pct` percent means `sd(log x) = log1p(pct / 100)`, so the
+#' shape solves `trigamma(shape) = log1p(pct / 100)^2`.
 #'
-#' @param pct Expected multiplicative variation, in percent (`NULL` returns
-#'   the historical default).
+#' Inverted numerically rather than via the usual `1 / sd^2` approximation:
+#' that approximation is good above shape 10 or so (20.1 vs 20.6 at 25
+#' percent) but is 28 percent off at shape 1, which is exactly where the
+#' `time_fe` prior sits.
+#'
+#' @param pct Expected multiplicative variation, in percent. `NULL` returns
+#'   `default_shape` unchanged.
+#' @param default_shape Shape to return when `pct` is `NULL`.
 #' @return The Gamma shape (and rate; they are equal).
 #' @export
-time_fac_shape_from_pct <- function(pct) {
+gamma_shape_from_pct <- function(pct, default_shape = DEFAULT_TIME_FAC_SHAPE) {
   if (is.null(pct)) {
-    return(DEFAULT_TIME_FAC_SHAPE)
+    return(default_shape)
   }
   checkmate::assert_number(pct, lower = 1e-6, finite = TRUE)
-  1 / log1p(pct / 100)^2
+  target <- log1p(pct / 100)^2
+  # trigamma decreases from Inf at 0 to 0 at Inf, so the root is unique.
+  stats::uniroot(
+    function(s) trigamma(s) - target,
+    interval = c(1e-8, 1e9), tol = .Machine$double.eps^0.5
+  )$root
 }
 
 AGGREGATION_PERIODS <- c("monthly", "bimonthly", "quarterly", "yearly")
@@ -286,17 +297,26 @@ bpnmf_type <- function(groups, ranks_to_test, total_from = NULL,
 #'   legacy `(1 | group) + (1 | unit) + (1 | group:unit)` model.
 #' @param factor_variation_pct Expected multiplicative variation of the
 #'   low-rank temporal basis, in percent, setting the `Gamma(shape, shape)`
-#'   prior on `time_fac` via [time_fac_shape_from_pct()]. `NULL` (default)
+#'   prior on `time_fac` via [gamma_shape_from_pct()]. `NULL` (default)
 #'   keeps the historical shape of 20, which corresponds to about 25 percent.
 #'   Raise it for panels whose within-unit seasonality or volatility is larger
 #'   than that; lower it for smooth series.
+#' @param time_level_variation_pct Expected multiplicative variation of the
+#'   *common* time level (`time_fe`, shared by all units within a group), in
+#'   percent. `NULL` (default) keeps the historical `Gamma(1, 1)`, which is
+#'   very diffuse: `sd(log time_fe)` is 1.28, a central 95% range of x0.03 to
+#'   x3.7. Because `unit_fe_mu` has a flat prior and the likelihood sees only
+#'   `log(time_fe) + unit_fe_mu`, this prior is the only thing separating the
+#'   two, so tightening it improves identification as well as encoding a
+#'   belief.
 #' @export
 bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
                              nb_disp = 1e-4, sample_disp = FALSE,
                              adjust_for_missingness = TRUE,
                              model_treated = TRUE, inference_mode = NULL,
                              treatment_effects = NULL,
-                             factor_variation_pct = NULL) {
+                             factor_variation_pct = NULL,
+                             time_level_variation_pct = NULL) {
   checkmate::assert_choice(outcome_distribution, c("NB", "Poisson"))
   types <- coerce_bpnmf_list(types, "bpnmf_type", "bpnmf_type", "types")
   checkmate::assert_list(types, types = "bpnmf_type")
@@ -323,6 +343,10 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
     factor_variation_pct,
     lower = 1e-6, finite = TRUE, null.ok = TRUE
   )
+  checkmate::assert_number(
+    time_level_variation_pct,
+    lower = 1e-6, finite = TRUE, null.ok = TRUE
+  )
   checkmate::assert_class(treatment_effects, "bpnmf_te_opts", null.ok = TRUE)
   if (!is.null(treatment_effects) && !is.null(treatment_effects$formula) &&
     !model_treated) {
@@ -337,7 +361,8 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
       adjust_for_missingness = adjust_for_missingness,
       model_treated = model_treated, inference_mode = inference_mode,
       treatment_effects = treatment_effects,
-      factor_variation_pct = factor_variation_pct
+      factor_variation_pct = factor_variation_pct,
+      time_level_variation_pct = time_level_variation_pct
     ),
     "bpnmf_model_opts"
   )

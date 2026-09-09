@@ -27,7 +27,8 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
                             sample_disp = FALSE,
                             adjust_for_missingness = TRUE,
                             gen_ypred = TRUE, te_design = NULL,
-                            time_fac_shape = DEFAULT_TIME_FAC_SHAPE) {
+                            time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
+                            time_fe_shape = DEFAULT_TIME_FE_SHAPE) {
   if (!is.null(te_design) && !model_treated) {
     cli::cli_abort(
       "te_design requires {.field model_treated} = TRUE."
@@ -85,7 +86,8 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
     adjust_missing = as.integer(adjust_for_missingness),
     nb_disp = nb_disp,
     gen_ypred = as.integer(gen_ypred),
-    time_fac_shape = time_fac_shape
+    time_fac_shape = time_fac_shape,
+    time_fe_shape = time_fe_shape
   )
   sd <- c(sd, te_stan_fields(te_design, length(exp_cell)))
   attr(sd, "dims") <- c(K = K, D = D, N = N)

@@ -13,7 +13,8 @@ bpnmf_model_opts(
   model_treated = TRUE,
   inference_mode = NULL,
   treatment_effects = NULL,
-  factor_variation_pct = NULL
+  factor_variation_pct = NULL,
+  time_level_variation_pct = NULL
 )
 }
 \arguments{
@@ -40,10 +41,19 @@ legacy \code{(1 | group) + (1 | unit) + (1 | group:unit)} model.}
 
 \item{factor_variation_pct}{Expected multiplicative variation of the
 low-rank temporal basis, in percent, setting the \code{Gamma(shape, shape)}
-prior on \code{time_fac} via \code{\link[=time_fac_shape_from_pct]{time_fac_shape_from_pct()}}. \code{NULL} (default)
+prior on \code{time_fac} via \code{\link[=gamma_shape_from_pct]{gamma_shape_from_pct()}}. \code{NULL} (default)
 keeps the historical shape of 20, which corresponds to about 25 percent.
 Raise it for panels whose within-unit seasonality or volatility is larger
 than that; lower it for smooth series.}
+
+\item{time_level_variation_pct}{Expected multiplicative variation of the
+\emph{common} time level (\code{time_fe}, shared by all units within a group), in
+percent. \code{NULL} (default) keeps the historical \code{Gamma(1, 1)}, which is
+very diffuse: \verb{sd(log time_fe)} is 1.28, a central 95\% range of x0.03 to
+x3.7. Because \code{unit_fe_mu} has a flat prior and the likelihood sees only
+\code{log(time_fe) + unit_fe_mu}, this prior is the only thing separating the
+two, so tightening it improves identification as well as encoding a
+belief.}
 }
 \description{
 Model options: likelihood family, model types, dispersion, treatment

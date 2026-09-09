@@ -71,7 +71,12 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
     adjust_for_missingness = config$model$adjust_for_missingness,
     gen_ypred = gen_ypred,
     te_design = te_design,
-    time_fac_shape = time_fac_shape_from_pct(config$model$factor_variation_pct)
+    time_fac_shape = gamma_shape_from_pct(
+      config$model$factor_variation_pct, DEFAULT_TIME_FAC_SHAPE
+    ),
+    time_fe_shape = gamma_shape_from_pct(
+      config$model$time_level_variation_pct, DEFAULT_TIME_FE_SHAPE
+    )
   )
   if (model_treated && sd$n_exposed == 0) {
     cli::cli_abort(

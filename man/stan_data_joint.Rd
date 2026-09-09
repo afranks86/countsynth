@@ -14,7 +14,8 @@ stan_data_joint(
   adjust_for_missingness = TRUE,
   gen_ypred = TRUE,
   te_design = NULL,
-  time_fac_shape = DEFAULT_TIME_FAC_SHAPE
+  time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
+  time_fe_shape = DEFAULT_TIME_FE_SHAPE
 )
 }
 \arguments{

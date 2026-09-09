@@ -50,6 +50,11 @@ data {
   // swing multiplicatively away from a unit's own level. 20 is the historical
   // default (about a +/-25% swing).
   real<lower=0> time_fac_shape;
+  // Gamma(shape, shape) on the common time level. 1 is the historical
+  // default (Gamma(1, 1)) and is very diffuse: sd(log) = 1.28. Since
+  // unit_fe_mu is flat and the likelihood sees only log(time_fe) +
+  // unit_fe_mu, this prior alone separates the two.
+  real<lower=0> time_fe_shape;
 
   // Optional treatment-effect regression (te_reg == 1, requires
   // model_treated == 1): the legacy group/unit/group:unit hierarchy is
@@ -93,7 +98,7 @@ parameters {
   vector[K] unit_fe_mu;                     // improper flat (no statement)
   vector<lower=0>[K] unit_fe_sigma;         // HalfNormal(0.5)
   matrix[D, K] unit_fe_z;                   // std normal (non-centered)
-  matrix<lower=0>[N, K] time_fe;             // Gamma(1, 1), logged in use
+  matrix<lower=0>[N, K] time_fe;             // Gamma(shape, shape), logged
   array[K, D] simplex[R] unit_weight;        // Dirichlet(1,...,1) per (k, d)
 
   // Treatment block; zero-size when model_treated == 0. Declaration order
@@ -185,7 +190,7 @@ model {
   }
   unit_fe_sigma ~ normal(0, 0.5);           // half-normal via <lower=0>
   to_vector(unit_fe_z) ~ std_normal();
-  to_vector(time_fe) ~ gamma(1, 1);
+  to_vector(time_fe) ~ gamma(time_fe_shape, time_fe_shape);
   // unit_weight ~ Dirichlet(1,...,1) is uniform on the simplex: the
   // declaration alone supplies the prior (a dirichlet statement would add
   // only a constant).

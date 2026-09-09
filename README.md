@@ -173,9 +173,10 @@ model:
   adjust_for_missingness: true   # integrate over suppressed counts 1-9
   model_treated: true            # false = baseline-only fit, no effects
   inference_mode: joint          # joint | cut
-  # factor_variation_pct: 25     # expected multiplicative swing of the latent
-                                 # temporal factors; unset = 25%-equivalent
-                                 # (the historical Gamma(20, 20))
+  # factor_variation_pct: 25     # expected swing of the unit-specific temporal
+                                 # factors; unset = Gamma(20, 20)
+  # time_level_variation_pct: 60 # expected swing of the common time level;
+                                 # unset = Gamma(1, 1), which is very diffuse
   types:
     total:                       # name of the model type -> output subdirectory
       groups: [total]            # which outcome labels this type models
@@ -374,13 +375,32 @@ level — the *unit × time interaction*, since unit levels are carried by
 | 50 | 6.1 | ×0.40 – ×2.05 |
 | 100 | 2.1 | ×0.13 – ×2.75 |
 
-Left unset it is `shape = 20`, the value carried over from the fertility
-application — about a ±25% swing. That is deliberately loose: on the bundled
-fertility panel the *observed* unit × time interaction is only about 3%
-(`shape` ≈ 1000), so the prior admits far more temporal movement than the data
-shows. Raise `factor_variation_pct` for panels with strong seasonality or
-volatility; lower it for smooth series where the default lets the
-factorization chase noise.
+Left unset it is `shape = 20`, carried over from the fertility application —
+about a ±25% swing. Whether that is loose or tight depends entirely on the
+grouping: on the bundled fertility panel the observed unit × time interaction
+is ~3% for the race groups (`shape` ≈ 1000, so the prior is ~7× looser than
+the data needs) but ~21% for the marital-status groups (`shape` ≈ 22, which
+the default matches almost exactly). That order-of-magnitude spread within one
+dataset is why the default is a fixed weakly-informative value rather than
+something estimated: a fixed multiple of the empirical scale would be
+reasonable for one grouping and degenerate for another.
+
+**The common time level.** `time_fe` carries the group-wide temporal level,
+shared by every unit, and has the same `Gamma(shape, shape)` form set by
+`time_level_variation_pct`. Unset it is `Gamma(1, 1)`, which is far more
+diffuse than it looks: `sd(log time_fe) = 1.28` — a central 95% range of ×0.03
+to ×3.7 — making it the loosest prior in the model.
+
+That matters beyond prior belief. `unit_fe_mu` has a flat prior and the
+likelihood sees only `log(time_fe) + unit_fe_mu`, so the two trade off exactly
+and this prior is the *only* thing separating them. On the bundled example
+their posterior correlation is −0.99, and they are the worst-mixing parameters
+in the model. Tightening `time_level_variation_pct` narrows that ridge.
+
+Both knobs are read as an expected multiplicative swing and inverted exactly
+(`trigamma(shape) = log(1 + p/100)²`), not through the usual `1/sd²`
+approximation — which is fine above shape 10 but 28% off at shape 1, exactly
+where `time_fe` sits.
 
 **Missingness.** `adjust_for_missingness: true` is meaningful only for data
 that suppresses small counts, i.e. where a blank cell means "somewhere in

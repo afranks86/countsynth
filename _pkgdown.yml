@@ -17,7 +17,7 @@ reference:
   - bpnmf_output_opts
   - bpnmf_cut_opts
   - bpnmf_te_opts
-  - time_fac_shape_from_pct
+  - gamma_shape_from_pct
   - bpnmf_time_aggregation
   - bpnmf_aggregate_unit
 - title: Data

@@ -99,13 +99,17 @@ test_that("time_fac_shape reaches the Stan data with the historical default", {
     stan_data_joint(data, rank = 2, time_fac_shape = 6.08)$time_fac_shape, 6.08
   )
   # The config route: model opts -> shape, default and explicit.
+  expect_equal(stan_data_joint(data, rank = 2)$time_fe_shape, 1)
   expect_equal(
-    time_fac_shape_from_pct(bpnmf_model_opts()$factor_variation_pct), 20
+    stan_data_joint(data, rank = 2, time_fe_shape = 10)$time_fe_shape, 10
   )
   expect_equal(
-    time_fac_shape_from_pct(
-      bpnmf_model_opts(factor_variation_pct = 50)$factor_variation_pct
+    gamma_shape_from_pct(bpnmf_model_opts()$factor_variation_pct), 20
+  )
+  expect_equal(
+    gamma_shape_from_pct(
+      bpnmf_model_opts()$time_level_variation_pct, DEFAULT_TIME_FE_SHAPE
     ),
-    1 / log1p(0.5)^2
+    1
   )
 })
