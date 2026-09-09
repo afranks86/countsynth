@@ -395,7 +395,18 @@ That matters beyond prior belief. `unit_fe_mu` has a flat prior and the
 likelihood sees only `log(time_fe) + unit_fe_mu`, so the two trade off exactly
 and this prior is the *only* thing separating them. On the bundled example
 their posterior correlation is −0.99, and they are the worst-mixing parameters
-in the model. Tightening `time_level_variation_pct` narrows that ridge.
+in the model. Tightening `time_level_variation_pct` narrows that ridge: at a
+50% swing (shape 6.6) the correlation falls to −0.91, `time_fe`'s worst R-hat
+goes 1.22 → 1.08 and its bulk ESS 18 → 47, and `unit_fe_mu`'s R-hat goes
+1.27 → 1.01.
+
+What it does *not* do is change the answer. `mu_ctrl`'s worst R-hat is 1.156
+either way, because only the sum was ever identified — tightening reallocates
+it between two parameters rather than learning anything new. So this knob
+buys cleaner diagnostics on the nuisance parameters, not a better posterior,
+which is why the loose default is left alone. It is worth reaching for if you
+gate on all parameters rather than the `mu_ctrl` / `te` default, where the
+split otherwise dominates the verdict.
 
 Both knobs are read as an expected multiplicative swing and inverted exactly
 (`trigamma(shape) = log(1 + p/100)²`), not through the usual `1/sd²`
