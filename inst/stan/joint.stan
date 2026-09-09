@@ -90,9 +90,9 @@ transformed data {
 }
 parameters {
   array[K] matrix<lower=0>[N, R] time_fac;   // Gamma(shape, shape), logged
-  vector[K] state_fe_mu;                     // improper flat (no statement)
-  vector<lower=0>[K] state_fe_sigma;         // HalfNormal(0.5)
-  matrix[D, K] state_fe_z;                   // std normal (non-centered)
+  vector[K] unit_fe_mu;                     // improper flat (no statement)
+  vector<lower=0>[K] unit_fe_sigma;         // HalfNormal(0.5)
+  matrix[D, K] unit_fe_z;                   // std normal (non-centered)
   matrix<lower=0>[N, K] time_fe;             // Gamma(1, 1), logged in use
   array[K, D] simplex[R] unit_weight;        // Dirichlet(1,...,1) per (k, d)
 
@@ -101,12 +101,12 @@ parameters {
   // exactly when the regression replaces it, so the legacy unconstrained
   // vector is unchanged -- same seed, same draws.
   array[model_treated] real<lower=0> treatment_it_scale;      // HalfNormal(0.1)
-  array[te_legacy] real<lower=0> treatment_state_scale;       // HalfNormal(1)
+  array[te_legacy] real<lower=0> treatment_unit_scale;       // HalfNormal(1)
   array[te_legacy] real<lower=0> treatment_category_scale;    // HalfNormal(1)
-  array[te_legacy] real<lower=0> state_category_scale;        // HalfNormal(1)
+  array[te_legacy] real<lower=0> unit_category_scale;        // HalfNormal(1)
   vector[model_treated == 1 ? n_exposed : 0] treatment_kt_z;
-  vector[te_legacy == 1 ? D : 0] state_treatment_effect_z;
-  matrix[te_legacy == 1 ? K : 0, te_legacy == 1 ? D : 0] state_category_te_z;
+  vector[te_legacy == 1 ? D : 0] unit_treatment_effect_z;
+  matrix[te_legacy == 1 ? K : 0, te_legacy == 1 ? D : 0] unit_category_te_z;
   vector[te_legacy == 1 ? K : 0] category_treatment_effect;   // centered
 
   // Per-unit dispersion; Uniform(0,1) via constraint + factor prior below.
@@ -131,8 +131,8 @@ transformed parameters {
       W[, d] = unit_weight[k, d];
     }
     matrix[N, D] factor_kd = time_fac[k] * W;
-    row_vector[D] fe_k = state_fe_mu[k]
-                         + state_fe_sigma[k] * to_row_vector(state_fe_z[, k]);
+    row_vector[D] fe_k = unit_fe_mu[k]
+                         + unit_fe_sigma[k] * to_row_vector(unit_fe_z[, k]);
     int base = (k - 1) * DN;
     // to_vector is column-major: column d contributes N contiguous entries,
     // exactly the row-major (k, d, n) flat layout of this group's cells.
@@ -145,9 +145,9 @@ transformed parameters {
   if (model_treated == 1) {
     te = treatment_kt_z * treatment_it_scale[1];
     if (te_reg == 0) {
-      te += state_treatment_effect_z[exp_d] * treatment_state_scale[1]
+      te += unit_treatment_effect_z[exp_d] * treatment_unit_scale[1]
             + category_treatment_effect[exp_k]
-            + to_vector(state_category_te_z)[exp_kd] * state_category_scale[1];
+            + to_vector(unit_category_te_z)[exp_kd] * unit_category_scale[1];
     } else {
       if (P > 0) {
         te += X * te_beta;
@@ -183,8 +183,8 @@ model {
   for (k in 1 : K) {
     to_vector(time_fac[k]) ~ gamma(time_fac_shape, time_fac_shape);
   }
-  state_fe_sigma ~ normal(0, 0.5);           // half-normal via <lower=0>
-  to_vector(state_fe_z) ~ std_normal();
+  unit_fe_sigma ~ normal(0, 0.5);           // half-normal via <lower=0>
+  to_vector(unit_fe_z) ~ std_normal();
   to_vector(time_fe) ~ gamma(1, 1);
   // unit_weight ~ Dirichlet(1,...,1) is uniform on the simplex: the
   // declaration alone supplies the prior (a dirichlet statement would add
@@ -195,11 +195,11 @@ model {
     treatment_it_scale[1] ~ normal(0, 0.1);
     treatment_kt_z ~ std_normal();
     if (te_reg == 0) {
-      treatment_state_scale[1] ~ normal(0, 1);
+      treatment_unit_scale[1] ~ normal(0, 1);
       treatment_category_scale[1] ~ normal(0, 1);
-      state_category_scale[1] ~ normal(0, 1);
-      state_treatment_effect_z ~ std_normal();
-      to_vector(state_category_te_z) ~ std_normal();
+      unit_category_scale[1] ~ normal(0, 1);
+      unit_treatment_effect_z ~ std_normal();
+      to_vector(unit_category_te_z) ~ std_normal();
       category_treatment_effect ~ normal(0, treatment_category_scale[1]);
     } else {
       te_beta ~ normal(0, te_beta_prior_scale);

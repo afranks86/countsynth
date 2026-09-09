@@ -362,7 +362,7 @@ sampling time and needs `NB`.
 `log(time_fac)`, so `sd(log time_fac) ≈ 1/√shape`. It sets how far the
 low-rank temporal structure may swing multiplicatively away from a unit's own
 level — the *unit × time interaction*, since unit levels are carried by
-`state_fe` and the common trend by `time_fe`.
+`unit_fe` and the common trend by `time_fe`.
 
 `factor_variation_pct` sets it in interpretable units: an expected swing of
 `p` percent means `shape = 1 / log(1 + p/100)²`.

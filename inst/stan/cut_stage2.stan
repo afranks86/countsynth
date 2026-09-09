@@ -66,12 +66,12 @@ parameters {
   // are zero-size in the parameterization they do not belong to, so the
   // legacy unconstrained vector is unchanged -- same seed, same draws.
   real<lower=0> treatment_it_scale;      // HalfNormal(0.1)
-  array[te_reg == 1 ? 0 : 1] real<lower=0> treatment_state_scale; // HalfNormal(1)
+  array[te_reg == 1 ? 0 : 1] real<lower=0> treatment_unit_scale; // HalfNormal(1)
   array[te_reg == 1 ? 0 : 1] real<lower=0> treatment_category_scale; // HalfNormal(1)
-  array[te_reg == 1 ? 0 : 1] real<lower=0> state_category_scale; // HalfNormal(1)
+  array[te_reg == 1 ? 0 : 1] real<lower=0> unit_category_scale; // HalfNormal(1)
   vector[n_exposed] treatment_kt_z;
-  vector[te_reg == 1 ? 0 : D] state_treatment_effect_z;
-  matrix[te_reg == 1 ? 0 : K, te_reg == 1 ? 0 : D] state_category_te_z;
+  vector[te_reg == 1 ? 0 : D] unit_treatment_effect_z;
+  matrix[te_reg == 1 ? 0 : K, te_reg == 1 ? 0 : D] unit_category_te_z;
   vector[te_reg == 1 ? 0 : K] category_treatment_effect; // centered
   // Regression surface; all sizes are zero when te_reg == 0.
   vector[P] te_beta;
@@ -82,9 +82,9 @@ transformed parameters {
   vector[n_exposed] te = treatment_kt_z * treatment_it_scale;
   vector[n_exposed] mu_exposed;
   if (te_reg == 0) {
-    te += state_treatment_effect_z[exp_d] * treatment_state_scale[1]
+    te += unit_treatment_effect_z[exp_d] * treatment_unit_scale[1]
           + category_treatment_effect[exp_k]
-          + to_vector(state_category_te_z)[exp_kd] * state_category_scale[1];
+          + to_vector(unit_category_te_z)[exp_kd] * unit_category_scale[1];
   } else {
     if (P > 0) {
       te += X * te_beta;
@@ -108,11 +108,11 @@ model {
   treatment_it_scale ~ normal(0, 0.1);
   treatment_kt_z ~ std_normal();
   if (te_reg == 0) {
-    treatment_state_scale[1] ~ normal(0, 1);
+    treatment_unit_scale[1] ~ normal(0, 1);
     treatment_category_scale[1] ~ normal(0, 1);
-    state_category_scale[1] ~ normal(0, 1);
-    state_treatment_effect_z ~ std_normal();
-    to_vector(state_category_te_z) ~ std_normal();
+    unit_category_scale[1] ~ normal(0, 1);
+    unit_treatment_effect_z ~ std_normal();
+    to_vector(unit_category_te_z) ~ std_normal();
     category_treatment_effect ~ normal(0, treatment_category_scale[1]);
   } else {
     te_beta ~ normal(0, te_beta_prior_scale);

@@ -25,7 +25,7 @@ DIAG_EXCLUDE <- c("lp__", "ypred")
 
 # Gated by default: the counterfactual log-rate surface and the treatment
 # effect -- the two quantities every reported estimand is built from. The
-# factor parameters (time_fac, unit_weight, state_fe_*) are deliberately left
+# factor parameters (time_fac, unit_weight, unit_fe_*) are deliberately left
 # out: an NMF is invariant to permuting and rescaling its factors, so chains
 # that settle on different labelings give those parameters an enormous R-hat
 # while mu_ctrl and te are converged. Gating on them measures label

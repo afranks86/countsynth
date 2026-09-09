@@ -51,7 +51,7 @@ test_that("gate_params prefix matching errors on zero matches", {
     match_gate_params(c("mu_ctrl", "te"), "bogus"),
     "matched no posterior variables"
   )
-  gated <- match_gate_params(c("mu_ctrl", "te", "state_fe_z"), c("mu", "te"))
+  gated <- match_gate_params(c("mu_ctrl", "te", "unit_fe_z"), c("mu", "te"))
   expect_identical(gated, c(TRUE, TRUE, FALSE))
 })
 
@@ -59,9 +59,9 @@ test_that("the gate defaults to mu_ctrl and te, with an 'all' opt-out", {
   # Every real Stan variable, so an over-matching prefix would show up here.
   bases <- c(
     "mu_ctrl", "te", "time_fac", "time_fe", "unit_weight", "disp", "phi_unit",
-    "state_fe_mu", "state_fe_sigma", "state_fe_z", "state_category_scale",
-    "treatment_it_scale", "treatment_state_scale", "treatment_category_scale",
-    "treatment_kt_z", "state_treatment_effect_z", "state_category_te_z",
+    "unit_fe_mu", "unit_fe_sigma", "unit_fe_z", "unit_category_scale",
+    "treatment_it_scale", "treatment_unit_scale", "treatment_category_scale",
+    "treatment_kt_z", "unit_treatment_effect_z", "unit_category_te_z",
     "category_treatment_effect"
   )
   gated <- match_gate_params(bases, DEFAULT_GATE_PARAMS)

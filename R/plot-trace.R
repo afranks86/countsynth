@@ -27,9 +27,9 @@ bpnmf_trace_plot <- function(fit, variables = NULL, max_elements = 20) {
   }
   all_vars <- setdiff(fit$metadata()$stan_variables, DIAG_EXCLUDE)
   defaults <- intersect(
-    c("disp", "treatment_it_scale", "treatment_state_scale",
-      "treatment_category_scale", "state_category_scale", "state_fe_mu",
-      "state_fe_sigma", "category_treatment_effect"),
+    c("disp", "treatment_it_scale", "treatment_unit_scale",
+      "treatment_category_scale", "unit_category_scale", "unit_fe_mu",
+      "unit_fe_sigma", "category_treatment_effect"),
     all_vars
   )
   variables <- variables %||% defaults

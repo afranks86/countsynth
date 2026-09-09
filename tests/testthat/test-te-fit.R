@@ -98,8 +98,8 @@ test_that("the regression replaces the legacy hierarchy in the sampler", {
   # Legacy blocks are declared zero-size, and CmdStan omits zero-size
   # parameters from its output entirely.
   expect_false(any(
-    c("category_treatment_effect", "state_treatment_effect_z",
-      "state_category_te_z", "treatment_category_scale") %in% vars
+    c("category_treatment_effect", "unit_treatment_effect_z",
+      "unit_category_te_z", "treatment_category_scale") %in% vars
   ))
 })
 
