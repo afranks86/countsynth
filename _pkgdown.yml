@@ -17,6 +17,7 @@ reference:
   - bpnmf_output_opts
   - bpnmf_cut_opts
   - bpnmf_te_opts
+  - bpnmf_rank_shrinkage_opts
   - gamma_shape_from_pct
   - bpnmf_time_aggregation
   - bpnmf_aggregate_unit
@@ -70,6 +71,10 @@ reference:
   - bpnmf_ppc_rmse
   - bpnmf_ppc_unit_corr
   - bpnmf_trace_plot
+  - bpnmf_component_weight_plot
+  - bpnmf_component_weight_summary
+  - bpnmf_rank_hyper_plot
+  - bpnmf_eff_rank_summary
 - title: Reports
   contents:
   - bpnmf_report

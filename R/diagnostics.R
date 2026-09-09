@@ -25,11 +25,15 @@ DIAG_EXCLUDE <- c("lp__", "ypred")
 
 # Gated by default: the counterfactual log-rate surface and the treatment
 # effect -- the two quantities every reported estimand is built from. The
-# factor parameters (time_fac, unit_weight, unit_fe_*) are deliberately left
-# out: an NMF is invariant to permuting and rescaling its factors, so chains
-# that settle on different labelings give those parameters an enormous R-hat
-# while mu_ctrl and te are converged. Gating on them measures label
-# disagreement, not convergence of anything reported.
+# factor parameters (time_fac, unit_weight, unit_fe_*, and under rank
+# shrinkage stick / group_weight / unit_weight_z) are deliberately left out:
+# an NMF is invariant to permuting and rescaling its factors, so chains that
+# settle on different labelings give those parameters an enormous R-hat while
+# mu_ctrl and te are converged. Gating on them measures label disagreement,
+# not convergence of anything reported. (unit_weight_z carries a genuinely
+# flat direction on top of that -- see the softmax note in joint.stan -- and
+# the rank diagnostics are built only from permutation-invariant functions:
+# eff_rank, and the profile's order statistics.)
 #
 # Matching is by prefix over base names, and neither prefix over-matches:
 # "te" does not reach `treatment_*` (which begins "tr"), and "mu_ctrl" is

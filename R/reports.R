@@ -2,6 +2,7 @@
 # under <output_dir>/figs/ with the same filenames the Python package writes
 # (fit_<unit>.png, gap_<unit>.png, raw_rate.png, interval.png,
 # group_comparison.png, ppc/ppc_*.png + ppc_pvalues.csv,
+# ppc/rank_*.png + rank_*.csv when rank shrinkage is on,
 # summary_table_by_unit.csv, expected_vs_observed.csv,
 # post_treatment_summary.csv). Tables ALWAYS write; only figures are gated by
 # the `figures` selection. The target unit's headline table is not written
@@ -80,9 +81,9 @@ ppc_plot_dims <- function(n_facets, ncol,
 #'   `summary_table_by_unit.html` via [bpnmf_gt_table()]. Needs the `gt`
 #'   package; warns and skips when it is missing.
 #' @param fit Optional `bpnmf_fit` / `bpnmf_cut_fit` the draws came from.
-#'   Required for the `"te_regression"` figures, which read the
-#'   treatment-effect design and coefficient draws rather than the draws
-#'   frame; without it that figure is skipped.
+#'   Required for the `"te_regression"` and `"rank_shrinkage"` figures, which
+#'   read the treatment-effect design and the factor block rather than the
+#'   draws frame; without it those figures are skipped.
 #' @return Invisible list with `summary`, `per_unit`, `detail`,
 #'   `target_unit`, `figs_dir`, `treated_units`.
 #' @export
@@ -234,6 +235,28 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     }
     write_table_csv(
       ppc$pvals, file.path(ppc_dir, "ppc_pvalues.csv")
+    )
+  }
+  # Rank-shrinkage diagnostics go beside the PPC figures deliberately: they
+  # answer the question ("is this rank adequate?") that a PPC-driven rank
+  # sweep was answering, and are read together with it. Skipped, not an
+  # error, when the fit did not use shrinkage -- the same way te_regression
+  # is skipped without a design.
+  if ("rank_shrinkage" %in% selected && !is.null(fit) &&
+    !is.null(rank_shrinkage_source(fit))) {
+    ppc_dir <- file.path(figs_dir, "ppc")
+    dir.create(ppc_dir, recursive = TRUE, showWarnings = FALSE)
+    rank_figs <- rank_report_figures(fit)
+    for (nm in names(rank_figs)) {
+      save_plot(rank_figs[[nm]], file.path(ppc_dir, paste0(nm, ".png")))
+    }
+    write_table_csv(
+      bpnmf_component_weight_summary(fit),
+      file.path(ppc_dir, "rank_component_weight.csv")
+    )
+    write_table_csv(
+      bpnmf_eff_rank_summary(fit),
+      file.path(ppc_dir, "rank_eff_rank.csv")
     )
   }
 

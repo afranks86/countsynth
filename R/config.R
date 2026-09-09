@@ -12,7 +12,7 @@
 # it and bpnmf_report() ignores it.
 FIGURE_NAMES <- c(
   "unit_fit", "unit_gap", "raw_rate", "interval", "group_comparison", "ppc",
-  "te_regression"
+  "te_regression", "rank_shrinkage"
 )
 
 # Historical shapes of the Gamma(shape, shape) priors, carried over from the
@@ -280,6 +280,81 @@ bpnmf_type <- function(groups, ranks_to_test, total_from = NULL,
   )
 }
 
+#' Rank-shrinkage options: shrink unused factor components
+#'
+#' Turns the flat per-unit component weights into a two-level hierarchy over
+#' the `R` candidate temporal curves -- the finite-dimensional form of a
+#' hierarchical Dirichlet process. Each group gets a shared
+#' component-popularity profile `group_weight[k]`, built by truncated
+#' stick-breaking (`stick ~ Beta(1, group_weight_mass)`), and each unit's
+#' weights are that profile perturbed multiplicatively and renormalized:
+#' `softmax(log group_weight[k] + unit_weight_sd * z)` with `z` standard
+#' normal.
+#'
+#' Two things follow. Components past the rank a group actually uses get
+#' near-zero profile weight for *every* unit in it, so an over-specified rank
+#' stops changing the fit -- pick a generous `R` once instead of sweeping.
+#' And the prior amplitude of the low-rank term stops depending on `R`: under
+#' the default `Dirichlet(1, ..., 1)`,
+#' `E[sum_r unit_weight^2] = 2 / (R + 1)`, so the variance of the low-rank
+#' term falls off like `1 / R` and [bpnmf_model_opts()]'s
+#' `factor_variation_pct` only means what it says at a fixed rank.
+#'
+#' The fit reports `eff_rank[k] = 1 / sum_r group_weight[k, r]^2` -- the
+#' effective number of components group `k` occupies. If its posterior sits
+#' well below `R` the truncation was generous enough; if it presses against
+#' `R`, raise the rank and refit. See [bpnmf_component_weight_plot()] and
+#' [bpnmf_rank_hyper_plot()].
+#'
+#' `NULL` in [bpnmf_model_opts()] leaves the weights iid uniform on the
+#' simplex; the Stan parameters this adds are then zero-size, so a fit is
+#' unchanged draw for draw.
+#'
+#' @param group_mass_prior `Gamma(shape, rate)` prior on
+#'   `group_weight_mass`, the DP mass behind the stick-breaking profile
+#'   (`stick ~ Beta(1, mass)`). Smaller mass means a sparser profile: the
+#'   implied effective rank is about `1 + mass`, so the default `c(2, 1)`
+#'   (mean 2) centres it near three components and reaches about seven.
+#' @param unit_sd_prior Half-normal prior scale for `unit_weight_sd`, the
+#'   multiplicative spread of a unit's component loadings about its group's
+#'   profile (a standard deviation on the log scale, so `0.5` is roughly a
+#'   1.6-fold departure and `1` a 2.7-fold one). Near zero pins every unit to
+#'   the shared profile, large lets each unit load on its own few components;
+#'   it is sampled rather than fixed because how much cross-unit sharing the
+#'   panel supports is exactly what is not known in advance. Default `1`.
+#'
+#'   Logistic-normal rather than the textbook HDP's
+#'   `Dirichlet(conc * profile)` for a computational reason, not a modelling
+#'   one: the Dirichlet form measured 5.4x slower on the bundled 51-unit
+#'   fertility panel (1193s against 223s for 300 iterations at rank 8), at
+#'   the same leapfrog count and with no divergences either way, because a
+#'   Dirichlet whose concentration is itself sampled costs an `lgamma` and a
+#'   `digamma` per component per unit on every gradient. It also needs a
+#'   concentration floor to keep unused components off the simplex boundary,
+#'   and no floor is both large enough to do that and small enough to keep
+#'   the rank-invariance. A concentration `c` corresponds to `unit_sd_prior`
+#'   near `sqrt(2 / c)`.
+#' @return A `bpnmf_rank_shrinkage_opts` object.
+#' @export
+bpnmf_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
+                                      unit_sd_prior = 1) {
+  checkmate::assert_numeric(
+    group_mass_prior,
+    lower = .Machine$double.xmin, finite = TRUE, any.missing = FALSE, len = 2,
+    .var.name = "group_mass_prior"
+  )
+  checkmate::assert_number(
+    unit_sd_prior, lower = .Machine$double.xmin, finite = TRUE
+  )
+  new_bpnmf_class(
+    list(
+      group_mass_prior = as.numeric(group_mass_prior),
+      unit_sd_prior = as.numeric(unit_sd_prior)
+    ),
+    "bpnmf_rank_shrinkage_opts"
+  )
+}
+
 #' Model options: likelihood family, model types, dispersion, treatment
 #'
 #' @param outcome_distribution `"NB"` or `"Poisson"`.
@@ -301,6 +376,11 @@ bpnmf_type <- function(groups, ranks_to_test, total_from = NULL,
 #'   keeps the historical shape of 20, which corresponds to about 25 percent.
 #'   Raise it for panels whose within-unit seasonality or volatility is larger
 #'   than that; lower it for smooth series.
+#' @param rank_shrinkage Optional [bpnmf_rank_shrinkage_opts()] object
+#'   shrinking unused factor components, so that an over-specified rank stops
+#'   changing the fit. `NULL` (default) keeps the flat
+#'   `Dirichlet(1, ..., 1)` weights, in which case results do depend on the
+#'   rank chosen and should be checked by sweeping `ranks_to_test`.
 #' @param time_level_variation_pct Expected multiplicative variation of the
 #'   *common* time level (`time_fe`, shared by all units within a group), in
 #'   percent. `NULL` (default) keeps the historical `Gamma(1, 1)`, which is
@@ -316,7 +396,8 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
                              model_treated = TRUE, inference_mode = NULL,
                              treatment_effects = NULL,
                              factor_variation_pct = NULL,
-                             time_level_variation_pct = NULL) {
+                             time_level_variation_pct = NULL,
+                             rank_shrinkage = NULL) {
   checkmate::assert_choice(outcome_distribution, c("NB", "Poisson"))
   types <- coerce_bpnmf_list(types, "bpnmf_type", "bpnmf_type", "types")
   checkmate::assert_list(types, types = "bpnmf_type")
@@ -347,6 +428,16 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
     time_level_variation_pct,
     lower = 1e-6, finite = TRUE, null.ok = TRUE
   )
+  # `TRUE` / `FALSE` are the natural shorthand for "on at the defaults" /
+  # "off", and the YAML loader accepts the same, so honour them here too.
+  if (is.logical(rank_shrinkage) && length(rank_shrinkage) == 1 &&
+    !is.na(rank_shrinkage)) {
+    rank_shrinkage <- if (rank_shrinkage) bpnmf_rank_shrinkage_opts() else NULL
+  }
+  rank_shrinkage <- coerce_bpnmf(
+    rank_shrinkage, "bpnmf_rank_shrinkage_opts", "bpnmf_rank_shrinkage_opts",
+    "rank_shrinkage"
+  )
   checkmate::assert_class(treatment_effects, "bpnmf_te_opts", null.ok = TRUE)
   if (!is.null(treatment_effects) && !is.null(treatment_effects$formula) &&
     !model_treated) {
@@ -362,7 +453,8 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
       model_treated = model_treated, inference_mode = inference_mode,
       treatment_effects = treatment_effects,
       factor_variation_pct = factor_variation_pct,
-      time_level_variation_pct = time_level_variation_pct
+      time_level_variation_pct = time_level_variation_pct,
+      rank_shrinkage = rank_shrinkage
     ),
     "bpnmf_model_opts"
   )

@@ -14,7 +14,8 @@ bpnmf_model_opts(
   inference_mode = NULL,
   treatment_effects = NULL,
   factor_variation_pct = NULL,
-  time_level_variation_pct = NULL
+  time_level_variation_pct = NULL,
+  rank_shrinkage = NULL
 )
 }
 \arguments{
@@ -54,6 +55,12 @@ x3.7. Because \code{unit_fe_mu} has a flat prior and the likelihood sees only
 \code{log(time_fe) + unit_fe_mu}, this prior is the only thing separating the
 two, so tightening it improves identification as well as encoding a
 belief.}
+
+\item{rank_shrinkage}{Optional \code{\link[=bpnmf_rank_shrinkage_opts]{bpnmf_rank_shrinkage_opts()}} object
+shrinking unused factor components, so that an over-specified rank stops
+changing the fit. \code{NULL} (default) keeps the flat
+\code{Dirichlet(1, ..., 1)} weights, in which case results do depend on the
+rank chosen and should be checked by sweeping \code{ranks_to_test}.}
 }
 \description{
 Model options: likelihood family, model types, dispersion, treatment

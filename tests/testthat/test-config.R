@@ -393,3 +393,64 @@ test_that("factor_variation_pct round-trips through YAML", {
     "Unknown"
   )
 })
+
+test_that("rank_shrinkage opts validate and accept the TRUE shorthand", {
+  o <- bpnmf_rank_shrinkage_opts()
+  expect_s3_class(o, "bpnmf_rank_shrinkage_opts")
+  expect_equal(o$group_mass_prior, c(2, 1))
+  expect_equal(o$unit_sd_prior, 1)
+
+  # The mass prior is a (shape, rate) pair, the spread prior one scale.
+  expect_error(bpnmf_rank_shrinkage_opts(group_mass_prior = 2), "length 2")
+  expect_error(
+    bpnmf_rank_shrinkage_opts(group_mass_prior = c(2, 0)), "not >= "
+  )
+  expect_error(bpnmf_rank_shrinkage_opts(unit_sd_prior = c(1, 2)), "length 1")
+  expect_error(bpnmf_rank_shrinkage_opts(unit_sd_prior = -1), "not >= ")
+
+  expect_null(bpnmf_model_opts()$rank_shrinkage)
+  expect_equal(bpnmf_model_opts(rank_shrinkage = TRUE)$rank_shrinkage, o)
+  expect_null(bpnmf_model_opts(rank_shrinkage = FALSE)$rank_shrinkage)
+  # A named list of the constructor's arguments, as elsewhere in the config.
+  expect_equal(
+    bpnmf_model_opts(rank_shrinkage = list(unit_sd_prior = 3))$rank_shrinkage$unit_sd_prior,
+    3
+  )
+  expect_error(
+    bpnmf_model_opts(rank_shrinkage = list(unit_sd = 3)), "Unknown"
+  )
+})
+
+test_that("rank_shrinkage round-trips through YAML", {
+  with_model <- function(block) {
+    sub("model:", paste0("model:\n", block), BASE_YAML, fixed = TRUE)
+  }
+  absent <- read_bpnmf_config(write_yaml_config(BASE_YAML))
+  expect_null(absent$model$rank_shrinkage)
+
+  flag <- read_bpnmf_config(write_yaml_config(
+    with_model("  rank_shrinkage: true")
+  ))
+  expect_equal(flag$model$rank_shrinkage, bpnmf_rank_shrinkage_opts())
+  expect_null(
+    read_bpnmf_config(write_yaml_config(with_model("  rank_shrinkage: false")))$model$rank_shrinkage
+  )
+
+  set <- read_bpnmf_config(write_yaml_config(with_model(
+    "  rank_shrinkage:\n    group_mass_prior: [3, 2]\n    unit_sd_prior: 0.5"
+  )))
+  expect_equal(set$model$rank_shrinkage$group_mass_prior, c(3, 2))
+  expect_equal(set$model$rank_shrinkage$unit_sd_prior, 0.5)
+  # Unspecified keys keep the constructor defaults.
+  partial <- read_bpnmf_config(write_yaml_config(
+    with_model("  rank_shrinkage:\n    unit_sd_prior: 0.5")
+  ))
+  expect_equal(partial$model$rank_shrinkage$group_mass_prior, c(2, 1))
+
+  expect_error(
+    read_bpnmf_config(write_yaml_config(
+      with_model("  rank_shrinkage:\n    group_mass: [3, 2]")
+    )),
+    "Unknown"
+  )
+})

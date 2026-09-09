@@ -15,7 +15,8 @@ stan_data_joint(
   gen_ypred = TRUE,
   te_design = NULL,
   time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
-  time_fe_shape = DEFAULT_TIME_FE_SHAPE
+  time_fe_shape = DEFAULT_TIME_FE_SHAPE,
+  rank_shrinkage = NULL
 )
 }
 \arguments{
@@ -40,6 +41,9 @@ gives the baseline (cut stage-1) model.}
 \item{te_design}{Optional \code{bpnmf_te_design} (see \code{\link[=build_te_design]{build_te_design()}})
 replacing the legacy treatment-effect hierarchy with a covariate
 regression; requires \code{model_treated = TRUE}.}
+
+\item{rank_shrinkage}{Optional \code{\link[=bpnmf_rank_shrinkage_opts]{bpnmf_rank_shrinkage_opts()}}; \code{NULL}
+leaves the component weights iid uniform on the simplex.}
 }
 \value{
 A named list for \code{cmdstanr}'s \code{data} argument, plus attributes
