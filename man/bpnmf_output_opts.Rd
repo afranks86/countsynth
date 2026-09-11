@@ -48,7 +48,7 @@ one; its rows are already in the by-unit table, so it defaults to off.}
 
 \item{ppc_units, ppc_exclude_units}{Unit filters for the PPC suite.}
 
-\item{ppc_acf_lags}{Integer lags for the ACF check (default 6).}
+\item{ppc_acf_lags}{Integer lags for the ACF check (default 1).}
 
 \item{ppc_unit_corr_max_time}{Cutoff date for the unit-correlation check.}
 

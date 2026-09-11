@@ -6,7 +6,7 @@
 \usage{
 bpnmf_ppc_acf(
   draws,
-  lag = 6,
+  lag = 1,
   categories = NULL,
   ppc_units = NULL,
   ppc_exclude_units = NULL
@@ -15,7 +15,7 @@ bpnmf_ppc_acf(
 \arguments{
 \item{draws}{A \code{bpnmf_draws} frame.}
 
-\item{lag}{Autocorrelation lag (default 6).}
+\item{lag}{Autocorrelation lag (default 1).}
 
 \item{categories, ppc_units, ppc_exclude_units}{Filters (see
 \code{\link[=bpnmf_output_opts]{bpnmf_output_opts()}}).}

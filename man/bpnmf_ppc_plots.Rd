@@ -7,7 +7,7 @@
 bpnmf_ppc_plots(
   draws,
   checks = c("abs", "acf", "rmse", "unit_corr"),
-  acf_lags = 6,
+  acf_lags = 1,
   categories = NULL,
   max_treat_date = NULL,
   ppc_units = NULL,

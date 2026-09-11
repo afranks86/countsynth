@@ -222,7 +222,7 @@ output:
   draws_format: csv              # csv | parquet
   # ppc_units: [Texas]
   # ppc_exclude_units: [Alaska]
-  # ppc_acf_lags: [6]
+  # ppc_acf_lags: [1]
   # ppc_unit_corr_max_time: "2022-01-01"
   interval_aggregates: true      # show aggregate units in interval.png
   # aggregate_units:             # synthetic reporting-only units

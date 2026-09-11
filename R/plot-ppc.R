@@ -65,6 +65,18 @@ prepare_ppc_residuals <- function(draws, categories = NULL, ppc_units = NULL,
   list(df = df, categories = categories, units = unique(df$unit))
 }
 
+# A 0-row main data frame crashes ggplot2's facet_wrap with "Faceting
+# variables must have at least one value" (combine_vars() requires the
+# layout have something to lay out). This can happen for reasons besides "no
+# data at all" -- e.g. bpnmf_ppc_acf's lag exceeding every cell's available
+# control-period length turns every autocorrelation into NA, and those rows
+# get filtered out entirely. Render an explanatory plot instead of crashing.
+ppc_insufficient_data_plot <- function(label) {
+  ggplot2::ggplot() +
+    ggplot2::annotate("text", x = 0, y = 0, label = label) +
+    ggplot2::theme_void()
+}
+
 #' Autocorrelation at one lag (NaN if too short or zero-variance)
 #' @keywords internal
 autocorrelation_at_lag <- function(x, lag) {
@@ -122,6 +134,12 @@ bpnmf_ppc_abs <- function(draws, categories = NULL, ppc_units = NULL,
   pvals <- stats_df |>
     dplyr::group_by(.data$unit, .data$group) |>
     dplyr::summarise(pval = mean(.data$diff_in_diff < 0), .groups = "drop")
+  if (nrow(stats_df) == 0) {
+    return(list(
+      plot = ppc_insufficient_data_plot("Insufficient data for abs-residual check"),
+      pvals = pvals
+    ))
+  }
   list(
     plot = ppc_histogram(
       stats_df, pvals, "diff_in_diff",
@@ -134,9 +152,9 @@ bpnmf_ppc_abs <- function(draws, categories = NULL, ppc_units = NULL,
 
 #' PPC: residual autocorrelation at one lag
 #' @inheritParams bpnmf_ppc_abs
-#' @param lag Autocorrelation lag (default 6).
+#' @param lag Autocorrelation lag (default 1).
 #' @export
-bpnmf_ppc_acf <- function(draws, lag = 6, categories = NULL, ppc_units = NULL,
+bpnmf_ppc_acf <- function(draws, lag = 1, categories = NULL, ppc_units = NULL,
                           ppc_exclude_units = NULL) {
   prep <- prepare_ppc_residuals(
     draws, categories, ppc_units, ppc_exclude_units,
@@ -154,6 +172,15 @@ bpnmf_ppc_acf <- function(draws, lag = 6, categories = NULL, ppc_units = NULL,
   pvals <- stats_df |>
     dplyr::group_by(.data$unit, .data$group) |>
     dplyr::summarise(pval = mean(.data$diff_in_ac < 0), .groups = "drop")
+  if (nrow(stats_df) == 0) {
+    return(list(
+      plot = ppc_insufficient_data_plot(sprintf(
+        "Insufficient data for lag-%d autocorrelation check\n(no cell has more than %d control-period observations)",
+        lag, lag
+      )),
+      pvals = pvals
+    ))
+  }
   list(
     plot = ppc_histogram(
       stats_df, pvals, "diff_in_ac",
@@ -181,6 +208,12 @@ bpnmf_ppc_rmse <- function(draws, categories = NULL, ppc_units = NULL,
   pvals <- stats_df |>
     dplyr::group_by(.data$unit, .data$group) |>
     dplyr::summarise(pval = mean(.data$diff_in_diff < 0), .groups = "drop")
+  if (nrow(stats_df) == 0) {
+    return(list(
+      plot = ppc_insufficient_data_plot("Insufficient data for RMSE check"),
+      pvals = pvals
+    ))
+  }
   list(
     plot = ppc_histogram(
       stats_df, pvals, "diff_in_diff",
@@ -275,13 +308,7 @@ bpnmf_ppc_unit_corr <- function(draws, max_treat_date = NULL,
   }
   if (nrow(stats_df) == 0) {
     return(list(
-      plot = ggplot2::ggplot() +
-        ggplot2::annotate(
-          "text",
-          x = 0, y = 0,
-          label = "Insufficient data for spectral norm computation"
-        ) +
-        ggplot2::theme_void(),
+      plot = ppc_insufficient_data_plot("Insufficient data for spectral norm computation"),
       pvals = tibble::tibble(group = character(), pval = numeric())
     ))
   }
@@ -308,7 +335,7 @@ bpnmf_ppc_unit_corr <- function(draws, max_treat_date = NULL,
 #'   tibble with a `check_type` column).
 #' @export
 bpnmf_ppc_plots <- function(draws, checks = c("abs", "acf", "rmse", "unit_corr"),
-                            acf_lags = 6, categories = NULL,
+                            acf_lags = 1, categories = NULL,
                             max_treat_date = NULL, ppc_units = NULL,
                             ppc_exclude_units = NULL) {
   checkmate::assert_subset(checks, c("abs", "acf", "rmse", "unit_corr"))

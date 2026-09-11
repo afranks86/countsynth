@@ -217,7 +217,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     }
     ppc <- bpnmf_ppc_plots(
       ppc_source,
-      acf_lags = ppc_acf_lags %||% 6,
+      acf_lags = ppc_acf_lags %||% 1,
       max_treat_date = ppc_unit_corr_max_time,
       ppc_units = ppc_units,
       ppc_exclude_units = ppc_exclude_units

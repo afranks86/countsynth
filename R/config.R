@@ -556,7 +556,7 @@ normalize_figures <- function(v) {
 #' @param html_tables Also write the `gt` HTML summary tables.
 #' @param aggregate_units List of [bpnmf_aggregate_unit()] specs.
 #' @param ppc_units,ppc_exclude_units Unit filters for the PPC suite.
-#' @param ppc_acf_lags Integer lags for the ACF check (default 6).
+#' @param ppc_acf_lags Integer lags for the ACF check (default 1).
 #' @param ppc_unit_corr_max_time Cutoff date for the unit-correlation check.
 #' @param draws_format `"csv"` or `"parquet"` for the draws artifact.
 #' @export
