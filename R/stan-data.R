@@ -43,10 +43,14 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
   denom_flat <- flatten_kdn(data$denominators)
   control_flat <- flatten_kdn(data$control_idx_array)
   missing_flat <- flatten_kdn(data$missing_idx_array)
+  excluded_flat <- flatten_kdn(
+    data$excluded_idx_array %||% array(FALSE, dim = c(K, D, N))
+  )
 
-  # Direct-likelihood cells: not missing, and (all cells if model_treated,
-  # else control cells only). Mirrors joint.py's mask logic.
-  obs_mask <- !missing_flat & (model_treated | control_flat)
+  # Direct-likelihood cells: not missing, not excluded (a validated (0, 0)
+  # outcome/denominator cell -- see build_model_arrays()), and (all cells if
+  # model_treated, else control cells only). Mirrors joint.py's mask logic.
+  obs_mask <- !missing_flat & !excluded_flat & (model_treated | control_flat)
   obs_cell <- which(obs_mask)
 
   # Exposed cells in canonical flat order.
@@ -54,8 +58,10 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
   exp_sub <- kdn_from_flat(exp_cell, D, N)
 
   # Censoring adjustment set: all cells when model_treated (matching joint.py
-  # passing an all-True mask), control-only otherwise.
-  adj_flat <- if (model_treated) rep(TRUE, KDN) else control_flat
+  # passing an all-True mask), control-only otherwise. Excluded cells never
+  # enter either side of the censoring split -- they have no likelihood
+  # contribution at all, censored or not.
+  adj_flat <- (if (model_treated) rep(TRUE, KDN) else control_flat) & !excluded_flat
   cens_cell <- which(missing_flat & adj_flat)
   notcens_cell <- which(!missing_flat & adj_flat)
 
@@ -118,15 +124,21 @@ stan_data_stage2 <- function(data, mu_ctrl_flat, phi_unit = NULL,
   y_flat <- flatten_kdn(data$Y)
   control_flat <- flatten_kdn(data$control_idx_array)
   missing_flat <- flatten_kdn(data$missing_idx_array)
+  excluded_flat <- flatten_kdn(
+    data$excluded_idx_array %||% array(FALSE, dim = c(K, D, N))
+  )
 
   exp_cell <- which(!control_flat)
   exp_sub <- kdn_from_flat(exp_cell, D, N)
 
   # Stage-2 likelihood/censoring subsets are positions WITHIN the exposed-cell
   # list (1..n_exposed), mirroring cut_treatment.py's exposed-only masks.
+  # Excluded cells (a validated (0, 0) outcome/denominator -- see
+  # build_model_arrays()) drop out of both: no likelihood contribution.
   exp_missing <- missing_flat[exp_cell]
-  obs_e <- which(!exp_missing)
-  cens_e <- which(exp_missing)
+  exp_excluded <- excluded_flat[exp_cell]
+  obs_e <- which(!exp_missing & !exp_excluded)
+  cens_e <- which(exp_missing & !exp_excluded)
 
   is_nb <- outcome_distribution == "NB"
   if (is_nb && is.null(phi_unit)) {
@@ -159,14 +171,21 @@ stan_data_stage2 <- function(data, mu_ctrl_flat, phi_unit = NULL,
 #' Error early when a cut run would have an empty likelihood in either stage
 #' @keywords internal
 validate_cut_data <- function(data) {
+  K <- length(data$groups)
+  D <- length(data$units)
+  N <- length(data$times)
   control_flat <- flatten_kdn(data$control_idx_array)
   missing_flat <- flatten_kdn(data$missing_idx_array)
-  if (!any(control_flat & !missing_flat)) {
+  excluded_flat <- flatten_kdn(
+    data$excluded_idx_array %||% array(FALSE, dim = c(K, D, N))
+  )
+  usable <- !missing_flat & !excluded_flat
+  if (!any(control_flat & usable)) {
     cli::cli_abort(
       "Cut stage 1 has an empty likelihood: no non-missing control cells."
     )
   }
-  if (!any(!control_flat & !missing_flat)) {
+  if (!any(!control_flat & usable)) {
     cli::cli_abort(
       "Cut stage 2 has an empty likelihood: no non-missing exposed cells."
     )

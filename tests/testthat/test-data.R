@@ -122,13 +122,66 @@ test_that("exclude_units drops units", {
   expect_identical(dat$units, c("A", "C"))
 })
 
-test_that("non-positive denominators are a hard error", {
+test_that("a zero denominator against a positive outcome is a hard error", {
   wide <- make_wide_df()
   wide$pop_g1[3] <- 0
   cfg <- wide_config(
     list(both = bpnmf_type(groups = c("g1", "g2"), ranks_to_test = 2))
   )
-  expect_error(bpnmf_data(cfg, df = wide), "non-positive denominator")
+  # births_g1[3] is a positive rpois() draw, so this is a real outcome >
+  # denominator (0) mismatch, not the deterministic (0, 0) case below.
+  expect_true(wide$births_g1[3] > 0)
+  expect_error(bpnmf_data(cfg, df = wide), "Invalid outcome/denominator")
+})
+
+test_that("negative outcomes and negative denominators are hard errors", {
+  wide <- make_wide_df()
+  cfg <- wide_config(
+    list(both = bpnmf_type(groups = c("g1", "g2"), ranks_to_test = 2))
+  )
+  neg_outcome <- wide
+  neg_outcome$births_g1[3] <- -1
+  expect_error(bpnmf_data(cfg, df = neg_outcome), "Invalid outcome/denominator")
+
+  neg_denom <- wide
+  neg_denom$pop_g1[3] <- -1
+  expect_error(bpnmf_data(cfg, df = neg_denom), "Invalid outcome/denominator")
+})
+
+test_that("an outcome exceeding a positive denominator is not an error", {
+  # The denominator is an exposure/offset, not a trial count, so it need not
+  # bound the outcome -- e.g. a denominator reported in thousands while the
+  # outcome is a raw count.
+  wide <- make_wide_df()
+  wide$pop_g1[3] <- wide$births_g1[3] - 1
+  expect_true(wide$pop_g1[3] > 0) # a real, positive-but-smaller denominator
+  cfg <- wide_config(
+    list(both = bpnmf_type(groups = c("g1", "g2"), ranks_to_test = 2))
+  )
+  dat <- expect_silent(bpnmf_data(cfg, df = wide))
+  expect_false(any(dat$excluded_idx_array))
+})
+
+test_that("a (0, 0) outcome/denominator cell is valid and excluded from the likelihood", {
+  wide <- make_wide_df()
+  wide$pop_g1[3] <- 0
+  wide$births_g1[3] <- 0
+  cfg <- wide_config(
+    list(both = bpnmf_type(groups = c("g1", "g2"), ranks_to_test = 2))
+  )
+  dat <- expect_silent(bpnmf_data(cfg, df = wide))
+  expect_equal(sum(dat$excluded_idx_array), 1)
+  # unit C (row 3), group g1, first time period.
+  expect_true(dat$excluded_idx_array[1, 3, 1])
+  expect_false(any(dat$excluded_idx_array[2, , ])) # g2 untouched
+  expect_equal(dat$Y[1, 3, 1], 0)
+  expect_false(dat$missing_idx_array[1, 3, 1]) # excluded, not missing/suppressed
+
+  sd <- stan_data_joint(dat, rank = 2)
+  excluded_cell <- flat_idx(1, 3, 1, length(dat$units), length(dat$times))
+  expect_false(excluded_cell %in% sd$obs_cell)
+  expect_false(excluded_cell %in% sd$cens_cell)
+  expect_false(excluded_cell %in% sd$notcens_cell)
 })
 
 test_that("a bad denominator outside the analysis window is not an error", {
@@ -139,7 +192,7 @@ test_that("a bad denominator outside the analysis window is not an error", {
   wide$pop_g1[as.Date(wide$time) == last] <- 0
   types <- list(both = bpnmf_type(groups = c("g1", "g2"), ranks_to_test = 2))
 
-  expect_error(bpnmf_data(wide_config(types), df = wide), "non-positive denominator")
+  expect_error(bpnmf_data(wide_config(types), df = wide), "Invalid outcome/denominator")
   # end_date is exclusive, so this drops exactly the offending period.
   ok <- bpnmf_data(
     wide_config(types, end_date = format(last)), df = wide
@@ -151,7 +204,7 @@ test_that("a bad denominator outside the analysis window is not an error", {
   first <- min(as.Date(wide$time))
   wide2 <- make_wide_df()
   wide2$pop_g1[as.Date(wide2$time) == first] <- 0
-  expect_error(bpnmf_data(wide_config(types), df = wide2), "non-positive denominator")
+  expect_error(bpnmf_data(wide_config(types), df = wide2), "Invalid outcome/denominator")
   expect_silent(
     bpnmf_data(wide_config(types, start_date = format(first + 1)), df = wide2)
   )
@@ -173,7 +226,7 @@ test_that("a bad denominator in an excluded unit or unmodeled group is ignored",
       wide_config(list(both = bpnmf_type(c("g1", "g2"), ranks_to_test = 2))),
       df = wide
     ),
-    "non-positive denominator"
+    "Invalid outcome/denominator"
   )
   # A group the type does not model is never validated.
   expect_silent(bpnmf_data(
@@ -241,6 +294,36 @@ test_that("temporal aggregation sums outcomes, maxes treatment, means denominato
     as.Date(dat$df$end_date[dat$df$start_date == as.Date("2020-01-01")][1]),
     as.Date("2020-03-31")
   )
+})
+
+test_that("no denominator means denominator 1 everywhere, aggregation included", {
+  # Regression: temporal aggregation used to fabricate a literal denominator
+  # of 1 for a denominator-less outcome, which then got divided by
+  # denominator_scale downstream (1e-4) instead of staying 1 -- silently
+  # rescaling every rate the moment aggregation was turned on.
+  grid <- expand.grid(
+    unit = c("A", "B"),
+    time = seq(as.Date("2020-01-01"), by = "month", length.out = 6),
+    stringsAsFactors = FALSE
+  )
+  grid$treatment <- 0L
+  grid$outcome_x <- 3L
+  cfg <- bpnmf_config(
+    input_file = "unused.csv", output_dir = tempdir(),
+    schema = list(
+      unit_col = "unit", time_col = "time", treatment_col = "treatment",
+      outcomes = list(list(outcome_col = "outcome_x", label = "x"))
+    ),
+    model = bpnmf_model_opts(
+      types = list(t = bpnmf_type(groups = "x", ranks_to_test = 1))
+    )
+  )
+  flat <- bpnmf_data(cfg, df = tibble::as_tibble(grid))
+  expect_true(all(flat$denominators == 1))
+
+  cfg$time_aggregation <- bpnmf_time_aggregation(enabled = TRUE, period = "quarterly")
+  agg <- bpnmf_data(cfg, df = tibble::as_tibble(grid))
+  expect_true(all(agg$denominators == 1))
 })
 
 test_that("n_periods aggregation combines N consecutive periods", {

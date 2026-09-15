@@ -25,7 +25,7 @@ time) cell has no row; if \code{TRUE}, mark such cells missing.}
 }
 \value{
 List with \code{Y}, \code{denominators}, \code{control_idx_array},
-\code{missing_idx_array}, \code{groups}, \code{units}, \code{times}.
+\code{missing_idx_array}, \code{excluded_idx_array}, \code{groups}, \code{units}, \code{times}.
 }
 \description{
 Convert a standardized long frame into dense (K, D, N) model arrays

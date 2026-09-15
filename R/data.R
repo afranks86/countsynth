@@ -4,6 +4,12 @@
 
 DATE_FORMATS_AUTO <- c("%Y-%m-%d", "%m/%d/%y", "%m/%d/%Y", "%d-%m-%Y")
 
+# Stand-in for a validated (outcome = 0, denominator = 0) cell's scaled
+# denominator. These cells are excluded from the likelihood entirely (see
+# build_model_arrays()), so this value only keeps log(denominator) finite for
+# generated-quantities code paths; it is never fit against data.
+ZERO_DENOM_PLACEHOLDER <- 1e-8
+
 parse_time_column <- function(x, date_format, time_col) {
   if (inherits(x, "Date")) {
     return(x)
@@ -134,18 +140,35 @@ denominator_columns <- function(outcomes) {
 }
 
 # Checked on the long frame *after* the date window, unit exclusions and group
-# selection have been applied. A zero or missing denominator only matters for
-# rows the model actually sees: stan_data computes log(denominator), so a zero
-# inside the window is genuinely fatal (-Inf), while one in a row the config
-# already discarded is not a problem at all. Validating the raw wide frame
-# instead used to reject a perfectly good run because of a row outside
-# `end_date`, an excluded unit, or an outcome column belonging to a group that
-# was never modeled.
+# selection have been applied. Only rows the model actually sees matter here:
+# validating the raw wide frame instead used to reject a perfectly good run
+# because of a row outside `end_date`, an excluded unit, or an outcome column
+# belonging to a group that was never modeled.
+#
+# The denominator is an exposure/offset, not a trial count, so an outcome
+# exceeding it is not by itself invalid: the two can be on different scales
+# (e.g. a denominator reported in thousands). What's fatal is a mismatch no
+# rescaling can explain: a negative denominator, a negative outcome, or a
+# positive outcome against a literal zero denominator (no amount of exposure
+# is zero and positive at once). A denominator of 0 alongside an observed
+# outcome of 0 is not invalid data either: zero exposure deterministically
+# implies zero count (MCAR, not informative missingness), so that cell is
+# excluded from the likelihood entirely rather than fed a literal log(0) (see
+# the `zero_denom` handling in build_model_arrays()). A row whose outcome is
+# NA (suppressed/missing) keeps the original all-or-nothing rule, since a
+# missing count can't confirm the zero-exposure case above.
 validate_denominators <- function(df_long, outcomes) {
   if (!"denominator" %in% names(df_long) || nrow(df_long) == 0) {
     return(invisible(NULL))
   }
-  bad <- is.na(df_long$denominator) | df_long$denominator <= 0
+  denom <- df_long$denominator
+  outcome <- df_long$outcome
+  observed <- !is.na(outcome)
+  bad <- ifelse(
+    observed,
+    is.na(denom) | denom < 0 | outcome < 0 | (denom == 0 & outcome > 0),
+    is.na(denom) | denom <= 0
+  )
   if (!any(bad)) {
     return(invisible(NULL))
   }
@@ -157,13 +180,16 @@ validate_denominators <- function(df_long, outcomes) {
   }, character(1)))
   times <- sort(unique(rows$time))
   cli::cli_abort(c(
-    "Missing or non-positive denominator in {sources}: {sum(bad)} row{?s}
+    "Invalid outcome/denominator values in {sources}: {sum(bad)} row{?s}
      affected (unit{?s}: {.val {unique(rows$unit)}}).",
     i = "Period{?s}: {.val {format(times)}}.",
-    i = "The model uses log(denominator), so these cells have no defined
-         exposure. Rows outside the configured date window, excluded units,
-         and unmodeled groups are already dropped before this check, so every
-         row named here is one the fit would have used."
+    i = "Each row needs a non-negative outcome and a non-negative denominator
+         (a (0, 0) pair is fine and is treated as a deterministic zero, but a
+         positive outcome needs a positive denominator); an unobserved row
+         still needs a positive denominator. Rows outside the configured
+         date window, excluded units, and unmodeled groups are already
+         dropped before this check, so every row named here is one the fit
+         would have used."
   ))
 }
 
@@ -225,14 +251,24 @@ wide_to_long <- function(df, schema, outcomes, groups, total_from_labels) {
 # a partly exposed block counts as exposed.
 summarise_blocks <- function(df, block_cols) {
   has_denom <- "denominator" %in% names(df)
-  df |>
+  out <- df |>
     dplyr::group_by(dplyr::across(dplyr::all_of(block_cols))) |>
     dplyr::summarise(
       outcome = sum(.data$outcome),
       treatment = max(.data$treatment),
-      denominator = if (has_denom) mean(.data$denominator) else 1,
+      denominator = if (has_denom) mean(.data$denominator) else NA_real_,
       .groups = "drop"
     )
+  # "No denominator" means every cell behaves as if denominator == 1 (see
+  # build_model_arrays()), which depends on the `denominator` column being
+  # absent entirely, not present-and-1: build_model_arrays() only skips
+  # scaling by `denominator_scale` when the column doesn't exist. Fabricating
+  # a literal 1 here would otherwise get divided down to 1/denominator_scale
+  # downstream, silently rescaling every rate the moment aggregation is on.
+  if (!has_denom) {
+    out$denominator <- NULL
+  }
+  out
 }
 
 # Calendar binning: bins land on calendar boundaries regardless of when the
@@ -340,8 +376,9 @@ add_months <- function(dates, months) {
 #' @param df Optional data frame to use instead of reading
 #'   `config$input_file`.
 #' @return A `bpnmf_data` object: list with `Y`, `denominators`,
-#'   `control_idx_array`, `missing_idx_array` (all `(K, D, N)` arrays),
-#'   `groups`, `units`, `times`, `type`, and the standardized long frame `df`.
+#'   `control_idx_array`, `missing_idx_array`, `excluded_idx_array` (all
+#'   `(K, D, N)` arrays), `groups`, `units`, `times`, `type`, and the
+#'   standardized long frame `df`.
 #' @export
 bpnmf_data <- function(config, type = NULL, df = NULL) {
   checkmate::assert_class(config, "bpnmf_config")
@@ -421,7 +458,7 @@ bpnmf_data <- function(config, type = NULL, df = NULL) {
 #' @param allow_unbalanced_panel If `FALSE`, error when any (group, unit,
 #'   time) cell has no row; if `TRUE`, mark such cells missing.
 #' @return List with `Y`, `denominators`, `control_idx_array`,
-#'   `missing_idx_array`, `groups`, `units`, `times`.
+#'   `missing_idx_array`, `excluded_idx_array`, `groups`, `units`, `times`.
 #' @export
 build_model_arrays <- function(df, groups, denominator_scale = 1e4,
                                allow_unbalanced_panel = FALSE) {
@@ -438,6 +475,7 @@ build_model_arrays <- function(df, groups, denominator_scale = 1e4,
   denominators <- array(1, dim = c(K, D, N))
   control_idx <- array(TRUE, dim = c(K, D, N))
   missing_idx <- array(FALSE, dim = c(K, D, N))
+  excluded_idx <- array(FALSE, dim = c(K, D, N))
   filled <- array(FALSE, dim = c(K, D, N))
 
   k_idx <- match(df$group, groups)
@@ -455,6 +493,17 @@ build_model_arrays <- function(df, groups, denominator_scale = 1e4,
     denom_ok <- !is.na(denom) & denom > 0
     denominators[cells[denom_ok, , drop = FALSE]] <-
       denom[denom_ok] / denominator_scale
+
+    # Zero exposure deterministically implies zero count (validate_denominators()
+    # only lets a zero denominator through when the observed outcome is also
+    # zero): exclude these cells from the likelihood entirely rather than
+    # feed Stan a literal log(0). The tiny placeholder keeps mu_ctrl finite
+    # for the counterfactual posterior predictive (ypred); it never reaches
+    # the likelihood since these cells are dropped from
+    # obs_cell/cens_cell/notcens_cell in stan_data_joint()/stan_data_stage2().
+    zero_denom <- !is.na(denom) & denom == 0
+    denominators[cells[zero_denom, , drop = FALSE]] <- ZERO_DENOM_PLACEHOLDER
+    excluded_idx[cells[zero_denom, , drop = FALSE]] <- TRUE
   }
 
   control_idx[cells] <- df$treatment == 0
@@ -477,8 +526,8 @@ build_model_arrays <- function(df, groups, denominator_scale = 1e4,
 
   list(
     Y = Y, denominators = denominators, control_idx_array = control_idx,
-    missing_idx_array = missing_idx, groups = groups, units = units,
-    times = times
+    missing_idx_array = missing_idx, excluded_idx_array = excluded_idx,
+    groups = groups, units = units, times = times
   )
 }
 
@@ -492,5 +541,10 @@ print.bpnmf_data <- function(x, ...) {
   cli::cli_li("{K} group{?s}: {.val {x$groups}}")
   cli::cli_li("{D} unit{?s}, {N} time period{?s}")
   cli::cli_li("{n_exposed} exposed cell{?s}, {sum(x$missing_idx_array)} missing cell{?s}")
+  if (!is.null(x$excluded_idx_array) && any(x$excluded_idx_array)) {
+    cli::cli_li(
+      "{sum(x$excluded_idx_array)} zero-exposure cell{?s} excluded from the likelihood"
+    )
+  }
   invisible(x)
 }

@@ -17,8 +17,9 @@ for. Defaults to the first type.}
 }
 \value{
 A \code{bpnmf_data} object: list with \code{Y}, \code{denominators},
-\code{control_idx_array}, \code{missing_idx_array} (all \verb{(K, D, N)} arrays),
-\code{groups}, \code{units}, \code{times}, \code{type}, and the standardized long frame \code{df}.
+\code{control_idx_array}, \code{missing_idx_array}, \code{excluded_idx_array} (all
+\verb{(K, D, N)} arrays), \code{groups}, \code{units}, \code{times}, \code{type}, and the
+standardized long frame \code{df}.
 }
 \description{
 Reads the config's input CSV, resolves outcomes, reshapes to a standardized
