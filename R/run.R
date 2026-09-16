@@ -113,13 +113,24 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
         reasons <- gate_failure_bullets(
           gate, config$mcmc$convergence, if (is_cut) NULL else fit
         )
+        advice <- gate_failure_advice(gate, config$mcmc$convergence)
         cli::cli_warn(c(
           "Convergence gate FAILED for {stem}; artifacts still written.",
           stats::setNames(reasons, rep("*", length(reasons))),
           i = "Gated on {.val {config$mcmc$gate_params}}; widen or narrow with
                {.field mcmc.gate_params}.",
-          i = "Per-parameter detail: {.code parameter_diagnostics(fit)}."
+          i = "Per-parameter detail: {.code parameter_diagnostics(fit)}.",
+          stats::setNames(advice, rep("i", length(advice)))
         ))
+      }
+      # Non-gating context (divergences on a pass, treedepth either way):
+      # meant to replace cmdstanr's own unglossed sampler warnings as the
+      # thing a user actually reads.
+      notes <- diagnostic_context_notes(
+        if (is_cut) gate$stage1 else gate, config$mcmc$convergence
+      )
+      if (length(notes) > 0) {
+        cli::cli_inform(stats::setNames(notes, rep("i", length(notes))))
       }
       if (out$save_traces) {
         saveRDS(

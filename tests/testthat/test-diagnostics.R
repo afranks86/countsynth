@@ -37,6 +37,36 @@ test_that("divergences are summarized as a rate over retained transitions", {
   expect_equal(clean$fraction, 0)
 })
 
+test_that("treedepth saturation is summarized as a rate, never gated", {
+  fake_fit <- function(treedepth, max_treedepth = 10L) {
+    sd <- posterior::as_draws_array(array(
+      treedepth,
+      dim = c(length(treedepth) / 2L, 2L, 1L),
+      dimnames = list(NULL, NULL, "treedepth__")
+    ))
+    list(
+      sampler_diagnostics = function() sd,
+      metadata = function() list(max_treedepth = max_treedepth)
+    )
+  }
+  td <- treedepth_summary(fake_fit(c(10, 9, 3, 2, 10, 4, 1, 1, 1, 1)))
+  expect_equal(td$hits, 2)
+  expect_equal(td$transitions, 10)
+  expect_equal(td$fraction, 0.2)
+  expect_equal(td$max_treedepth, 10L)
+
+  clean <- treedepth_summary(fake_fit(rep(1, 10)))
+  expect_equal(clean$hits, 0)
+  expect_equal(clean$fraction, 0)
+
+  # Falls back to cmdstan's own default when metadata doesn't carry it.
+  no_meta <- list(
+    sampler_diagnostics = fake_fit(rep(1, 10))$sampler_diagnostics,
+    metadata = function() list()
+  )
+  expect_equal(treedepth_summary(no_meta)$max_treedepth, 10L)
+})
+
 test_that("divergence_fail_fraction sets the gate's tolerance", {
   expect_equal(bpnmf_convergence()$divergence_fail_fraction, 0.01)
   # 0 restores the old rule: any divergence at all fails.
@@ -99,7 +129,8 @@ test_that("a variational fit is reported as ungated, not as failed", {
   expect_false(isFALSE(g$converged))
   expect_true(all(vapply(
     g[c("rhat_max", "ess_bulk_min", "ess_tail_min", "divergences",
-        "divergence_fraction")],
+        "divergence_fraction", "treedepth_hits", "treedepth_fraction",
+        "max_treedepth")],
     is.na, logical(1)
   )))
 })
@@ -213,4 +244,76 @@ test_that("gate failure bullets name the criterion and the level it reached", {
 
 test_that("gate_worst_parameters is silent without a fit", {
   expect_equal(gate_worst_parameters(NULL), character())
+})
+
+test_that("gate failure advice matches the criterion that actually tripped", {
+  th <- bpnmf_convergence(
+    rhat_warn = 1.1, rhat_fail = 1.5, ess_min = 100,
+    ess_fail_fraction = 0.25, divergence_fail_fraction = 0.01
+  )
+  gate <- function(rhat, bulk, tail, div, frac) {
+    list(rhat_max = rhat, ess_bulk_min = bulk, ess_tail_min = tail,
+         divergences = div, divergence_fraction = frac, converged = FALSE)
+  }
+
+  rhat_only <- gate_failure_advice(gate(1.8258, 900, 900, 0L, 0), th)
+  expect_match(rhat_only, "R-hat/ESS", all = FALSE)
+  expect_false(any(grepl("Divergences", rhat_only)))
+
+  div_only <- gate_failure_advice(gate(1.01, 900, 900, 40L, 0.02), th)
+  expect_match(div_only, "Divergences", all = FALSE)
+  expect_false(any(grepl("R-hat/ESS", div_only)))
+
+  both <- gate_failure_advice(gate(1.8258, 5.865, 15.886, 40L, 0.02), th)
+  expect_match(both, "R-hat/ESS", all = FALSE)
+  expect_match(both, "Divergences", all = FALSE)
+
+  # A cut manifest has no top-level fields to key off; silent, not an error.
+  expect_equal(gate_failure_advice(list(converged = FALSE), th), character())
+})
+
+test_that("diagnostic context notes explain treedepth and reassure on divergences", {
+  th <- bpnmf_convergence(divergence_fail_fraction = 0.01)
+
+  # Divergences only narrated when the gate passed -- gate_failure_bullets()
+  # already covers them on a failing one.
+  passed <- list(
+    converged = TRUE, divergences = 2L, divergence_fraction = 0.0005,
+    treedepth_hits = 0L, treedepth_fraction = 0
+  )
+  notes <- diagnostic_context_notes(passed, th)
+  expect_match(notes, "2 divergent transitions", all = FALSE)
+  expect_match(notes, "isolated count", all = FALSE)
+
+  failed <- passed
+  failed$converged <- FALSE
+  expect_equal(diagnostic_context_notes(failed, th), character())
+
+  # Treedepth is framed as an efficiency signal, never a validity one, and
+  # shown regardless of pass/fail.
+  hot <- list(
+    converged = FALSE, divergences = 0L, divergence_fraction = 0,
+    treedepth_hits = 500L, treedepth_fraction = 0.5, max_treedepth = 10L
+  )
+  hot_notes <- diagnostic_context_notes(hot, th)
+  expect_match(hot_notes, "500 transitions", all = FALSE)
+  expect_match(hot_notes, "does not bias the posterior", all = FALSE)
+  expect_match(hot_notes, "large enough to be slowing", all = FALSE)
+
+  mild <- hot
+  mild$treedepth_hits <- 1L
+  mild$treedepth_fraction <- 0.001
+  mild_notes <- diagnostic_context_notes(mild, th)
+  expect_match(mild_notes, "1 transition ", all = FALSE)
+  expect_match(mild_notes, "rarely worth acting on", all = FALSE)
+
+  # Nothing to report: silent.
+  expect_equal(
+    diagnostic_context_notes(
+      list(converged = TRUE, divergences = 0L, divergence_fraction = 0,
+           treedepth_hits = 0L, treedepth_fraction = 0),
+      th
+    ),
+    character()
+  )
 })

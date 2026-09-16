@@ -70,6 +70,9 @@ variational_gate <- function() {
     ess_tail_min = NA_real_,
     divergences = NA_integer_,
     divergence_fraction = NA_real_,
+    treedepth_hits = NA_integer_,
+    treedepth_fraction = NA_real_,
+    max_treedepth = NA_integer_,
     converged = NA
   )
 }
@@ -131,6 +134,29 @@ divergence_summary <- function(fit) {
   )
 }
 
+# Treedepth saturation over the retained draws. A trajectory cut off at the
+# depth ceiling is still a valid Hamiltonian proposal -- it costs mixing
+# efficiency, not correctness -- so unlike a divergence this is never gated
+# (see convergence_gate()) and never fails a run. It is tracked here purely
+# so bpnmf can report it with that context instead of leaving cmdstanr's own
+# unglossed "N transitions hit the maximum treedepth" warning as the only
+# signal a user sees.
+treedepth_summary <- function(fit) {
+  sd <- posterior::as_draws_matrix(
+    posterior::subset_draws(fit$sampler_diagnostics(), variable = "treedepth__")
+  )
+  transitions <- nrow(sd)
+  # cmdstan's own default when a fit doesn't expose it back (older cmdstanr).
+  max_treedepth <- fit$metadata()$max_treedepth %||% 10L
+  hits <- sum(sd >= max_treedepth)
+  list(
+    hits = hits,
+    transitions = transitions,
+    fraction = if (transitions > 0) hits / transitions else 0,
+    max_treedepth = max_treedepth
+  )
+}
+
 #' Run-level convergence gate
 #'
 #' Port of `diagnostics.convergence_summary`: worst R-hat and smallest
@@ -145,9 +171,12 @@ divergence_summary <- function(fit) {
 #'   `mcmc$gate_params` when `fit` is a `bpnmf_fit`).
 #' @param thresholds A [bpnmf_convergence()] object.
 #' @return A list: `rhat_max`, `ess_bulk_min`, `ess_tail_min`, `divergences`,
-#'   `divergence_fraction`, `converged` (+ `gate_params` when set). For a
-#'   variational (ADVI) fit none of those quantities exist, so they are `NA`
-#'   and `converged` is `NA` -- "not gated", not "failed".
+#'   `divergence_fraction`, `treedepth_hits`, `treedepth_fraction`,
+#'   `max_treedepth`, `converged` (+ `gate_params` when set). Treedepth is
+#'   informational only -- it is never part of `converged` (see
+#'   [treedepth_summary()]). For a variational (ADVI) fit none of those
+#'   quantities exist, so they are `NA` and `converged` is `NA` -- "not
+#'   gated", not "failed".
 #' @export
 convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
   if (inherits(fit, "bpnmf_fit") || inherits(fit, "bpnmf_cut_fit")) {
@@ -171,6 +200,7 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
   ess_bulk_min <- min(gated_summ$ess_bulk, na.rm = TRUE)
   ess_tail_min <- min(gated_summ$ess_tail, na.rm = TRUE)
   div <- divergence_summary(fit)
+  td <- treedepth_summary(fit)
   status <- convergence_status(
     rhat_max, min(ess_bulk_min, ess_tail_min), thresholds
   )
@@ -181,6 +211,9 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
     ess_tail_min = ess_tail_min,
     divergences = div$count,
     divergence_fraction = div$fraction,
+    treedepth_hits = td$hits,
+    treedepth_fraction = td$fraction,
+    max_treedepth = td$max_treedepth,
     converged = status == "PASS" &&
       div$fraction <= thresholds$divergence_fail_fraction
   )
@@ -339,14 +372,20 @@ gate_failure_bullets <- function(gate, thresholds = NULL, fit = NULL,
   if (isTRUE(gate$divergence_fraction > thresholds$divergence_fail_fraction)) {
     warn_only <- FALSE
     bullets <- c(bullets, sprintf(
-      "%d divergence%s = %.2f%%, above divergence_fail_fraction %.2f%%",
+      "%d divergence%s = %.2f%%, above divergence_fail_fraction %.2f%% --
+       a fraction this high usually means some region of the posterior is
+       poorly explored, so treat estimates cautiously; raising
+       {.field mcmc.target_accept} (adapt_delta) toward 0.95-0.99 or
+       simplifying the model often resolves it",
       gate$divergences, if (isTRUE(gate$divergences == 1)) "" else "s",
       100 * gate$divergence_fraction,
       100 * thresholds$divergence_fail_fraction
     ))
   } else if (isTRUE(gate$divergences > 0)) {
     bullets <- c(bullets, sprintf(
-      "%d divergence%s = %.2f%%, within the %.2f%% allowance",
+      "%d divergence%s = %.2f%%, within the %.2f%% allowance -- a small,
+       isolated count like this is common and usually not a validity
+       concern on its own",
       gate$divergences, if (isTRUE(gate$divergences == 1)) "" else "s",
       100 * gate$divergence_fraction,
       100 * thresholds$divergence_fail_fraction
@@ -389,6 +428,79 @@ gate_worst_parameters <- function(fit, max_params = 3L) {
   }
   bad <- utils::head(bad, max_params)
   sprintf("%s (R-hat %.3g, ESS %.3g)", bad$parameter, bad$rhat, bad$ess)
+}
+
+# Concrete next steps for a failed gate, keyed off which criterion actually
+# tripped -- gate_failure_bullets() says what went wrong; this says what to
+# try. Silently returns nothing for a gate missing the relevant fields (e.g.
+# a cut manifest, which carries no top-level R-hat/ESS/divergence rate).
+gate_failure_advice <- function(gate, thresholds = NULL) {
+  thresholds <- thresholds %||% bpnmf_convergence()
+  advice <- character()
+
+  ess <- suppressWarnings(min(gate$ess_bulk_min, gate$ess_tail_min, na.rm = TRUE))
+  if (isTRUE(gate$rhat_max >= thresholds$rhat_warn) ||
+    isTRUE(ess < thresholds$ess_min)) {
+    advice <- c(advice, paste(
+      "R-hat/ESS: try more warmup/sampling iterations first",
+      "({.field mcmc.num_warmup} / {.field mcmc.num_samples}); if it persists",
+      "at a given rank, a lower rank often mixes faster (an overly high rank",
+      "can leave components weakly identified), and",
+      "{.code parameter_diagnostics(fit)} shows which parameter is the",
+      "bottleneck."
+    ))
+  }
+  if (isTRUE(gate$divergence_fraction > thresholds$divergence_fail_fraction)) {
+    advice <- c(advice, paste(
+      "Divergences: try raising {.field mcmc.target_accept} (adapt_delta)",
+      "toward 0.95-0.99; this trades sampling speed for a smaller step size",
+      "and usually clears a high divergence rate."
+    ))
+  }
+  advice
+}
+
+# Non-gating diagnostic context, meant to be shown alongside a PASSING gate.
+# gate_failure_bullets() already explains any divergences on a FAILING one,
+# so the divergence note here only fires when the gate passed -- otherwise a
+# harmless divergence count would be narrated twice. Treedepth is never part
+# of gate_failure_bullets() at all (it is never gated -- see
+# convergence_gate()), so it is reported here unconditionally: this is meant
+# to replace cmdstanr's own unglossed "N transitions hit the maximum
+# treedepth" warning as the thing a user actually reads, on a pass or a fail.
+diagnostic_context_notes <- function(gate, thresholds = NULL) {
+  thresholds <- thresholds %||% bpnmf_convergence()
+  notes <- character()
+
+  if (isTRUE(gate$converged) && isTRUE(gate$divergences > 0)) {
+    notes <- c(notes, sprintf(
+      "%d divergent transition%s (%.2f%% of retained draws): a small,
+       isolated count like this is common and does not usually affect
+       validity -- it's only worth a closer look if the count keeps growing
+       with more draws, or the fraction reaches several percent or more.",
+      gate$divergences, if (isTRUE(gate$divergences == 1)) "" else "s",
+      100 * gate$divergence_fraction
+    ))
+  }
+
+  if (isTRUE(gate$treedepth_hits > 0)) {
+    action <- if (isTRUE(gate$treedepth_fraction >= 0.1)) {
+      "This share is large enough to be slowing the run down substantially;
+       raising {.field mcmc.target_accept} or simplifying/reparameterizing
+       the model can help mixing."
+    } else {
+      "A share this small is common and rarely worth acting on."
+    }
+    notes <- c(notes, sprintf(
+      "%d transition%s (%.2f%%) hit the maximum treedepth (%d): this only
+       means those trajectories were cut short for speed and slows effective
+       mixing -- unlike a divergence it does not bias the posterior, so it
+       is not part of the convergence gate above. %s",
+      gate$treedepth_hits, if (isTRUE(gate$treedepth_hits == 1)) "" else "s",
+      100 * gate$treedepth_fraction, gate$max_treedepth, action
+    ))
+  }
+  notes
 }
 
 #' Write a convergence gate as JSON (artifact parity with Python)
