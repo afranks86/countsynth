@@ -10,7 +10,8 @@ bpnmf_gt_table(
   by_unit = FALSE,
   rate_normalizer = 1000,
   title = NULL,
-  subtitle = NULL
+  subtitle = NULL,
+  denominator_may_be_affected = TRUE
 )
 }
 \arguments{
@@ -25,6 +26,22 @@ auto-detected when \code{NULL} (an aggregate unit wins -- see
 \item{rate_normalizer}{Rates are per this many person-years.}
 
 \item{title, subtitle}{Header text. \code{NULL} builds a default from the unit.}
+
+\item{denominator_may_be_affected}{The model treats the denominator as a
+fixed, treatment-unaffected exposure: \code{mu_ctrl} bakes in
+\code{log(denominator)} as a constant offset, so "Expected"/"Pct Change" are
+the counterfactual count conditional on the \emph{observed} denominator, not
+a counterfactual where the denominator itself is also allowed to vary.
+That's usually fine (e.g. population as the denominator for a mortality
+rate), but not when treatment could plausibly change the denominator
+too (e.g. births as the denominator for an infant mortality rate, when
+the exposure could also change the number of births). \code{TRUE} (the
+default) surfaces that caveat in the printed report and the \code{gt}
+tables; it changes no computation. Set \code{FALSE} only once you've
+confirmed the denominator is exogenous to treatment, to quiet the
+caveat -- the default errs toward showing it, since a user who doesn't
+already know about the issue has no reason to go looking for a flag to
+turn it on.}
 }
 \value{
 A \code{gt_tbl}. Print it to view, or save with \code{\link[gt:gtsave]{gt::gtsave()}}.

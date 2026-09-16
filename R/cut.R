@@ -373,6 +373,7 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
   attr(draws, "groups") <- data$groups
   attr(draws, "units") <- data$units
   attr(draws, "times") <- data$times
+  attr(draws, "has_denominator") <- "denominator" %in% names(data$df)
   class(draws) <- c("bpnmf_draws", class(draws))
 
   te_draws <- NULL

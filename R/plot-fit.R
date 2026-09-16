@@ -168,13 +168,22 @@ observed_rows <- function(df) {
 #'   lines (names are labels).
 #' @param separate_unit Optional unit drawn as its own series.
 #' @param smooth_window Centered rolling-mean window (`NULL` = raw values).
-#' @param plot_type `"rate"` or `"count"`.
+#' @param plot_type `"rate"` or `"count"`. `"rate"` falls back to `"count"`
+#'   when the run has no denominator: there is no exposure to divide by, and
+#'   plotting `count * rate_multiplier` under a "Rate per 1,000" axis would
+#'   just be a mislabeled count.
 #' @export
 bpnmf_raw_rate_plot <- function(df, group = NULL, rate_multiplier = 1000,
                                 treatment_dates = NULL, separate_unit = NULL,
                                 smooth_window = NULL, plot_type = "rate") {
   checkmate::assert_choice(plot_type, c("rate", "count"))
+  if (!draws_has_denominator(df)) {
+    plot_type <- "count"
+  }
   df <- observed_rows(df)
+  if (!"denominator" %in% names(df)) {
+    df$denominator <- 1
+  }
   if (!is.null(group)) {
     df <- df[df$group == group, ]
   }
@@ -286,7 +295,13 @@ bpnmf_group_comparison_plot <- function(df, groups = NULL,
                                         treatment_dates = NULL,
                                         plot_type = "rate") {
   checkmate::assert_choice(plot_type, c("rate", "count"))
+  if (!draws_has_denominator(df)) {
+    plot_type <- "count"
+  }
   df <- observed_rows(df)
+  if (!"denominator" %in% names(df)) {
+    df$denominator <- 1
+  }
   groups <- groups %||% unique(df$group)
   df <- df[df$group %in% groups, ]
   treated_units <- identify_treated_units(df)

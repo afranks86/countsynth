@@ -11,6 +11,27 @@
 #' `treated = sum(exp(mu_treated))`, `untreated = sum(exp(mu))`, and rates
 #' divide by the summed person-time `sum(denominator * years)`; with
 #' `method = "pred"`, observed vs posterior-predictive count totals.
+#'
+#' With `estimand = "ratio"` (the report default), `treated_rate` and
+#' `untreated_rate` share the same `denom_val` and `rate_normalizer`, so both
+#' cancel algebraically: the plotted percent change is numerically identical
+#' to `100 * (treated/untreated - 1)` computed directly on raw counts, and is
+#' the same *number* whether or not a denominator is configured at all. Only
+#' `estimand = "diff"` actually depends on the denominator's value (a genuine
+#' rate difference).
+#'
+#' That numeric equivalence is not an interpretive one, though -- see
+#' [bpnmf_summary_table()] for the full explanation, in short: with a
+#' denominator, the offset it contributes to `mu`/`mu_treated` is identical
+#' on both sides of the ratio, so the percent change is an estimate of the
+#' percent change in the **rate** (holding the measured exposure fixed).
+#' Without one, it is only an estimate of the percent change in the raw
+#' **count**, which cannot be attributed to a rate change versus a change in
+#' some unmeasured denominator. Either way, `mu`/`mu_treated` already have
+#' `log(denominator)` baked in as a fixed, observed offset (see
+#' `stan_data_joint()`), so `untreated`/`ypred_rate` are the counterfactual
+#' conditional on that denominator holding -- not a counterfactual where the
+#' denominator is also allowed to vary.
 #' @keywords internal
 compute_draw_effects <- function(df, estimand, method, rate_normalizer,
                                  agg_cols) {
@@ -95,6 +116,11 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
     cli::cli_abort("No post-treatment rows to plot.")
   }
   df$years <- years_per_row(df)
+  # bpnmf_draws() always emits a denominator column (1 everywhere when none
+  # was configured -- see build_cell_table()), but a hand-built frame may not.
+  if (!"denominator" %in% names(df)) {
+    df$denominator <- 1
+  }
 
   multi_group <- length(unique(df$group)) > 1
   color_group <- color_group %||% if (multi_group) "group" else NULL

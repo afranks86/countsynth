@@ -16,7 +16,12 @@ bpnmf_summary_table(draws, target_unit = NULL, rate_normalizer = 1000)
 \value{
 A tibble with pre-formatted CI columns (parity with the Python
 CSV) plus a logical \code{Imputed} column, or an empty tibble when the unit
-has no post-treatment rows.
+has no post-treatment rows. The rate columns (\code{Person-Years},
+\verb{Obs Rate}, \verb{Exp Rate}, \verb{Rate Diff CI}) are present only when the run
+has a denominator -- without one there is no exposure to divide by, so
+they would be counts divided by the summed period lengths rather than
+rates. \verb{Pct Change CI} is always present (the denominator cancels out of
+it), and the returned tibble carries a \code{has_denominator} attribute.
 }
 \description{
 Port of \code{tables.make_summary_table}. Person-year-weighted rates
@@ -25,4 +30,51 @@ difference and percent change with equal-tailed 95\% intervals, and a
 two-sided posterior p-value (\code{*} marks p < 0.05 on the group label). A
 dagger marks a group whose post-treatment window includes any cell
 imputed by \code{\link[=add_aggregate_units]{add_aggregate_units()}} (see the \code{Imputed} column).
+}
+\details{
+\verb{Pct Change CI} is \code{100 * (treated/untreated - 1)} on raw counts
+(\code{treated = sum(exp(mu_treated))}, \code{untreated = sum(exp(mu))}); routing it
+through \code{treated_rate}/\code{untreated_rate} first doesn't change that, since
+both divide by the same \code{denom_val} and \code{rate_normalizer}, which cancel.
+The \emph{number} is therefore identical whether or not a denominator is
+configured -- but what it \emph{estimates} is not, and that's the point that
+actually matters:
+\itemize{
+\item \strong{With a denominator}, \code{mu_ctrl = log(rate) + log(denominator)}, where
+\code{log(denominator)} is the same fixed, observed offset on the treated
+and untreated side alike (see \code{stan_data_joint()}). It cancels not just
+algebraically but \emph{causally}: the model holds the measured exposure
+fixed, so any difference between the two sides is attributed entirely
+to the rate term. \verb{Pct Change} is therefore an estimate of the percent
+change in the underlying \strong{rate} (events per unit of that measured,
+held-fixed exposure), and the count-level \code{Expected}/\code{Diff} columns are
+just that rate effect applied to the observed exposure.
+\item \strong{Without a denominator} (equivalent to denominator \code{1} everywhere),
+there is no separately measured exposure for the model to hold fixed.
+\verb{Pct Change} is then only an estimate of the percent change in the
+raw \strong{count}, and that number is consistent with many different
+rate/exposure stories -- a higher per-unit rate, a change in some real
+but unmeasured denominator, or both. The model has no way to tell these
+apart, so without a denominator, read \verb{Pct Change} as "the count
+changed by X\%," not "the rate changed by X\%."
+}
+
+A related but distinct caveat, and one that lands on the \strong{count}
+columns only. The model parameterizes the rate directly, so the
+counterfactual rate behind \verb{Exp Rate} needs no assumption about what the
+denominator would have been -- the denominator cancels out of it. Turning
+that rate into a counterfactual \emph{count} is what requires multiplying by
+some denominator, and \code{Expected} uses the one actually observed. That's
+the right estimand when the denominator is exogenous to treatment (e.g.
+total population for a mortality rate). It understates the full causal
+picture when treatment could plausibly change the denominator too -- e.g.
+births as the denominator for an infant mortality rate, when the exposure
+could also change the number of births: \code{Expected} then answers "how many
+deaths, given the births that were actually observed under treatment"
+rather than "how many deaths under a world with no treatment at all"
+(which would need a counterfactual birth count too, and in general a
+counterfactual denominator is not identified by this model at all). See
+\code{denominator_may_be_affected} in \code{\link[=bpnmf_output_opts]{bpnmf_output_opts()}} to surface that
+second caveat in the rendered report, where it is a footnote on
+\code{Expected}.
 }

@@ -104,10 +104,58 @@ Requirements and gotchas:
   marked missing (with a warning). Duplicate (group, unit, time) rows are an
   error.
 - **Denominators are optional but recommended.** They enter as an exposure
-  offset and must be present and strictly positive on every row (a `NA` or
-  `0` denominator is an error, not a dropped row). Denominators are divided
-  by 10,000 internally, so effects are reported as rates per 10k.
-  Without denominators the model works on raw counts.
+  offset (must be non-negative; `NA` is an error, and a `0` denominator is
+  only valid alongside an observed outcome of `0`, treated as a
+  deterministic zero and excluded from the likelihood). Without a
+  denominator the model works on raw counts, equivalent to every row having
+  denominator 1. Internally the model divides denominators by 10,000 purely
+  as a numerical reparametrization; that factor never reaches the report
+  (see below).
+  - **What "Pct Change" estimates depends on whether you give it a
+    denominator, even though the formula computing it doesn't.**
+    `Expected`/`Pct Change` are built from `exp(mu_ctrl)`/`exp(mu_ctrl+te)`
+    (raw expected counts); the reporting-layer `rate_normalizer` (default
+    1000, i.e. "per 1,000 person-years", a display choice independent of
+    the internal 10,000 Stan scaling) cancels out of every percent-change
+    figure, so the *number* is identical whether or not a denominator is
+    configured. But with a denominator, `log(denominator)` is baked into
+    `mu_ctrl` as the same fixed, observed offset on the treated and
+    untreated side alike, so it cancels *causally*, not just
+    algebraically: the model holds the measured exposure fixed, and
+    `Pct Change` is an estimate of the percent change in the underlying
+    **rate** (events per unit of that exposure). Without a denominator
+    there is no measured exposure to hold fixed, so `Pct Change` is only an
+    estimate of the percent change in the raw **count** — a number
+    consistent with many different rate/exposure stories (a higher
+    per-unit rate, a change in some real but unmeasured denominator, or
+    both), which the model has no way to distinguish. The summary tables
+    place `Pct Change` accordingly: under the rate spanner with a
+    denominator, under Counts without one.
+  - **Rate columns only exist with a denominator.** `Person-Years`,
+    `Obs Rate`, `Exp Rate` and `Rate Diff CI` are dropped from the summary
+    table (and its CSV) for a run with no denominator — there is no exposure
+    to divide by, so they would be counts divided by the summed period
+    lengths, not rates. `Pct Change` survives either way, since the shared
+    denominator cancels out of a ratio.
+  - **`Expected` (the count) assumes the observed denominator would have
+    held anyway.** The model parameterizes the rate directly, so the
+    counterfactual rate behind `Exp Rate` needs no assumption about what the
+    denominator would have been — it cancels out. Turning that rate into a
+    counterfactual *count* is what requires multiplying by a denominator,
+    and `Expected` uses the one actually observed. So `Expected` answers
+    "how many events, given the exposure that was actually observed" — not
+    "how many events under a world with no treatment at all," which would
+    need a counterfactual denominator too. That's the right estimand when
+    the denominator is exogenous to treatment (e.g. total population for a
+    mortality rate). It understates the full causal picture when treatment
+    could plausibly change the denominator itself — e.g. births as the
+    denominator for an infant mortality rate, when the exposure could also
+    change the number of births. `output.denominator_may_be_affected`
+    (default `true`) attaches this caveat as a footnote on the `Expected`
+    column of the `gt` tables, and as a note under the printed table; set it
+    `false` once you've confirmed the denominator is exogenous to treatment
+    for your outcome. With no denominator nothing is being held fixed, so
+    there is no such assumption and no caveat is shown.
 - **Suppressed small counts should be blank/`NA`** in the outcome column, not
   zero. See `adjust_for_missingness` below.
 
@@ -220,6 +268,10 @@ output:
   print_target_table: false      # also print the target unit's own table
   html_tables: true              # write gt HTML tables (needs the gt package)
   draws_format: csv              # csv | parquet
+  # denominator_may_be_affected: false # default true; set false only once
+                                        # you've confirmed the denominator is
+                                        # exogenous to treatment (see
+                                        # "Where configs live" above)
   # ppc_units: [Texas]
   # ppc_exclude_units: [Alaska]
   # ppc_acf_lags: [1]

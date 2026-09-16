@@ -12,4 +12,26 @@ Port of \code{compute_draw_effect}: with \code{method = "mu"},
 divide by the summed person-time \code{sum(denominator * years)}; with
 \code{method = "pred"}, observed vs posterior-predictive count totals.
 }
+\details{
+With \code{estimand = "ratio"} (the report default), \code{treated_rate} and
+\code{untreated_rate} share the same \code{denom_val} and \code{rate_normalizer}, so both
+cancel algebraically: the plotted percent change is numerically identical
+to \code{100 * (treated/untreated - 1)} computed directly on raw counts, and is
+the same \emph{number} whether or not a denominator is configured at all. Only
+\code{estimand = "diff"} actually depends on the denominator's value (a genuine
+rate difference).
+
+That numeric equivalence is not an interpretive one, though -- see
+\code{\link[=bpnmf_summary_table]{bpnmf_summary_table()}} for the full explanation, in short: with a
+denominator, the offset it contributes to \code{mu}/\code{mu_treated} is identical
+on both sides of the ratio, so the percent change is an estimate of the
+percent change in the \strong{rate} (holding the measured exposure fixed).
+Without one, it is only an estimate of the percent change in the raw
+\strong{count}, which cannot be attributed to a rate change versus a change in
+some unmeasured denominator. Either way, \code{mu}/\code{mu_treated} already have
+\code{log(denominator)} baked in as a fixed, observed offset (see
+\code{stan_data_joint()}), so \code{untreated}/\code{ypred_rate} are the counterfactual
+conditional on that denominator holding -- not a counterfactual where the
+denominator is also allowed to vary.
+}
 \keyword{internal}

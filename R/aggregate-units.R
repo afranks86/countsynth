@@ -121,7 +121,7 @@ add_aggregate_units <- function(draws, specs) {
     return(draws)
   }
   checkmate::assert_list(specs, types = "bpnmf_aggregate_unit")
-  attr_names <- c("groups", "units", "times")
+  attr_names <- c("groups", "units", "times", "has_denominator")
   attrs <- stats::setNames(lapply(attr_names, function(a) attr(draws, a)), attr_names)
   attrs <- attrs[!vapply(attrs, is.null, logical(1))]
   source_df <- draws

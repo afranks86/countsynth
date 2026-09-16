@@ -21,7 +21,8 @@ bpnmf_report(
   print_tables = TRUE,
   print_target_table = FALSE,
   html_tables = TRUE,
-  fit = NULL
+  fit = NULL,
+  denominator_may_be_affected = TRUE
 )
 }
 \arguments{
@@ -65,6 +66,22 @@ package; warns and skips when it is missing.}
 Required for the \code{"te_regression"} figures, which read the
 treatment-effect design and coefficient draws rather than the draws
 frame; without it that figure is skipped.}
+
+\item{denominator_may_be_affected}{The model treats the denominator as a
+fixed, treatment-unaffected exposure: \code{mu_ctrl} bakes in
+\code{log(denominator)} as a constant offset, so "Expected"/"Pct Change" are
+the counterfactual count conditional on the \emph{observed} denominator, not
+a counterfactual where the denominator itself is also allowed to vary.
+That's usually fine (e.g. population as the denominator for a mortality
+rate), but not when treatment could plausibly change the denominator
+too (e.g. births as the denominator for an infant mortality rate, when
+the exposure could also change the number of births). \code{TRUE} (the
+default) surfaces that caveat in the printed report and the \code{gt}
+tables; it changes no computation. Set \code{FALSE} only once you've
+confirmed the denominator is exogenous to treatment, to quiet the
+caveat -- the default errs toward showing it, since a user who doesn't
+already know about the issue has no reason to go looking for a flag to
+turn it on.}
 }
 \value{
 Invisible list with \code{summary}, \code{per_unit}, \code{detail},

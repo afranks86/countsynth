@@ -18,3 +18,9 @@ each with the draw-level equal-tailed 95\% interval. \code{observed} is retained
 for transparency only. \code{observed_imputed} flags a unit-group whose
 post-treatment window includes a cell imputed by \code{\link[=add_aggregate_units]{add_aggregate_units()}}.
 }
+\details{
+All raw counts here -- no denominator involved -- but \code{expected} still
+assumes the observed denominator baked into \code{mu} is fixed/exogenous; see
+\code{\link[=bpnmf_summary_table]{bpnmf_summary_table()}} for the caveat when treatment could also affect
+the denominator.
+}

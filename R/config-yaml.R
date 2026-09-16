@@ -208,7 +208,7 @@ parse_yaml_output <- function(x, path = "output") {
       "fit_gap_per_unit", "interval_aggregates",
       "print_tables", "print_target_table", "html_tables",
       "aggregate_units", "ppc_units", "ppc_exclude_units", "ppc_acf_lags",
-      "ppc_unit_corr_max_time", "draws_format"),
+      "ppc_unit_corr_max_time", "draws_format", "denominator_may_be_affected"),
     path
   )
   figures <- x$figures %||% FALSE
@@ -263,7 +263,11 @@ parse_yaml_output <- function(x, path = "output") {
     ppc_acf_lags =
       if (is.null(x$ppc_acf_lags)) NULL else unlist(x$ppc_acf_lags, use.names = FALSE),
     ppc_unit_corr_max_time = x$ppc_unit_corr_max_time,
-    draws_format = x$draws_format %||% "csv"
+    draws_format = x$draws_format %||% "csv",
+    denominator_may_be_affected = yaml_flag(
+      x$denominator_may_be_affected,
+      glue::glue("{path}.denominator_may_be_affected"), TRUE
+    )
   )
 }
 

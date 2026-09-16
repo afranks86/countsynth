@@ -23,7 +23,10 @@ bpnmf_group_comparison_plot(
 \item{treatment_dates}{Named character vector of dates for vertical marker
 lines (names are labels).}
 
-\item{plot_type}{\code{"rate"} or \code{"count"}.}
+\item{plot_type}{\code{"rate"} or \code{"count"}. \code{"rate"} falls back to \code{"count"}
+when the run has no denominator: there is no exposure to divide by, and
+plotting \code{count * rate_multiplier} under a "Rate per 1,000" axis would
+just be a mislabeled count.}
 }
 \description{
 Treated vs control rate comparison, faceted by group

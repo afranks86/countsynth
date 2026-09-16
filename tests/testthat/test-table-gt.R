@@ -89,3 +89,141 @@ test_that("html_tables flows through the config layers", {
   expect_false(bpnmf_output_opts()$print_target_table)
   expect_false(parse_yaml_output(list())$print_target_table)
 })
+
+test_that("denominator_may_be_affected flows through the config layers, on by default", {
+  # Default TRUE: a user who doesn't already know about this concern has no
+  # reason to go looking for a flag to turn it on, so the caution starts
+  # showing and has to be deliberately silenced instead.
+  expect_true(bpnmf_output_opts()$denominator_may_be_affected)
+  expect_false(
+    bpnmf_output_opts(denominator_may_be_affected = FALSE)$denominator_may_be_affected
+  )
+  expect_true(parse_yaml_output(list())$denominator_may_be_affected)
+  expect_false(
+    parse_yaml_output(
+      list(denominator_may_be_affected = FALSE)
+    )$denominator_may_be_affected
+  )
+})
+
+test_that("the denominator caveat is a footnote on the expected columns", {
+  skip_if_not_installed("gt")
+  draws <- make_draws_frame()
+
+  flagged <- bpnmf_gt_table(draws)
+  # A real gt footnote anchored to the column it is about, not a loose source
+  # note. Expected only, not Exp Rate: the model parameterizes the rate
+  # directly, so only the count-scale counterfactual needs a denominator
+  # multiplied back in, and that's the assumption being flagged.
+  fn <- flagged[["_footnotes"]]
+  expect_equal(fn$colname, "Expected")
+  expect_true(all(fn$locname == "columns_columns"))
+  expect_match(unlist(fn$footnotes), "conditional on the observed denominator",
+               all = FALSE)
+
+  quiet <- bpnmf_gt_table(draws, denominator_may_be_affected = FALSE)
+  expect_equal(nrow(quiet[["_footnotes"]]), 0)
+
+  # With a denominator, % Change belongs with the rates: it estimates a
+  # change in the rate, holding the measured exposure fixed.
+  spanners <- flagged[["_spanners"]]
+  rate_vars <- unlist(
+    spanners$vars[grepl("Rate per", unlist(spanners$spanner_label))]
+  )
+  expect_true("Pct Change CI" %in% rate_vars)
+
+  # Flows through the full report, printed only alongside the table itself.
+  out_dir <- withr::local_tempdir()
+  msg <- utils::capture.output(
+    bpnmf_report(
+      draws, out_dir,
+      figures = character(), html_tables = FALSE, print_tables = TRUE
+    ),
+    type = "message"
+  )
+  expect_match(paste(msg, collapse = "\n"), "Caution")
+  expect_match(paste(msg, collapse = "\n"), "percent change in the rate")
+})
+
+test_that("with no denominator, rate columns are dropped and % change is a count", {
+  skip_if_not_installed("gt")
+  draws <- make_draws_frame()
+  draws$denominator <- NULL
+
+  # Regression: bpnmf_summary_table()/bpnmf_interval_plot() used to error
+  # ("Column `denominator` not found") whenever no denominator was ever
+  # configured -- they must instead treat that as denominator == 1.
+  tbl <- expect_silent(bpnmf_summary_table(draws, "B"))
+  expect_true(nrow(tbl) > 0)
+  expect_s3_class(bpnmf_interval_plot(draws), "ggplot")
+
+  # Person-Years would truncate to 0 and every rate would divide by roughly
+  # nothing, so the rate columns are omitted rather than reported as garbage.
+  expect_false(any(
+    c("Person-Years", "Obs Rate", "Exp Rate", "Rate Diff CI") %in% names(tbl)
+  ))
+  expect_true("Pct Change CI" %in% names(tbl))
+
+  g <- bpnmf_gt_table(draws)
+  spanners <- g[["_spanners"]]
+  expect_equal(unlist(spanners$spanner_label), "Counts")
+  expect_true("Pct Change CI" %in% unlist(spanners$vars))
+  # Nothing is held fixed without a denominator, so there is no assumption
+  # about it to caveat.
+  expect_equal(nrow(g[["_footnotes"]]), 0)
+
+  out_dir <- withr::local_tempdir()
+  msg <- utils::capture.output(
+    bpnmf_report(
+      draws, out_dir,
+      figures = character(), html_tables = FALSE, print_tables = TRUE
+    ),
+    type = "message"
+  )
+  expect_match(paste(msg, collapse = "\n"), "percent change in the raw count")
+  expect_false(grepl("Caution", paste(msg, collapse = "\n")))
+})
+
+test_that("a denominator-free run renders every figure in the report", {
+  # Reported case: mortality.yml with `denominator_prefix` commented out blew
+  # up in bpnmf_group_comparison_plot() ("Column `denominator` not found").
+  # Every rate-aware consumer has to tolerate a run with no denominator, so
+  # exercise the whole figure set rather than the tables alone.
+  draws <- make_draws_frame()
+  draws$denominator <- NULL
+  attr(draws, "has_denominator") <- FALSE
+
+  out_dir <- withr::local_tempdir()
+  expect_no_error(
+    bpnmf_report(draws, out_dir, print_tables = FALSE, html_tables = FALSE)
+  )
+  figs <- list.files(file.path(out_dir, "figs"), recursive = TRUE)
+  expect_true(all(
+    c("raw_rate.png", "group_comparison.png", "interval.png") %in% figs
+  ))
+
+  # A rate is undefined without an exposure, so the rate plots fall back to
+  # counts rather than plotting count * rate_multiplier under a rate axis.
+  expect_equal(bpnmf_raw_rate_plot(draws)$labels$y, "Count")
+  expect_equal(bpnmf_group_comparison_plot(draws)$labels$y, "Count")
+})
+
+test_that("bpnmf_draws stamps has_denominator and always emits the column", {
+  # The column is always present (1 everywhere when unconfigured) so every
+  # consumer sees one schema; the attribute is what carries the distinction.
+  with_denom <- make_draws_frame()
+  expect_true(draws_has_denominator(with_denom))
+
+  # No flag stamped (hand-built frame): fall back to column presence.
+  no_col <- with_denom
+  no_col$denominator <- NULL
+  attr(no_col, "has_denominator") <- NULL
+  expect_false(draws_has_denominator(no_col))
+
+  # Flag wins over column presence once stamped: a denominator-free run still
+  # has a denominator column, filled with 1s.
+  filled <- with_denom
+  filled$denominator <- 1
+  attr(filled, "has_denominator") <- FALSE
+  expect_false(draws_has_denominator(filled))
+})

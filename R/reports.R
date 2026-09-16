@@ -83,6 +83,7 @@ ppc_plot_dims <- function(n_facets, ncol,
 #'   Required for the `"te_regression"` figures, which read the
 #'   treatment-effect design and coefficient draws rather than the draws
 #'   frame; without it that figure is skipped.
+#' @inheritParams bpnmf_output_opts
 #' @return Invisible list with `summary`, `per_unit`, `detail`,
 #'   `target_unit`, `figs_dir`, `treated_units`.
 #' @export
@@ -94,7 +95,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
                          fit_gap_per_unit = FALSE,
                          interval_aggregates = TRUE, print_tables = TRUE,
                          print_target_table = FALSE, html_tables = TRUE,
-                         fit = NULL) {
+                         fit = NULL, denominator_may_be_affected = TRUE) {
   selected <- figures %||% FIGURE_NAMES
   unknown <- setdiff(selected, FIGURE_NAMES)
   if (length(unknown) > 0) {
@@ -254,7 +255,10 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     per_unit, file.path(figs_dir, "post_treatment_summary.csv")
   )
   if (html_tables) {
-    write_gt_tables(reporting, target_unit, figs_dir)
+    write_gt_tables(
+      reporting, target_unit, figs_dir,
+      denominator_may_be_affected = denominator_may_be_affected
+    )
   }
 
   if (print_tables && nrow(by_unit_tbl) > 0) {
@@ -268,6 +272,35 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     }
     cli::cli_h1("Post-treatment effect by unit")
     print(as.data.frame(drop_unused_imputed(by_unit_tbl)), row.names = FALSE)
+    # The terminal table can't carry the gt version's spanners or its
+    # column-anchored footnote (see bpnmf_gt_table()), so say in words what
+    # "Pct Change" estimates -- and, with a denominator, what Expected
+    # assumes. Without a denominator nothing is being held fixed, so there is
+    # no such assumption to caveat.
+    if (draws_has_denominator(reporting)) {
+      cli::cli_alert_info(paste(
+        "Pct Change above is the estimated percent change in the rate",
+        "(a configured denominator was held fixed on both sides)."
+      ))
+      if (isTRUE(denominator_may_be_affected)) {
+        cli::cli_alert_warning(paste(
+          "Caution: Expected is a counterfactual count, conditional on the",
+          "observed denominator -- it multiplies the estimated counterfactual",
+          "rate by the denominator as actually observed, which treatment may",
+          "itself have changed. The rate columns do not share this",
+          "assumption (the denominator cancels out of them). Set",
+          "{.field output.denominator_may_be_affected} to FALSE to silence",
+          "this."
+        ))
+      }
+    } else {
+      cli::cli_alert_info(paste(
+        "Pct Change above is the estimated percent change in the raw count",
+        "(no denominator was configured, so it can't be attributed to a",
+        "rate change specifically); rate columns are omitted for the same",
+        "reason."
+      ))
+    }
   }
 
   invisible(list(

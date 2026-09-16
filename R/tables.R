@@ -83,12 +83,62 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 #' dagger marks a group whose post-treatment window includes any cell
 #' imputed by [add_aggregate_units()] (see the `Imputed` column).
 #'
+#' `Pct Change CI` is `100 * (treated/untreated - 1)` on raw counts
+#' (`treated = sum(exp(mu_treated))`, `untreated = sum(exp(mu))`); routing it
+#' through `treated_rate`/`untreated_rate` first doesn't change that, since
+#' both divide by the same `denom_val` and `rate_normalizer`, which cancel.
+#' The *number* is therefore identical whether or not a denominator is
+#' configured -- but what it *estimates* is not, and that's the point that
+#' actually matters:
+#'
+#' - **With a denominator**, `mu_ctrl = log(rate) + log(denominator)`, where
+#'   `log(denominator)` is the same fixed, observed offset on the treated
+#'   and untreated side alike (see `stan_data_joint()`). It cancels not just
+#'   algebraically but *causally*: the model holds the measured exposure
+#'   fixed, so any difference between the two sides is attributed entirely
+#'   to the rate term. `Pct Change` is therefore an estimate of the percent
+#'   change in the underlying **rate** (events per unit of that measured,
+#'   held-fixed exposure), and the count-level `Expected`/`Diff` columns are
+#'   just that rate effect applied to the observed exposure.
+#' - **Without a denominator** (equivalent to denominator `1` everywhere),
+#'   there is no separately measured exposure for the model to hold fixed.
+#'   `Pct Change` is then only an estimate of the percent change in the
+#'   raw **count**, and that number is consistent with many different
+#'   rate/exposure stories -- a higher per-unit rate, a change in some real
+#'   but unmeasured denominator, or both. The model has no way to tell these
+#'   apart, so without a denominator, read `Pct Change` as "the count
+#'   changed by X%," not "the rate changed by X%."
+#'
+#' A related but distinct caveat, and one that lands on the **count**
+#' columns only. The model parameterizes the rate directly, so the
+#' counterfactual rate behind `Exp Rate` needs no assumption about what the
+#' denominator would have been -- the denominator cancels out of it. Turning
+#' that rate into a counterfactual *count* is what requires multiplying by
+#' some denominator, and `Expected` uses the one actually observed. That's
+#' the right estimand when the denominator is exogenous to treatment (e.g.
+#' total population for a mortality rate). It understates the full causal
+#' picture when treatment could plausibly change the denominator too -- e.g.
+#' births as the denominator for an infant mortality rate, when the exposure
+#' could also change the number of births: `Expected` then answers "how many
+#' deaths, given the births that were actually observed under treatment"
+#' rather than "how many deaths under a world with no treatment at all"
+#' (which would need a counterfactual birth count too, and in general a
+#' counterfactual denominator is not identified by this model at all). See
+#' `denominator_may_be_affected` in [bpnmf_output_opts()] to surface that
+#' second caveat in the rendered report, where it is a footnote on
+#' `Expected`.
+#'
 #' @param draws A `bpnmf_draws` frame.
 #' @param target_unit Unit to summarize.
 #' @param rate_normalizer Rates are per this many person-years (default 1000).
 #' @return A tibble with pre-formatted CI columns (parity with the Python
 #'   CSV) plus a logical `Imputed` column, or an empty tibble when the unit
-#'   has no post-treatment rows.
+#'   has no post-treatment rows. The rate columns (`Person-Years`,
+#'   `Obs Rate`, `Exp Rate`, `Rate Diff CI`) are present only when the run
+#'   has a denominator -- without one there is no exposure to divide by, so
+#'   they would be counts divided by the summed period lengths rather than
+#'   rates. `Pct Change CI` is always present (the denominator cancels out of
+#'   it), and the returned tibble carries a `has_denominator` attribute.
 #' @export
 bpnmf_summary_table <- function(draws, target_unit = NULL,
                                 rate_normalizer = 1000) {
@@ -102,6 +152,12 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
     return(tibble::tibble())
   }
   df$years <- years_per_row(df)
+  # bpnmf_draws() always emits a denominator column (1 everywhere when none
+  # was configured -- see build_cell_table()), but a hand-built frame may not.
+  has_denom <- draws_has_denominator(draws)
+  if (!"denominator" %in% names(df)) {
+    df$denominator <- 1
+  }
   has_imputed <- "outcome_imputed" %in% names(df)
 
   draw_stats <- df |>
@@ -160,7 +216,18 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
       )
     )
   })
-  dplyr::bind_rows(rows)
+  out <- dplyr::bind_rows(rows)
+  # Without a configured denominator there is no exposure to divide by:
+  # `denom_val` collapses to the summed period lengths (0.25 per quarterly
+  # cell, say), so Person-Years truncates to 0 and every rate is a count
+  # divided by very nearly nothing. Those columns are not unstable so much as
+  # meaningless, so drop them rather than print them -- Pct Change survives
+  # because it is a ratio, and the shared denominator cancels out of it.
+  if (!has_denom) {
+    out[c("Person-Years", "Obs Rate", "Exp Rate", "Rate Diff CI")] <- NULL
+  }
+  attr(out, "has_denominator") <- has_denom
+  out
 }
 
 #' Headline summary table stacked over several units
@@ -195,6 +262,11 @@ bpnmf_summary_table_by_unit <- function(draws, units = NULL,
 #' each with the draw-level equal-tailed 95% interval. `observed` is retained
 #' for transparency only. `observed_imputed` flags a unit-group whose
 #' post-treatment window includes a cell imputed by [add_aggregate_units()].
+#'
+#' All raw counts here -- no denominator involved -- but `expected` still
+#' assumes the observed denominator baked into `mu` is fixed/exogenous; see
+#' [bpnmf_summary_table()] for the caveat when treatment could also affect
+#' the denominator.
 #'
 #' @param draws A `bpnmf_draws` frame.
 #' @export

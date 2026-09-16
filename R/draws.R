@@ -22,7 +22,21 @@ build_cell_table <- function(data) {
       "start_date", "end_date"),
     names(data$df)
   )
-  dplyr::left_join(cells, data$df[obs_cols], by = c("unit", "time", "group"))
+  out <- dplyr::left_join(
+    cells, data$df[obs_cols],
+    by = c("unit", "time", "group")
+  )
+  # No denominator configured means denominator 1 everywhere (the same
+  # convention build_model_arrays() uses for the Stan-facing array). Emit the
+  # column either way so every downstream table and figure sees one schema --
+  # dropping it instead made every rate-aware consumer fail with "Column
+  # `denominator` not found" on an otherwise valid denominator-free run.
+  # `has_denominator` (stamped in draws_frame_core()) is what distinguishes
+  # the two cases for reporting; the column's presence no longer does.
+  if (!"denominator" %in% names(out)) {
+    out$denominator <- 1
+  }
+  out
 }
 
 # Core long-frame assembly. mu_mat / ypred_mat are (n_draws x KDN) matrices in
@@ -51,8 +65,24 @@ draws_frame_core <- function(mu_mat, te_mat, ypred_mat, chain, iteration,
   attr(out, "groups") <- data$groups
   attr(out, "units") <- data$units
   attr(out, "times") <- data$times
+  attr(out, "has_denominator") <- "denominator" %in% names(data$df)
   class(out) <- c("bpnmf_draws", class(out))
   out
+}
+
+# Was a real denominator configured, as opposed to the implicit 1 that
+# build_cell_table() fills in? Reporting needs the distinction even though the
+# column is always present: with a denominator, "Pct Change" estimates a
+# change in the RATE (the measured exposure is held fixed on both sides of the
+# ratio); without one it only estimates a change in the raw COUNT. Frames
+# built by hand (tests, external callers) carry no flag, so fall back to
+# column presence -- what the flag's absence used to mean.
+draws_has_denominator <- function(draws) {
+  flag <- attr(draws, "has_denominator")
+  if (!is.null(flag)) {
+    return(isTRUE(flag))
+  }
+  "denominator" %in% names(draws)
 }
 
 # Extract a variable from a CmdStanMCMC fit as a (n_draws x n_elements)

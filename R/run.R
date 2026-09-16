@@ -157,7 +157,8 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
           print_tables = out$print_tables,
           print_target_table = out$print_target_table,
           html_tables = out$html_tables,
-          fit = fit
+          fit = fit,
+          denominator_may_be_affected = out$denominator_may_be_affected
         )
       }
 

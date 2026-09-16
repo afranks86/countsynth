@@ -30,6 +30,7 @@ GT_LABELS <- list(
 #' @param by_unit Show every treated unit, grouped by unit, instead of one.
 #' @param rate_normalizer Rates are per this many person-years.
 #' @param title,subtitle Header text. `NULL` builds a default from the unit.
+#' @inheritParams bpnmf_output_opts
 #' @return A `gt_tbl`. Print it to view, or save with [gt::gtsave()].
 #' @export
 #' @examples
@@ -41,7 +42,8 @@ GT_LABELS <- list(
 #' }
 bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
                            rate_normalizer = 1000,
-                           title = NULL, subtitle = NULL) {
+                           title = NULL, subtitle = NULL,
+                           denominator_may_be_affected = TRUE) {
   rlang::check_installed("gt", reason = "to render HTML summary tables")
   checkmate::assert_flag(by_unit)
 
@@ -64,6 +66,15 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
   rate_label <- sprintf(
     "Rate per %s person-years", format(rate_normalizer, big.mark = ",")
   )
+  # A configured denominator makes mu's log(denominator) offset identical on
+  # the treated and untreated side, so "Pct Change" estimates the percent
+  # change in the RATE (holding that measured exposure fixed) and belongs
+  # with the rate columns. Without one there is no measured exposure at all:
+  # bpnmf_summary_table() drops the rate columns entirely, and the same
+  # number is a change in the raw COUNT, so it belongs under Counts.
+  has_denom <- draws_has_denominator(draws)
+  count_cols <- c("Observed", "Expected", "Diff (95% CI)")
+  rate_cols <- c("Obs Rate", "Exp Rate", "Rate Diff CI")
 
   g <- gt::gt(
     tbl,
@@ -71,18 +82,28 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
     rowname_col = "Group"
   )
   g <- gt::tab_header(g, title = title, subtitle = subtitle)
-  g <- gt::cols_label(g, .list = GT_LABELS)
-  g <- gt::tab_spanner(g, label = "Counts", columns = c(
-    "Observed", "Expected", "Diff (95% CI)"
-  ))
-  g <- gt::tab_spanner(g, label = rate_label, columns = c(
-    "Obs Rate", "Exp Rate", "Rate Diff CI", "Pct Change CI"
-  ))
-  g <- gt::fmt_number(g, columns = c("Person-Years", "Observed", "Expected"),
-                      decimals = 0, use_seps = TRUE)
+  g <- gt::cols_label(g, .list = GT_LABELS[names(GT_LABELS) %in% names(tbl)])
+  if (has_denom) {
+    g <- gt::tab_spanner(g, label = "Counts", columns = count_cols)
+    g <- gt::tab_spanner(
+      g,
+      label = rate_label, columns = c(rate_cols, "Pct Change CI")
+    )
+  } else {
+    g <- gt::tab_spanner(
+      g,
+      label = "Counts", columns = c(count_cols, "Pct Change CI")
+    )
+  }
+  g <- gt::fmt_number(
+    g,
+    columns = intersect(c("Person-Years", "Observed", "Expected"), names(tbl)),
+    decimals = 0, use_seps = TRUE
+  )
   g <- gt::cols_align(g, align = "right", columns = -1)
-  # Source notes rather than footnotes: both marks live in the row label, so
-  # anchoring a numbered footnote to some arbitrary column would misdirect.
+  # Source notes rather than footnotes for these two: both marks live in the
+  # row label, so anchoring a numbered footnote to some arbitrary column
+  # would misdirect.
   g <- gt::tab_source_note(
     g, "* two-sided posterior p < 0.05 for the treated/untreated contrast."
   )
@@ -92,12 +113,38 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
       "was imputed when building the aggregate unit."
     ))
   }
+  # This one does have a column to point at, so it is a real footnote rather
+  # than a source note. It belongs on Expected alone, not on Exp Rate: the
+  # model parameterizes the rate directly, so the counterfactual RATE needs
+  # no assumption about what the denominator would have been (it cancels --
+  # Exp Rate is untreated_count / denom_val). Turning that rate into a
+  # counterfactual COUNT is what requires multiplying by a denominator, and
+  # the one used is the observed, possibly treatment-affected one. Only
+  # meaningful with a denominator at all -- without one nothing is being held
+  # fixed. gt's numbered marker avoids colliding with the literal * and
+  # dagger already carried in the row labels.
+  if (isTRUE(denominator_may_be_affected) && has_denom) {
+    g <- gt::tab_footnote(
+      g,
+      footnote = paste(
+        "Counterfactual count, conditional on the observed denominator: it",
+        "multiplies the estimated counterfactual rate by the denominator as",
+        "actually observed, which treatment may itself have changed (e.g.",
+        "births as the denominator for an infant mortality rate, when the",
+        "exposure could also change the number of births). The rate columns",
+        "do not share this assumption -- the denominator cancels out of",
+        "them. Set output.denominator_may_be_affected: false to silence this."
+      ),
+      locations = gt::cells_column_labels(columns = "Expected")
+    )
+  }
   gt::tab_options(g, table.font.size = gt::px(13), data_row.padding = gt::px(4))
 }
 
 # Write the report's HTML tables. gt is optional, so a missing install is a
 # warning that names the fix, not a failed run -- the CSVs already landed.
-write_gt_tables <- function(draws, target_unit, figs_dir) {
+write_gt_tables <- function(draws, target_unit, figs_dir,
+                            denominator_may_be_affected = TRUE) {
   if (!requireNamespace("gt", quietly = TRUE)) {
     cli::cli_warn(c(
       "Skipping HTML tables: the {.pkg gt} package is not installed.",
@@ -115,7 +162,10 @@ write_gt_tables <- function(draws, target_unit, figs_dir) {
     ok <- tryCatch(
       {
         gt::gtsave(
-          bpnmf_gt_table(draws, target_unit, by_unit = spec$by_unit),
+          bpnmf_gt_table(
+            draws, target_unit, by_unit = spec$by_unit,
+            denominator_may_be_affected = denominator_may_be_affected
+          ),
           path
         )
         TRUE

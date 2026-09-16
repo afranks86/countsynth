@@ -20,7 +20,8 @@ bpnmf_output_opts(
   ppc_exclude_units = NULL,
   ppc_acf_lags = NULL,
   ppc_unit_corr_max_time = NULL,
-  draws_format = "csv"
+  draws_format = "csv",
+  denominator_may_be_affected = TRUE
 )
 }
 \arguments{
@@ -53,6 +54,22 @@ one; its rows are already in the by-unit table, so it defaults to off.}
 \item{ppc_unit_corr_max_time}{Cutoff date for the unit-correlation check.}
 
 \item{draws_format}{\code{"csv"} or \code{"parquet"} for the draws artifact.}
+
+\item{denominator_may_be_affected}{The model treats the denominator as a
+fixed, treatment-unaffected exposure: \code{mu_ctrl} bakes in
+\code{log(denominator)} as a constant offset, so "Expected"/"Pct Change" are
+the counterfactual count conditional on the \emph{observed} denominator, not
+a counterfactual where the denominator itself is also allowed to vary.
+That's usually fine (e.g. population as the denominator for a mortality
+rate), but not when treatment could plausibly change the denominator
+too (e.g. births as the denominator for an infant mortality rate, when
+the exposure could also change the number of births). \code{TRUE} (the
+default) surfaces that caveat in the printed report and the \code{gt}
+tables; it changes no computation. Set \code{FALSE} only once you've
+confirmed the denominator is exogenous to treatment, to quiet the
+caveat -- the default errs toward showing it, since a user who doesn't
+already know about the issue has no reason to go looking for a flag to
+turn it on.}
 }
 \description{
 Output options: figures, tables, reporting/PPC filters
