@@ -15,7 +15,8 @@ bpnmf_time_aggregation(enabled = FALSE, period = NULL, n_periods = NULL)
 \item{n_periods}{Number of consecutive input periods to combine into one.
 Mutually exclusive with \code{period}. A trailing block with fewer than
 \code{n_periods} points is kept (and warned about); its shorter exposure is
-carried in \code{start_date}/\code{end_date}, so person-year rates stay correct.}
+carried in \code{start_date}/\code{end_date}, so exposure-weighted rates stay
+correct.}
 }
 \description{
 Two ways to coarsen the time axis, one of which must be chosen when

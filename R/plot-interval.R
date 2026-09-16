@@ -81,7 +81,7 @@ compute_draw_effects <- function(df, estimand, method, rate_normalizer,
 #'   under `method = "mu"`; rate ratio under `method = "pred"`).
 #' @param method `"mu"` (model log-rate) or `"pred"` (posterior-predictive
 #'   counts).
-#' @param rate_normalizer Rates are per this many person-years.
+#' @param rate_normalizer Rates are per this many units of exposure.
 #' @param color_group Optional column used to color/dodge points within a
 #'   row (defaults to `"group"` when more than one group is present).
 #' @param separate_units Units to split into their own band at the top of the
@@ -95,6 +95,7 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
                                 estimand = c("ratio", "diff"),
                                 method = c("mu", "pred"),
                                 rate_normalizer = 1000,
+                                denominator_label = NULL,
                                 color_group = NULL,
                                 separate_units = NULL) {
   estimand <- match.arg(estimand)
@@ -162,7 +163,10 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
   xlab <- if (estimand == "ratio") {
     if (method == "mu") "Percent Change (%)" else "Rate Ratio"
   } else {
-    sprintf("Rate Difference (per %s person-years)", format(rate_normalizer, big.mark = ","))
+    sprintf(
+      "Rate Difference (%s)",
+      format_rate_label(rate_normalizer, denominator_label, prefix = "per")
+    )
   }
 
   aes_base <- if (!is.null(color_group)) {

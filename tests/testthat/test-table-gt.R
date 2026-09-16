@@ -157,10 +157,10 @@ test_that("with no denominator, rate columns are dropped and % change is a count
   expect_true(nrow(tbl) > 0)
   expect_s3_class(bpnmf_interval_plot(draws), "ggplot")
 
-  # Person-Years would truncate to 0 and every rate would divide by roughly
+  # Exposure would truncate to 0 and every rate would divide by roughly
   # nothing, so the rate columns are omitted rather than reported as garbage.
   expect_false(any(
-    c("Person-Years", "Obs Rate", "Exp Rate", "Rate Diff CI") %in% names(tbl)
+    c("Exposure", "Obs Rate", "Exp Rate", "Rate Diff CI") %in% names(tbl)
   ))
   expect_true("Pct Change CI" %in% names(tbl))
 
@@ -226,4 +226,70 @@ test_that("bpnmf_draws stamps has_denominator and always emits the column", {
   filled$denominator <- 1
   attr(filled, "has_denominator") <- FALSE
   expect_false(draws_has_denominator(filled))
+})
+
+test_that("rate scale and denominator noun are configurable, neutral by default", {
+  skip_if_not_installed("gt")
+  draws <- make_draws_frame()
+
+  # The package can't know what a denominator counts, so no noun by default --
+  # "person-years" was a demographic assumption baked into a general-purpose
+  # package -- and the exposure column is named for what it is.
+  expect_equal(format_rate_label(1000), "Rate per 1,000")
+  expect_equal(format_rate_label(1e5, "births"), "Rate per 100,000 births")
+  expect_true("Exposure" %in% names(bpnmf_summary_table(draws, "B")))
+
+  spanner <- function(g) unlist(g[["_spanners"]]$spanner_label)
+  expect_true("Rate per 1,000" %in% spanner(bpnmf_gt_table(draws)))
+  expect_true(
+    "Rate per 100,000 births" %in%
+      spanner(bpnmf_gt_table(draws, rate_normalizer = 1e5,
+                             denominator_label = "births"))
+  )
+  expect_equal(
+    bpnmf_interval_plot(
+      draws,
+      estimand = "diff", rate_normalizer = 1e5, denominator_label = "births"
+    )$labels$x,
+    "Rate Difference (per 100,000 births)"
+  )
+  expect_equal(
+    bpnmf_raw_rate_plot(
+      draws,
+      rate_multiplier = 1e5, denominator_label = "births"
+    )$labels$y,
+    "Rate per 100,000 births"
+  )
+})
+
+test_that("rate_normalizer and denominator_label reach the report from config", {
+  # Regression: rate_normalizer was a hardcoded default on six function
+  # signatures and was never threaded through bpnmf_report(), so a bpnmf_run()
+  # pipeline was stuck at 1000 with no way to override it.
+  expect_equal(bpnmf_output_opts()$rate_normalizer, 1000)
+  expect_null(bpnmf_output_opts()$denominator_label)
+  expect_equal(bpnmf_output_opts(rate_normalizer = 1e5)$rate_normalizer, 1e5)
+  expect_equal(parse_yaml_output(list())$rate_normalizer, 1000)
+  expect_equal(
+    parse_yaml_output(list(rate_normalizer = 1e5))$rate_normalizer, 1e5
+  )
+  expect_equal(
+    parse_yaml_output(list(denominator_label = "births"))$denominator_label,
+    "births"
+  )
+  expect_error(bpnmf_output_opts(rate_normalizer = 0))
+  expect_error(bpnmf_output_opts(denominator_label = 42))
+
+  skip_if_not_installed("gt")
+  out_dir <- withr::local_tempdir()
+  bpnmf_report(
+    make_draws_frame(), out_dir,
+    figures = character(), print_tables = FALSE,
+    rate_normalizer = 1e5, denominator_label = "births"
+  )
+  html <- paste(
+    readLines(file.path(out_dir, "figs", "summary_table.html"), warn = FALSE),
+    collapse = "\n"
+  )
+  expect_match(html, "Rate per 100,000 births")
 })

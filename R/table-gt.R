@@ -6,7 +6,7 @@
 
 # Column labels carry their own units, so the headers can stay short.
 GT_LABELS <- list(
-  `Person-Years` = "Person-years",
+  Exposure = "Exposure",
   Observed = "Observed",
   Expected = "Expected",
   `Diff (95% CI)` = "Difference (95% CI)",
@@ -28,7 +28,6 @@ GT_LABELS <- list(
 #'   auto-detected when `NULL` (an aggregate unit wins -- see
 #'   [auto_detect_target()]).
 #' @param by_unit Show every treated unit, grouped by unit, instead of one.
-#' @param rate_normalizer Rates are per this many person-years.
 #' @param title,subtitle Header text. `NULL` builds a default from the unit.
 #' @inheritParams bpnmf_output_opts
 #' @return A `gt_tbl`. Print it to view, or save with [gt::gtsave()].
@@ -43,6 +42,7 @@ GT_LABELS <- list(
 bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
                            rate_normalizer = 1000,
                            title = NULL, subtitle = NULL,
+                           denominator_label = NULL,
                            denominator_may_be_affected = TRUE) {
   rlang::check_installed("gt", reason = "to render HTML summary tables")
   checkmate::assert_flag(by_unit)
@@ -63,9 +63,7 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
   # dagger already in the Group label.
   any_imputed <- any(tbl$Imputed)
   tbl$Imputed <- NULL
-  rate_label <- sprintf(
-    "Rate per %s person-years", format(rate_normalizer, big.mark = ",")
-  )
+  rate_label <- format_rate_label(rate_normalizer, denominator_label)
   # A configured denominator makes mu's log(denominator) offset identical on
   # the treated and untreated side, so "Pct Change" estimates the percent
   # change in the RATE (holding that measured exposure fixed) and belongs
@@ -97,7 +95,7 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
   }
   g <- gt::fmt_number(
     g,
-    columns = intersect(c("Person-Years", "Observed", "Expected"), names(tbl)),
+    columns = intersect(c("Exposure", "Observed", "Expected"), names(tbl)),
     decimals = 0, use_seps = TRUE
   )
   g <- gt::cols_align(g, align = "right", columns = -1)
@@ -144,6 +142,8 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
 # Write the report's HTML tables. gt is optional, so a missing install is a
 # warning that names the fix, not a failed run -- the CSVs already landed.
 write_gt_tables <- function(draws, target_unit, figs_dir,
+                            rate_normalizer = 1000,
+                            denominator_label = NULL,
                             denominator_may_be_affected = TRUE) {
   if (!requireNamespace("gt", quietly = TRUE)) {
     cli::cli_warn(c(
@@ -164,6 +164,8 @@ write_gt_tables <- function(draws, target_unit, figs_dir,
         gt::gtsave(
           bpnmf_gt_table(
             draws, target_unit, by_unit = spec$by_unit,
+            rate_normalizer = rate_normalizer,
+            denominator_label = denominator_label,
             denominator_may_be_affected = denominator_may_be_affected
           ),
           path

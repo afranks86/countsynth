@@ -95,7 +95,9 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
                          fit_gap_per_unit = FALSE,
                          interval_aggregates = TRUE, print_tables = TRUE,
                          print_target_table = FALSE, html_tables = TRUE,
-                         fit = NULL, denominator_may_be_affected = TRUE) {
+                         fit = NULL, rate_normalizer = 1000,
+                         denominator_label = NULL,
+                         denominator_may_be_affected = TRUE) {
   selected <- figures %||% FIGURE_NAMES
   unknown <- setdiff(selected, FIGURE_NAMES)
   if (length(unknown) > 0) {
@@ -167,7 +169,12 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     }
     if ("raw_rate" %in% selected) {
       save_plot(
-        bpnmf_raw_rate_plot(draws, group = grp, separate_unit = target_unit),
+        bpnmf_raw_rate_plot(
+          draws,
+          group = grp, separate_unit = target_unit,
+          rate_multiplier = rate_normalizer,
+          denominator_label = denominator_label
+        ),
         file.path(grp_dir, "raw_rate.png")
       )
     }
@@ -182,6 +189,8 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
       bpnmf_interval_plot(
         if (interval_aggregates) reporting else draws,
         estimand = "ratio", method = "mu",
+        rate_normalizer = rate_normalizer,
+        denominator_label = denominator_label,
         separate_units = if (interval_aggregates) NULL else character()
       ),
       file.path(figs_dir, "interval.png"),
@@ -190,7 +199,11 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
   }
   if ("group_comparison" %in% selected) {
     save_plot(
-      bpnmf_group_comparison_plot(draws),
+      bpnmf_group_comparison_plot(
+        draws,
+        rate_multiplier = rate_normalizer,
+        denominator_label = denominator_label
+      ),
       file.path(figs_dir, "group_comparison.png"),
       width = 11, height = 7
     )
@@ -241,8 +254,14 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
   # Tables: always written, never gated by `figures`.
   # Returned (and printed) but not written: its rows are the target unit's
   # slice of summary_table_by_unit.csv below.
-  summary_tbl <- bpnmf_summary_table(reporting, target_unit)
-  by_unit_tbl <- bpnmf_summary_table_by_unit(reporting, treated_units)
+  summary_tbl <- bpnmf_summary_table(
+    reporting, target_unit,
+    rate_normalizer = rate_normalizer
+  )
+  by_unit_tbl <- bpnmf_summary_table_by_unit(
+    reporting, treated_units,
+    rate_normalizer = rate_normalizer
+  )
   write_table_csv(
     by_unit_tbl, file.path(figs_dir, "summary_table_by_unit.csv")
   )
@@ -257,6 +276,8 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
   if (html_tables) {
     write_gt_tables(
       reporting, target_unit, figs_dir,
+      rate_normalizer = rate_normalizer,
+      denominator_label = denominator_label,
       denominator_may_be_affected = denominator_may_be_affected
     )
   }

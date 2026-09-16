@@ -9,7 +9,8 @@ bpnmf_group_comparison_plot(
   groups = NULL,
   rate_multiplier = 1000,
   treatment_dates = NULL,
-  plot_type = "rate"
+  plot_type = "rate",
+  denominator_label = NULL
 )
 }
 \arguments{

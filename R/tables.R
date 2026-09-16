@@ -76,7 +76,7 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 
 #' Headline observed-vs-expected summary table, one row per group
 #'
-#' Port of `tables.make_summary_table`. Person-year-weighted rates
+#' Port of `tables.make_summary_table`. Exposure-weighted rates
 #' (`denominator * years` summed over post-treatment periods), rate
 #' difference and percent change with equal-tailed 95% intervals, and a
 #' two-sided posterior p-value (`*` marks p < 0.05 on the group label). A
@@ -130,10 +130,11 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 #'
 #' @param draws A `bpnmf_draws` frame.
 #' @param target_unit Unit to summarize.
-#' @param rate_normalizer Rates are per this many person-years (default 1000).
+#' @param rate_normalizer Rates are per this many units of exposure
+#'   (default 1000). A display scale only -- it cancels out of `Pct Change`.
 #' @return A tibble with pre-formatted CI columns (parity with the Python
 #'   CSV) plus a logical `Imputed` column, or an empty tibble when the unit
-#'   has no post-treatment rows. The rate columns (`Person-Years`,
+#'   has no post-treatment rows. The rate columns (`Exposure`,
 #'   `Obs Rate`, `Exp Rate`, `Rate Diff CI`) are present only when the run
 #'   has a denominator -- without one there is no exposure to divide by, so
 #'   they would be counts divided by the summed period lengths rather than
@@ -200,7 +201,7 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
     tibble::tibble(
       Group = paste0(grp, sig, if (imputed) " \u2020" else ""),
       Imputed = imputed,
-      `Person-Years` = as.integer(mean(gd$denom_val)),
+      Exposure = as.integer(mean(gd$denom_val)),
       Observed = as.integer(outcome_mean),
       Expected = as.integer(outcome_mean - mean(diff)),
       `Diff (95% CI)` = sprintf(
@@ -219,12 +220,12 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
   out <- dplyr::bind_rows(rows)
   # Without a configured denominator there is no exposure to divide by:
   # `denom_val` collapses to the summed period lengths (0.25 per quarterly
-  # cell, say), so Person-Years truncates to 0 and every rate is a count
+  # cell, say), so Exposure truncates to 0 and every rate is a count
   # divided by very nearly nothing. Those columns are not unstable so much as
   # meaningless, so drop them rather than print them -- Pct Change survives
   # because it is a ratio, and the shared denominator cancels out of it.
   if (!has_denom) {
-    out[c("Person-Years", "Obs Rate", "Exp Rate", "Rate Diff CI")] <- NULL
+    out[c("Exposure", "Obs Rate", "Exp Rate", "Rate Diff CI")] <- NULL
   }
   attr(out, "has_denominator") <- has_denom
   out
@@ -238,7 +239,7 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
 #' @param draws A `bpnmf_draws` frame.
 #' @param units Units to include (`NULL` = every treated unit, aggregates
 #'   included when the frame has them).
-#' @param rate_normalizer Rates are per this many person-years.
+#' @param rate_normalizer Rates are per this many units of exposure.
 #' @return A tibble, or an empty tibble when no unit has post-treatment rows.
 #' @export
 bpnmf_summary_table_by_unit <- function(draws, units = NULL,

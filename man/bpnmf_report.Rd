@@ -22,6 +22,8 @@ bpnmf_report(
   print_target_table = FALSE,
   html_tables = TRUE,
   fit = NULL,
+  rate_normalizer = 1000,
+  denominator_label = NULL,
   denominator_may_be_affected = TRUE
 )
 }
@@ -66,6 +68,17 @@ package; warns and skips when it is missing.}
 Required for the \code{"te_regression"} figures, which read the
 treatment-effect design and coefficient draws rather than the draws
 frame; without it that figure is skipped.}
+
+\item{rate_normalizer}{Reported rates are per this many units of exposure
+(default 1000). Purely a display scale: it cancels out of every
+percent-change figure and only sets the scale of the rate columns and
+the rate-difference axis.}
+
+\item{denominator_label}{What one unit of the denominator \emph{is}, used to
+label the rate columns and axes -- \code{"person-years"}, \code{"births"},
+\code{"vehicle-miles"}, whatever the denominator column counts. \code{NULL} (the
+default) labels rates as "Rate per 1,000" with no noun, since the
+package has no way to know what your denominator measures.}
 
 \item{denominator_may_be_affected}{The model treats the denominator as a
 fixed, treatment-unaffected exposure: \code{mu_ctrl} bakes in

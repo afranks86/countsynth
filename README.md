@@ -115,8 +115,8 @@ Requirements and gotchas:
     denominator, even though the formula computing it doesn't.**
     `Expected`/`Pct Change` are built from `exp(mu_ctrl)`/`exp(mu_ctrl+te)`
     (raw expected counts); the reporting-layer `rate_normalizer` (default
-    1000, i.e. "per 1,000 person-years", a display choice independent of
-    the internal 10,000 Stan scaling) cancels out of every percent-change
+    1000, set with `output.rate_normalizer` — a display choice independent
+    of the internal 10,000 Stan scaling) cancels out of every percent-change
     figure, so the *number* is identical whether or not a denominator is
     configured. But with a denominator, `log(denominator)` is baked into
     `mu_ctrl` as the same fixed, observed offset on the treated and
@@ -131,7 +131,7 @@ Requirements and gotchas:
     both), which the model has no way to distinguish. The summary tables
     place `Pct Change` accordingly: under the rate spanner with a
     denominator, under Counts without one.
-  - **Rate columns only exist with a denominator.** `Person-Years`,
+  - **Rate columns only exist with a denominator.** `Exposure`,
     `Obs Rate`, `Exp Rate` and `Rate Diff CI` are dropped from the summary
     table (and its CSV) for a run with no denominator — there is no exposure
     to divide by, so they would be counts divided by the summed period
@@ -268,6 +268,12 @@ output:
   print_target_table: false      # also print the target unit's own table
   html_tables: true              # write gt HTML tables (needs the gt package)
   draws_format: csv              # csv | parquet
+  rate_normalizer: 1000          # rates are reported per this much exposure
+  # denominator_label: person-years  # what one unit of the denominator IS;
+                                     # labels rate columns/axes ("Rate per
+                                     # 1,000 births"). No noun by default —
+                                     # the package can't know what yours
+                                     # counts.
   # denominator_may_be_affected: false # default true; set false only once
                                         # you've confirmed the denominator is
                                         # exogenous to treatment (see
@@ -542,7 +548,7 @@ ranking them together would read as a peer comparison when it is not. Set
 `interval_aggregates: false` to plot only the real units.
 
 **Tables.** Every run writes `summary_table_by_unit.csv` (display-formatted:
-counts, rates per 1,000 person-years, pre-formatted CIs, `*` for a two-sided
+counts, rates per `output.rate_normalizer` units of exposure, pre-formatted CIs, `*` for a two-sided
 posterior p < 0.05) and `post_treatment_summary.csv` (the same estimands as
 plain numeric columns, for joining and plotting). With the `gt` package
 installed you also get `summary_table.html` and `summary_table_by_unit.html`,

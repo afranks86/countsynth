@@ -224,7 +224,8 @@ bpnmf_schema <- function(unit_col, time_col, treatment_col,
 #' @param n_periods Number of consecutive input periods to combine into one.
 #'   Mutually exclusive with `period`. A trailing block with fewer than
 #'   `n_periods` points is kept (and warned about); its shorter exposure is
-#'   carried in `start_date`/`end_date`, so person-year rates stay correct.
+#'   carried in `start_date`/`end_date`, so exposure-weighted rates stay
+#'   correct.
 #' @export
 bpnmf_time_aggregation <- function(enabled = FALSE, period = NULL,
                                    n_periods = NULL) {
@@ -559,6 +560,15 @@ normalize_figures <- function(v) {
 #' @param ppc_acf_lags Integer lags for the ACF check (default 1).
 #' @param ppc_unit_corr_max_time Cutoff date for the unit-correlation check.
 #' @param draws_format `"csv"` or `"parquet"` for the draws artifact.
+#' @param rate_normalizer Reported rates are per this many units of exposure
+#'   (default 1000). Purely a display scale: it cancels out of every
+#'   percent-change figure and only sets the scale of the rate columns and
+#'   the rate-difference axis.
+#' @param denominator_label What one unit of the denominator *is*, used to
+#'   label the rate columns and axes -- `"person-years"`, `"births"`,
+#'   `"vehicle-miles"`, whatever the denominator column counts. `NULL` (the
+#'   default) labels rates as "Rate per 1,000" with no noun, since the
+#'   package has no way to know what your denominator measures.
 #' @param denominator_may_be_affected The model treats the denominator as a
 #'   fixed, treatment-unaffected exposure: `mu_ctrl` bakes in
 #'   `log(denominator)` as a constant offset, so "Expected"/"Pct Change" are
@@ -585,6 +595,8 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
                               ppc_exclude_units = NULL, ppc_acf_lags = NULL,
                               ppc_unit_corr_max_time = NULL,
                               draws_format = "csv",
+                              rate_normalizer = 1000,
+                              denominator_label = NULL,
                               denominator_may_be_affected = TRUE) {
   figures <- normalize_figures(figures)
   checkmate::assert_flag(clean)
@@ -599,6 +611,8 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
   checkmate::assert_flag(print_tables)
   checkmate::assert_flag(print_target_table)
   checkmate::assert_flag(html_tables)
+  checkmate::assert_number(rate_normalizer, lower = .Machine$double.eps)
+  checkmate::assert_string(denominator_label, min.chars = 1, null.ok = TRUE)
   checkmate::assert_flag(denominator_may_be_affected)
   aggregate_units <- coerce_bpnmf_list(
     aggregate_units, "bpnmf_aggregate_unit", "bpnmf_aggregate_unit",
@@ -631,6 +645,8 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
       ppc_acf_lags = if (is.null(ppc_acf_lags)) NULL else as.integer(ppc_acf_lags),
       ppc_unit_corr_max_time = ppc_unit_corr_max_time,
       draws_format = draws_format,
+      rate_normalizer = rate_normalizer,
+      denominator_label = denominator_label,
       denominator_may_be_affected = denominator_may_be_affected
     ),
     "bpnmf_output_opts"

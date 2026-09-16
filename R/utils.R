@@ -110,3 +110,25 @@ unit_slug <- function(x) {
 }
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
+
+#' Axis / header text for a rate scaled by `rate_normalizer`
+#'
+#' "Rate per 1,000", or "Rate per 1,000 births" when the caller says what a
+#' unit of the denominator is. The package has no way to know what a
+#' denominator counts -- population, births, conceptions, vehicle-miles -- so
+#' the noun is the user's to supply (`output.denominator_label`) and there is
+#' none by default. Hardcoding "person-years" baked a demographic assumption
+#' into a general-purpose package.
+#'
+#' @param rate_normalizer Rates are per this many units of exposure.
+#' @param denominator_label What one unit of the denominator is, or `NULL`.
+#' @param prefix Leading words, e.g. `"Rate per"` or `"per"`.
+#' @keywords internal
+format_rate_label <- function(rate_normalizer, denominator_label = NULL,
+                              prefix = "Rate per") {
+  scale <- format(
+    rate_normalizer,
+    big.mark = ",", scientific = FALSE, trim = TRUE
+  )
+  paste(c(prefix, scale, denominator_label), collapse = " ")
+}

@@ -12,7 +12,7 @@ bpnmf_summary_table_by_unit(draws, units = NULL, rate_normalizer = 1000)
 \item{units}{Units to include (\code{NULL} = every treated unit, aggregates
 included when the frame has them).}
 
-\item{rate_normalizer}{Rates are per this many person-years.}
+\item{rate_normalizer}{Rates are per this many units of exposure.}
 }
 \value{
 A tibble, or an empty tibble when no unit has post-treatment rows.

@@ -11,6 +11,7 @@ bpnmf_interval_plot(
   estimand = c("ratio", "diff"),
   method = c("mu", "pred"),
   rate_normalizer = 1000,
+  denominator_label = NULL,
   color_group = NULL,
   separate_units = NULL
 )
@@ -28,7 +29,7 @@ under \code{method = "mu"}; rate ratio under \code{method = "pred"}).}
 \item{method}{\code{"mu"} (model log-rate) or \code{"pred"} (posterior-predictive
 counts).}
 
-\item{rate_normalizer}{Rates are per this many person-years.}
+\item{rate_normalizer}{Rates are per this many units of exposure.}
 
 \item{color_group}{Optional column used to color/dodge points within a
 row (defaults to \code{"group"} when more than one group is present).}

@@ -11,7 +11,8 @@ bpnmf_raw_rate_plot(
   treatment_dates = NULL,
   separate_unit = NULL,
   smooth_window = NULL,
-  plot_type = "rate"
+  plot_type = "rate",
+  denominator_label = NULL
 )
 }
 \arguments{

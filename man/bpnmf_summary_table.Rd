@@ -11,12 +11,13 @@ bpnmf_summary_table(draws, target_unit = NULL, rate_normalizer = 1000)
 
 \item{target_unit}{Unit to summarize.}
 
-\item{rate_normalizer}{Rates are per this many person-years (default 1000).}
+\item{rate_normalizer}{Rates are per this many units of exposure
+(default 1000). A display scale only -- it cancels out of \verb{Pct Change}.}
 }
 \value{
 A tibble with pre-formatted CI columns (parity with the Python
 CSV) plus a logical \code{Imputed} column, or an empty tibble when the unit
-has no post-treatment rows. The rate columns (\code{Person-Years},
+has no post-treatment rows. The rate columns (\code{Exposure},
 \verb{Obs Rate}, \verb{Exp Rate}, \verb{Rate Diff CI}) are present only when the run
 has a denominator -- without one there is no exposure to divide by, so
 they would be counts divided by the summed period lengths rather than
@@ -24,7 +25,7 @@ rates. \verb{Pct Change CI} is always present (the denominator cancels out of
 it), and the returned tibble carries a \code{has_denominator} attribute.
 }
 \description{
-Port of \code{tables.make_summary_table}. Person-year-weighted rates
+Port of \code{tables.make_summary_table}. Exposure-weighted rates
 (\code{denominator * years} summed over post-treatment periods), rate
 difference and percent change with equal-tailed 95\% intervals, and a
 two-sided posterior p-value (\code{*} marks p < 0.05 on the group label). A

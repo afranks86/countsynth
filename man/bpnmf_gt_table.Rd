@@ -11,6 +11,7 @@ bpnmf_gt_table(
   rate_normalizer = 1000,
   title = NULL,
   subtitle = NULL,
+  denominator_label = NULL,
   denominator_may_be_affected = TRUE
 )
 }
@@ -23,9 +24,18 @@ auto-detected when \code{NULL} (an aggregate unit wins -- see
 
 \item{by_unit}{Show every treated unit, grouped by unit, instead of one.}
 
-\item{rate_normalizer}{Rates are per this many person-years.}
+\item{rate_normalizer}{Reported rates are per this many units of exposure
+(default 1000). Purely a display scale: it cancels out of every
+percent-change figure and only sets the scale of the rate columns and
+the rate-difference axis.}
 
 \item{title, subtitle}{Header text. \code{NULL} builds a default from the unit.}
+
+\item{denominator_label}{What one unit of the denominator \emph{is}, used to
+label the rate columns and axes -- \code{"person-years"}, \code{"births"},
+\code{"vehicle-miles"}, whatever the denominator column counts. \code{NULL} (the
+default) labels rates as "Rate per 1,000" with no noun, since the
+package has no way to know what your denominator measures.}
 
 \item{denominator_may_be_affected}{The model treats the denominator as a
 fixed, treatment-unaffected exposure: \code{mu_ctrl} bakes in

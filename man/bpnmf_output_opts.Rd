@@ -21,6 +21,8 @@ bpnmf_output_opts(
   ppc_acf_lags = NULL,
   ppc_unit_corr_max_time = NULL,
   draws_format = "csv",
+  rate_normalizer = 1000,
+  denominator_label = NULL,
   denominator_may_be_affected = TRUE
 )
 }
@@ -54,6 +56,17 @@ one; its rows are already in the by-unit table, so it defaults to off.}
 \item{ppc_unit_corr_max_time}{Cutoff date for the unit-correlation check.}
 
 \item{draws_format}{\code{"csv"} or \code{"parquet"} for the draws artifact.}
+
+\item{rate_normalizer}{Reported rates are per this many units of exposure
+(default 1000). Purely a display scale: it cancels out of every
+percent-change figure and only sets the scale of the rate columns and
+the rate-difference axis.}
+
+\item{denominator_label}{What one unit of the denominator \emph{is}, used to
+label the rate columns and axes -- \code{"person-years"}, \code{"births"},
+\code{"vehicle-miles"}, whatever the denominator column counts. \code{NULL} (the
+default) labels rates as "Rate per 1,000" with no noun, since the
+package has no way to know what your denominator measures.}
 
 \item{denominator_may_be_affected}{The model treats the denominator as a
 fixed, treatment-unaffected exposure: \code{mu_ctrl} bakes in
