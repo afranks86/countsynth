@@ -176,7 +176,7 @@ observed_rows <- function(df) {
 bpnmf_raw_rate_plot <- function(df, group = NULL, rate_multiplier = 1000,
                                 treatment_dates = NULL, separate_unit = NULL,
                                 smooth_window = NULL, plot_type = "rate",
-                                denominator_label = NULL) {
+                                denominator_label = "denominator") {
   checkmate::assert_choice(plot_type, c("rate", "count"))
   if (!draws_has_denominator(df)) {
     plot_type <- "count"
@@ -210,7 +210,7 @@ bpnmf_raw_rate_plot <- function(df, group = NULL, rate_multiplier = 1000,
   ylabel <- if (plot_type == "count") {
     "Count"
   } else {
-    format_rate_label(rate_multiplier, denominator_label)
+    format_rate_label(rate_multiplier, denominator_label, time_unit = "none")
   }
 
   if (!is.null(smooth_window) && smooth_window > 1) {
@@ -295,7 +295,7 @@ bpnmf_group_comparison_plot <- function(df, groups = NULL,
                                         rate_multiplier = 1000,
                                         treatment_dates = NULL,
                                         plot_type = "rate",
-                                        denominator_label = NULL) {
+                                        denominator_label = "denominator") {
   checkmate::assert_choice(plot_type, c("rate", "count"))
   if (!draws_has_denominator(df)) {
     plot_type <- "count"
@@ -326,7 +326,7 @@ bpnmf_group_comparison_plot <- function(df, groups = NULL,
   ylabel <- if (plot_type == "count") {
     "Count"
   } else {
-    format_rate_label(rate_multiplier, denominator_label)
+    format_rate_label(rate_multiplier, denominator_label, time_unit = "none")
   }
 
   p <- ggplot2::ggplot(

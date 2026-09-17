@@ -4,7 +4,13 @@
 \alias{bpnmf_summary_table}
 \title{Headline observed-vs-expected summary table, one row per group}
 \usage{
-bpnmf_summary_table(draws, target_unit = NULL, rate_normalizer = 1000)
+bpnmf_summary_table(
+  draws,
+  target_unit = NULL,
+  rate_normalizer = 1000,
+  denominator_label = "denominator",
+  denominator_time_unit = "year"
+)
 }
 \arguments{
 \item{draws}{A \code{bpnmf_draws} frame.}
@@ -17,7 +23,7 @@ bpnmf_summary_table(draws, target_unit = NULL, rate_normalizer = 1000)
 \value{
 A tibble with pre-formatted CI columns (parity with the Python
 CSV) plus a logical \code{Imputed} column, or an empty tibble when the unit
-has no post-treatment rows. The rate columns (\code{Exposure},
+has no post-treatment rows. The rate columns (the exposure column,
 \verb{Obs Rate}, \verb{Exp Rate}, \verb{Rate Diff CI}) are present only when the run
 has a denominator -- without one there is no exposure to divide by, so
 they would be counts divided by the summed period lengths rather than

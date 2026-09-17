@@ -23,7 +23,8 @@ bpnmf_report(
   html_tables = TRUE,
   fit = NULL,
   rate_normalizer = 1000,
-  denominator_label = NULL,
+  denominator_label = "denominator",
+  denominator_time_unit = "year",
   denominator_may_be_affected = TRUE
 )
 }
@@ -74,11 +75,21 @@ frame; without it that figure is skipped.}
 percent-change figure and only sets the scale of the rate columns and
 the rate-difference axis.}
 
-\item{denominator_label}{What one unit of the denominator \emph{is}, used to
-label the rate columns and axes -- \code{"person-years"}, \code{"births"},
-\code{"vehicle-miles"}, whatever the denominator column counts. \code{NULL} (the
-default) labels rates as "Rate per 1,000" with no noun, since the
-package has no way to know what your denominator measures.}
+\item{denominator_label}{Singular noun for one unit of the denominator --
+\code{"person"}, \code{"birth"}, \code{"vehicle-mile"}, whatever your denominator
+column counts. Combined with \code{denominator_time_unit} to name the
+exposure ("person-years"), which labels the rate columns and axes.
+Defaults to the neutral \code{"denominator"}, since the package has no way to
+know what yours measures.}
+
+\item{denominator_time_unit}{Time unit the denominator is weighted by when
+forming exposure: one of \code{"year"} (default), \code{"month"}, \code{"week"},
+\code{"day"}, or \code{"none"}. This is part of the quantity, not decoration --
+rates are counts per \code{denominator * time}, so changing it changes the
+numbers. Use \code{"none"} when the denominator is itself a per-period flow
+(births \emph{during} each quarter) rather than a level standing through the
+period (population), since time-weighting a flow double-counts the
+period length.}
 
 \item{denominator_may_be_affected}{The model treats the denominator as a
 fixed, treatment-unaffected exposure: \code{mu_ctrl} bakes in

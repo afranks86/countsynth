@@ -96,7 +96,8 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
                          interval_aggregates = TRUE, print_tables = TRUE,
                          print_target_table = FALSE, html_tables = TRUE,
                          fit = NULL, rate_normalizer = 1000,
-                         denominator_label = NULL,
+                         denominator_label = "denominator",
+                         denominator_time_unit = "year",
                          denominator_may_be_affected = TRUE) {
   selected <- figures %||% FIGURE_NAMES
   unknown <- setdiff(selected, FIGURE_NAMES)
@@ -191,6 +192,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
         estimand = "ratio", method = "mu",
         rate_normalizer = rate_normalizer,
         denominator_label = denominator_label,
+        denominator_time_unit = denominator_time_unit,
         separate_units = if (interval_aggregates) NULL else character()
       ),
       file.path(figs_dir, "interval.png"),
@@ -256,11 +258,15 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
   # slice of summary_table_by_unit.csv below.
   summary_tbl <- bpnmf_summary_table(
     reporting, target_unit,
-    rate_normalizer = rate_normalizer
+    rate_normalizer = rate_normalizer,
+    denominator_label = denominator_label,
+    denominator_time_unit = denominator_time_unit
   )
   by_unit_tbl <- bpnmf_summary_table_by_unit(
     reporting, treated_units,
-    rate_normalizer = rate_normalizer
+    rate_normalizer = rate_normalizer,
+    denominator_label = denominator_label,
+    denominator_time_unit = denominator_time_unit
   )
   write_table_csv(
     by_unit_tbl, file.path(figs_dir, "summary_table_by_unit.csv")
@@ -278,6 +284,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
       reporting, target_unit, figs_dir,
       rate_normalizer = rate_normalizer,
       denominator_label = denominator_label,
+      denominator_time_unit = denominator_time_unit,
       denominator_may_be_affected = denominator_may_be_affected
     )
   }

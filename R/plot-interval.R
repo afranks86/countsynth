@@ -95,7 +95,8 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
                                 estimand = c("ratio", "diff"),
                                 method = c("mu", "pred"),
                                 rate_normalizer = 1000,
-                                denominator_label = NULL,
+                                denominator_label = "denominator",
+                                denominator_time_unit = "year",
                                 color_group = NULL,
                                 separate_units = NULL) {
   estimand <- match.arg(estimand)
@@ -116,7 +117,7 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
   if (nrow(df) == 0) {
     cli::cli_abort("No post-treatment rows to plot.")
   }
-  df$years <- years_per_row(df)
+  df$years <- time_weight_per_row(df, denominator_time_unit)
   # bpnmf_draws() always emits a denominator column (1 everywhere when none
   # was configured -- see build_cell_table()), but a hand-built frame may not.
   if (!"denominator" %in% names(df)) {
@@ -165,7 +166,10 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
   } else {
     sprintf(
       "Rate Difference (%s)",
-      format_rate_label(rate_normalizer, denominator_label, prefix = "per")
+      format_rate_label(
+        rate_normalizer, denominator_label, denominator_time_unit,
+        prefix = "per"
+      )
     )
   }
 

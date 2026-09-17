@@ -134,7 +134,7 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 #'   (default 1000). A display scale only -- it cancels out of `Pct Change`.
 #' @return A tibble with pre-formatted CI columns (parity with the Python
 #'   CSV) plus a logical `Imputed` column, or an empty tibble when the unit
-#'   has no post-treatment rows. The rate columns (`Exposure`,
+#'   has no post-treatment rows. The rate columns (the exposure column,
 #'   `Obs Rate`, `Exp Rate`, `Rate Diff CI`) are present only when the run
 #'   has a denominator -- without one there is no exposure to divide by, so
 #'   they would be counts divided by the summed period lengths rather than
@@ -142,7 +142,9 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 #'   it), and the returned tibble carries a `has_denominator` attribute.
 #' @export
 bpnmf_summary_table <- function(draws, target_unit = NULL,
-                                rate_normalizer = 1000) {
+                                rate_normalizer = 1000,
+                                denominator_label = "denominator",
+                                denominator_time_unit = "year") {
   target_unit <- target_unit %||% auto_detect_target(draws)
   if (is.null(target_unit)) {
     cli::cli_abort("No treated units in draws and no {.arg target_unit} given.")
@@ -152,7 +154,7 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
   if (nrow(df) == 0) {
     return(tibble::tibble())
   }
-  df$years <- years_per_row(df)
+  df$years <- time_weight_per_row(df, denominator_time_unit)
   # bpnmf_draws() always emits a denominator column (1 everywhere when none
   # was configured -- see build_cell_table()), but a hand-built frame may not.
   has_denom <- draws_has_denominator(draws)
@@ -187,6 +189,9 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
     NULL
   }
 
+  exposure_col <- exposure_column_name(
+    denominator_label, denominator_time_unit
+  )
   q <- function(x, p) stats::quantile(x, p, names = FALSE)
   rows <- lapply(unique(draw_stats$group), function(grp) {
     gd <- draw_stats[draw_stats$group == grp, ]
@@ -201,7 +206,7 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
     tibble::tibble(
       Group = paste0(grp, sig, if (imputed) " \u2020" else ""),
       Imputed = imputed,
-      Exposure = as.integer(mean(gd$denom_val)),
+      !!exposure_col := as.integer(mean(gd$denom_val)),
       Observed = as.integer(outcome_mean),
       Expected = as.integer(outcome_mean - mean(diff)),
       `Diff (95% CI)` = sprintf(
@@ -225,9 +230,10 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
   # meaningless, so drop them rather than print them -- Pct Change survives
   # because it is a ratio, and the shared denominator cancels out of it.
   if (!has_denom) {
-    out[c("Exposure", "Obs Rate", "Exp Rate", "Rate Diff CI")] <- NULL
+    out[c(exposure_col, "Obs Rate", "Exp Rate", "Rate Diff CI")] <- NULL
   }
   attr(out, "has_denominator") <- has_denom
+  attr(out, "exposure_col") <- exposure_col
   out
 }
 
@@ -243,10 +249,17 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
 #' @return A tibble, or an empty tibble when no unit has post-treatment rows.
 #' @export
 bpnmf_summary_table_by_unit <- function(draws, units = NULL,
-                                        rate_normalizer = 1000) {
+                                        rate_normalizer = 1000,
+                                        denominator_label = "denominator",
+                                        denominator_time_unit = "year") {
   units <- units %||% identify_treated_units(draws)
   dplyr::bind_rows(lapply(units, function(u) {
-    tbl <- bpnmf_summary_table(draws, u, rate_normalizer = rate_normalizer)
+    tbl <- bpnmf_summary_table(
+      draws, u,
+      rate_normalizer = rate_normalizer,
+      denominator_label = denominator_label,
+      denominator_time_unit = denominator_time_unit
+    )
     if (nrow(tbl) == 0) {
       return(tbl)
     }

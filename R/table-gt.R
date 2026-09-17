@@ -6,7 +6,6 @@
 
 # Column labels carry their own units, so the headers can stay short.
 GT_LABELS <- list(
-  Exposure = "Exposure",
   Observed = "Observed",
   Expected = "Expected",
   `Diff (95% CI)` = "Difference (95% CI)",
@@ -42,17 +41,28 @@ GT_LABELS <- list(
 bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
                            rate_normalizer = 1000,
                            title = NULL, subtitle = NULL,
-                           denominator_label = NULL,
+                           denominator_label = "denominator",
+                           denominator_time_unit = "year",
                            denominator_may_be_affected = TRUE) {
   rlang::check_installed("gt", reason = "to render HTML summary tables")
   checkmate::assert_flag(by_unit)
 
   if (by_unit) {
-    tbl <- bpnmf_summary_table_by_unit(draws, rate_normalizer = rate_normalizer)
+    tbl <- bpnmf_summary_table_by_unit(
+      draws,
+      rate_normalizer = rate_normalizer,
+      denominator_label = denominator_label,
+      denominator_time_unit = denominator_time_unit
+    )
     title <- title %||% "Post-treatment effect by unit"
   } else {
     target_unit <- target_unit %||% auto_detect_target(draws)
-    tbl <- bpnmf_summary_table(draws, target_unit, rate_normalizer = rate_normalizer)
+    tbl <- bpnmf_summary_table(
+      draws, target_unit,
+      rate_normalizer = rate_normalizer,
+      denominator_label = denominator_label,
+      denominator_time_unit = denominator_time_unit
+    )
     title <- title %||% sprintf("%s — observed vs expected", target_unit)
   }
   if (nrow(tbl) == 0) {
@@ -63,7 +73,12 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
   # dagger already in the Group label.
   any_imputed <- any(tbl$Imputed)
   tbl$Imputed <- NULL
-  rate_label <- format_rate_label(rate_normalizer, denominator_label)
+  rate_label <- format_rate_label(
+    rate_normalizer, denominator_label, denominator_time_unit
+  )
+  exposure_col <- exposure_column_name(
+    denominator_label, denominator_time_unit
+  )
   # A configured denominator makes mu's log(denominator) offset identical on
   # the treated and untreated side, so "Pct Change" estimates the percent
   # change in the RATE (holding that measured exposure fixed) and belongs
@@ -95,7 +110,7 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
   }
   g <- gt::fmt_number(
     g,
-    columns = intersect(c("Exposure", "Observed", "Expected"), names(tbl)),
+    columns = intersect(c(exposure_col, "Observed", "Expected"), names(tbl)),
     decimals = 0, use_seps = TRUE
   )
   g <- gt::cols_align(g, align = "right", columns = -1)
@@ -143,7 +158,8 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
 # warning that names the fix, not a failed run -- the CSVs already landed.
 write_gt_tables <- function(draws, target_unit, figs_dir,
                             rate_normalizer = 1000,
-                            denominator_label = NULL,
+                            denominator_label = "denominator",
+                            denominator_time_unit = "year",
                             denominator_may_be_affected = TRUE) {
   if (!requireNamespace("gt", quietly = TRUE)) {
     cli::cli_warn(c(
@@ -166,6 +182,7 @@ write_gt_tables <- function(draws, target_unit, figs_dir,
             draws, target_unit, by_unit = spec$by_unit,
             rate_normalizer = rate_normalizer,
             denominator_label = denominator_label,
+            denominator_time_unit = denominator_time_unit,
             denominator_may_be_affected = denominator_may_be_affected
           ),
           path

@@ -131,7 +131,7 @@ Requirements and gotchas:
     both), which the model has no way to distinguish. The summary tables
     place `Pct Change` accordingly: under the rate spanner with a
     denominator, under Counts without one.
-  - **Rate columns only exist with a denominator.** `Exposure`,
+  - **Rate columns only exist with a denominator.** The exposure column,
     `Obs Rate`, `Exp Rate` and `Rate Diff CI` are dropped from the summary
     table (and its CSV) for a run with no denominator — there is no exposure
     to divide by, so they would be counts divided by the summed period
@@ -269,11 +269,18 @@ output:
   html_tables: true              # write gt HTML tables (needs the gt package)
   draws_format: csv              # csv | parquet
   rate_normalizer: 1000          # rates are reported per this much exposure
-  # denominator_label: person-years  # what one unit of the denominator IS;
-                                     # labels rate columns/axes ("Rate per
-                                     # 1,000 births"). No noun by default —
-                                     # the package can't know what yours
-                                     # counts.
+  denominator_label: denominator # SINGULAR noun for one unit of your
+                                 # denominator: person, birth, vehicle-mile.
+                                 # Composed with the time unit below into
+                                 # "person-years", which names the exposure
+                                 # column and labels the rate axes.
+  denominator_time_unit: year    # year | month | week | day | none.
+                                 # Part of the quantity, not decoration:
+                                 # rates are per denominator * time. Use
+                                 # `none` when the denominator is itself a
+                                 # per-period flow (births DURING each
+                                 # quarter) rather than a level standing
+                                 # through it (population).
   # denominator_may_be_affected: false # default true; set false only once
                                         # you've confirmed the denominator is
                                         # exogenous to treatment (see
@@ -548,7 +555,9 @@ ranking them together would read as a peer comparison when it is not. Set
 `interval_aggregates: false` to plot only the real units.
 
 **Tables.** Every run writes `summary_table_by_unit.csv` (display-formatted:
-counts, rates per `output.rate_normalizer` units of exposure, pre-formatted CIs, `*` for a two-sided
+counts, rates per `output.rate_normalizer` units of exposure (`denominator ×
+time`, named by `output.denominator_label` / `output.denominator_time_unit`),
+pre-formatted CIs, `*` for a two-sided
 posterior p < 0.05) and `post_treatment_summary.csv` (the same estimands as
 plain numeric columns, for joining and plotting). With the `gt` package
 installed you also get `summary_table.html` and `summary_table_by_unit.html`,

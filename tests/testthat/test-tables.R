@@ -32,7 +32,7 @@ test_that("summary table computes exposure-weighted rates", {
   st <- bpnmf_summary_table(make_draws_frame(), "B", rate_normalizer = 1000)
   expect_equal(nrow(st), 1)
   # 2 post periods x denominator 1000 (years = 1 without period bounds)
-  expect_equal(st$Exposure, 2000L)
+  expect_equal(st$`Denominator-Years`, 2000L)
   expect_equal(st$Observed, 250L)
   # pct change is exactly 20% in every draw
   expect_match(st$`Pct Change CI`, "^20.0% \\(20.0%, 20.0%\\)")

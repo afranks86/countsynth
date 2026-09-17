@@ -157,10 +157,11 @@ test_that("with no denominator, rate columns are dropped and % change is a count
   expect_true(nrow(tbl) > 0)
   expect_s3_class(bpnmf_interval_plot(draws), "ggplot")
 
-  # Exposure would truncate to 0 and every rate would divide by roughly
+  # The exposure column would truncate to 0 and every rate would divide by
   # nothing, so the rate columns are omitted rather than reported as garbage.
   expect_false(any(
-    c("Exposure", "Obs Rate", "Exp Rate", "Rate Diff CI") %in% names(tbl)
+    c("Denominator-Years", "Obs Rate", "Exp Rate", "Rate Diff CI") %in%
+      names(tbl)
   ))
   expect_true("Pct Change CI" %in% names(tbl))
 
@@ -235,31 +236,54 @@ test_that("rate scale and denominator noun are configurable, neutral by default"
   # The package can't know what a denominator counts, so no noun by default --
   # "person-years" was a demographic assumption baked into a general-purpose
   # package -- and the exposure column is named for what it is.
-  expect_equal(format_rate_label(1000), "Rate per 1,000")
-  expect_equal(format_rate_label(1e5, "births"), "Rate per 100,000 births")
-  expect_true("Exposure" %in% names(bpnmf_summary_table(draws, "B")))
+  # The noun is composed from the denominator's own label and the time unit
+  # it is weighted by, so the time weighting stays visible instead of a bare
+  # "Rate per 1,000" implying a rate per denominator.
+  expect_equal(format_rate_label(1000), "Rate per 1,000 denominator-years")
+  expect_equal(
+    format_rate_label(1e5, "person"), "Rate per 100,000 person-years"
+  )
+  expect_equal(format_rate_label(1e5, "birth", "none"), "Rate per 100,000 births")
+  expect_equal(exposure_column_name(), "Denominator-Years")
+  expect_equal(exposure_column_name("person"), "Person-Years")
+  expect_equal(exposure_column_name("birth", "none"), "Births")
+  expect_true("Denominator-Years" %in% names(bpnmf_summary_table(draws, "B")))
+  expect_true(
+    "Person-Years" %in%
+      names(bpnmf_summary_table(draws, "B", denominator_label = "person"))
+  )
 
   spanner <- function(g) unlist(g[["_spanners"]]$spanner_label)
-  expect_true("Rate per 1,000" %in% spanner(bpnmf_gt_table(draws)))
+  expect_true("Rate per 1,000 denominator-years" %in% spanner(bpnmf_gt_table(draws)))
   expect_true(
-    "Rate per 100,000 births" %in%
+    "Rate per 100,000 person-years" %in%
       spanner(bpnmf_gt_table(draws, rate_normalizer = 1e5,
-                             denominator_label = "births"))
+                             denominator_label = "person"))
   )
   expect_equal(
     bpnmf_interval_plot(
       draws,
-      estimand = "diff", rate_normalizer = 1e5, denominator_label = "births"
+      estimand = "diff", rate_normalizer = 1e5, denominator_label = "person"
     )$labels$x,
-    "Rate Difference (per 100,000 births)"
+    "Rate Difference (per 100,000 person-years)"
   )
+  # The raw-rate plots don't time-weight at all (sum(outcome)/sum(denominator)),
+  # so their label must not claim a per-time rate.
   expect_equal(
     bpnmf_raw_rate_plot(
       draws,
-      rate_multiplier = 1e5, denominator_label = "births"
+      rate_multiplier = 1e5, denominator_label = "birth"
     )$labels$y,
     "Rate per 100,000 births"
   )
+
+  # The time unit is part of the quantity: weighting by months rather than
+  # years scales the exposure, and hence the rates, by 12.
+  yearly <- bpnmf_summary_table(draws, "B")
+  monthly <- bpnmf_summary_table(draws, "B", denominator_time_unit = "month")
+  expect_equal(monthly$`Denominator-Months`, yearly$`Denominator-Years` * 12L)
+  # Obs Rate is rounded to 2dp in the table, so compare on that scale.
+  expect_equal(monthly$`Obs Rate`, round(yearly$`Obs Rate` / 12, 2))
 })
 
 test_that("rate_normalizer and denominator_label reach the report from config", {
@@ -267,7 +291,9 @@ test_that("rate_normalizer and denominator_label reach the report from config", 
   # signatures and was never threaded through bpnmf_report(), so a bpnmf_run()
   # pipeline was stuck at 1000 with no way to override it.
   expect_equal(bpnmf_output_opts()$rate_normalizer, 1000)
-  expect_null(bpnmf_output_opts()$denominator_label)
+  expect_equal(bpnmf_output_opts()$denominator_label, "denominator")
+  expect_equal(bpnmf_output_opts()$denominator_time_unit, "year")
+  expect_error(bpnmf_output_opts(denominator_time_unit = "fortnight"))
   expect_equal(bpnmf_output_opts(rate_normalizer = 1e5)$rate_normalizer, 1e5)
   expect_equal(parse_yaml_output(list())$rate_normalizer, 1000)
   expect_equal(
@@ -285,11 +311,11 @@ test_that("rate_normalizer and denominator_label reach the report from config", 
   bpnmf_report(
     make_draws_frame(), out_dir,
     figures = character(), print_tables = FALSE,
-    rate_normalizer = 1e5, denominator_label = "births"
+    rate_normalizer = 1e5, denominator_label = "person"
   )
   html <- paste(
     readLines(file.path(out_dir, "figs", "summary_table.html"), warn = FALSE),
     collapse = "\n"
   )
-  expect_match(html, "Rate per 100,000 births")
+  expect_match(html, "Rate per 100,000 person-years")
 })

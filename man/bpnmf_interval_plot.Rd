@@ -11,7 +11,8 @@ bpnmf_interval_plot(
   estimand = c("ratio", "diff"),
   method = c("mu", "pred"),
   rate_normalizer = 1000,
-  denominator_label = NULL,
+  denominator_label = "denominator",
+  denominator_time_unit = "year",
   color_group = NULL,
   separate_units = NULL
 )

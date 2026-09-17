@@ -6,23 +6,22 @@
 \usage{
 format_rate_label(
   rate_normalizer,
-  denominator_label = NULL,
+  denominator_label = "denominator",
+  time_unit = "year",
   prefix = "Rate per"
 )
 }
 \arguments{
 \item{rate_normalizer}{Rates are per this many units of exposure.}
 
-\item{denominator_label}{What one unit of the denominator is, or \code{NULL}.}
+\item{denominator_label}{Singular noun for one unit of the denominator.}
+
+\item{time_unit}{One of \link{DENOMINATOR_TIME_UNITS}.}
 
 \item{prefix}{Leading words, e.g. \code{"Rate per"} or \code{"per"}.}
 }
 \description{
-"Rate per 1,000", or "Rate per 1,000 births" when the caller says what a
-unit of the denominator is. The package has no way to know what a
-denominator counts -- population, births, conceptions, vehicle-miles -- so
-the noun is the user's to supply (\code{output.denominator_label}) and there is
-none by default. Hardcoding "person-years" baked a demographic assumption
-into a general-purpose package.
+"Rate per 1,000 denominator-years", or "Rate per 100,000 birth-years" once
+the caller says what a unit of the denominator is.
 }
 \keyword{internal}

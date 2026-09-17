@@ -4,7 +4,13 @@
 \alias{bpnmf_summary_table_by_unit}
 \title{Headline summary table stacked over several units}
 \usage{
-bpnmf_summary_table_by_unit(draws, units = NULL, rate_normalizer = 1000)
+bpnmf_summary_table_by_unit(
+  draws,
+  units = NULL,
+  rate_normalizer = 1000,
+  denominator_label = "denominator",
+  denominator_time_unit = "year"
+)
 }
 \arguments{
 \item{draws}{A \code{bpnmf_draws} frame.}

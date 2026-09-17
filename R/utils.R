@@ -111,24 +111,93 @@ unit_slug <- function(x) {
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
+#' Time units the denominator may be weighted by
+#'
+#' The exposure a rate is quoted per is `denominator * time`, so the time
+#' unit is part of the quantity rather than decoration -- changing it changes
+#' the number. `"none"` drops the time weighting entirely, which is what a
+#' denominator that is itself a per-period flow wants (births during the
+#' quarter, say, rather than a population standing through it).
+#' @keywords internal
+DENOMINATOR_TIME_UNITS <- c("year", "month", "week", "day", "none")
+
+#' Per-row denominator weight, in the requested time unit
+#'
+#' @param df Rows with `start_date`/`end_date` (else one period each).
+#' @param time_unit One of [DENOMINATOR_TIME_UNITS].
+#' @keywords internal
+time_weight_per_row <- function(df, time_unit = "year") {
+  checkmate::assert_choice(time_unit, DENOMINATOR_TIME_UNITS)
+  if (identical(time_unit, "none")) {
+    return(rep(1, nrow(df)))
+  }
+  per_year <- switch(time_unit,
+    year = 1, month = 12, week = 365.25 / 7, day = 365.25
+  )
+  years_per_row(df) * per_year
+}
+
+#' What one unit of the exposure is called
+#'
+#' Composed from the denominator's own noun and the time unit:
+#' `"person"` + `"year"` gives `"person-years"`, `"birth"` + `"none"` gives
+#' `"births"`. The package has no way to know what a denominator counts --
+#' population, births, conceptions, vehicle-miles -- so the noun is the
+#' user's to supply and defaults to the neutral `"denominator"`. Hardcoding
+#' "person-years" baked a demographic assumption into a general-purpose
+#' package; dropping the time word entirely hid that rates are per
+#' denominator *per unit time*, which is just as misleading.
+#'
+#' @param denominator_label Singular noun for one unit of the denominator.
+#' @param time_unit One of [DENOMINATOR_TIME_UNITS].
+#' @keywords internal
+format_exposure_noun <- function(denominator_label = "denominator",
+                                 time_unit = "year") {
+  checkmate::assert_choice(time_unit, DENOMINATOR_TIME_UNITS)
+  label <- denominator_label %||% "denominator"
+  if (identical(time_unit, "none")) {
+    return(paste0(label, "s"))
+  }
+  paste0(label, "-", time_unit, "s")
+}
+
+#' Column name for the summed exposure, e.g. `"Person-Years"`
+#'
+#' Tracks the unit rather than staying fixed: the value under it changes with
+#' the time unit, so a stable-but-generic header would mean different things
+#' in different runs with nothing in the file to say which.
+#' @inheritParams format_exposure_noun
+#' @keywords internal
+exposure_column_name <- function(denominator_label = "denominator",
+                                 time_unit = "year") {
+  parts <- strsplit(
+    format_exposure_noun(denominator_label, time_unit), "-",
+    fixed = TRUE
+  )[[1]]
+  paste(
+    toupper(substring(parts, 1, 1)), substring(parts, 2),
+    sep = "", collapse = "-"
+  )
+}
+
 #' Axis / header text for a rate scaled by `rate_normalizer`
 #'
-#' "Rate per 1,000", or "Rate per 1,000 births" when the caller says what a
-#' unit of the denominator is. The package has no way to know what a
-#' denominator counts -- population, births, conceptions, vehicle-miles -- so
-#' the noun is the user's to supply (`output.denominator_label`) and there is
-#' none by default. Hardcoding "person-years" baked a demographic assumption
-#' into a general-purpose package.
+#' "Rate per 1,000 denominator-years", or "Rate per 100,000 birth-years" once
+#' the caller says what a unit of the denominator is.
 #'
 #' @param rate_normalizer Rates are per this many units of exposure.
-#' @param denominator_label What one unit of the denominator is, or `NULL`.
+#' @inheritParams format_exposure_noun
 #' @param prefix Leading words, e.g. `"Rate per"` or `"per"`.
 #' @keywords internal
-format_rate_label <- function(rate_normalizer, denominator_label = NULL,
+format_rate_label <- function(rate_normalizer,
+                              denominator_label = "denominator",
+                              time_unit = "year",
                               prefix = "Rate per") {
   scale <- format(
     rate_normalizer,
     big.mark = ",", scientific = FALSE, trim = TRUE
   )
-  paste(c(prefix, scale, denominator_label), collapse = " ")
+  paste(
+    prefix, scale, format_exposure_noun(denominator_label, time_unit)
+  )
 }

@@ -160,6 +160,7 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
           fit = fit,
           rate_normalizer = out$rate_normalizer,
           denominator_label = out$denominator_label,
+          denominator_time_unit = out$denominator_time_unit,
           denominator_may_be_affected = out$denominator_may_be_affected
         )
       }

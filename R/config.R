@@ -564,11 +564,20 @@ normalize_figures <- function(v) {
 #'   (default 1000). Purely a display scale: it cancels out of every
 #'   percent-change figure and only sets the scale of the rate columns and
 #'   the rate-difference axis.
-#' @param denominator_label What one unit of the denominator *is*, used to
-#'   label the rate columns and axes -- `"person-years"`, `"births"`,
-#'   `"vehicle-miles"`, whatever the denominator column counts. `NULL` (the
-#'   default) labels rates as "Rate per 1,000" with no noun, since the
-#'   package has no way to know what your denominator measures.
+#' @param denominator_label Singular noun for one unit of the denominator --
+#'   `"person"`, `"birth"`, `"vehicle-mile"`, whatever your denominator
+#'   column counts. Combined with `denominator_time_unit` to name the
+#'   exposure ("person-years"), which labels the rate columns and axes.
+#'   Defaults to the neutral `"denominator"`, since the package has no way to
+#'   know what yours measures.
+#' @param denominator_time_unit Time unit the denominator is weighted by when
+#'   forming exposure: one of `"year"` (default), `"month"`, `"week"`,
+#'   `"day"`, or `"none"`. This is part of the quantity, not decoration --
+#'   rates are counts per `denominator * time`, so changing it changes the
+#'   numbers. Use `"none"` when the denominator is itself a per-period flow
+#'   (births *during* each quarter) rather than a level standing through the
+#'   period (population), since time-weighting a flow double-counts the
+#'   period length.
 #' @param denominator_may_be_affected The model treats the denominator as a
 #'   fixed, treatment-unaffected exposure: `mu_ctrl` bakes in
 #'   `log(denominator)` as a constant offset, so "Expected"/"Pct Change" are
@@ -596,7 +605,8 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
                               ppc_unit_corr_max_time = NULL,
                               draws_format = "csv",
                               rate_normalizer = 1000,
-                              denominator_label = NULL,
+                              denominator_label = "denominator",
+                              denominator_time_unit = "year",
                               denominator_may_be_affected = TRUE) {
   figures <- normalize_figures(figures)
   checkmate::assert_flag(clean)
@@ -612,7 +622,8 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
   checkmate::assert_flag(print_target_table)
   checkmate::assert_flag(html_tables)
   checkmate::assert_number(rate_normalizer, lower = .Machine$double.eps)
-  checkmate::assert_string(denominator_label, min.chars = 1, null.ok = TRUE)
+  checkmate::assert_string(denominator_label, min.chars = 1)
+  checkmate::assert_choice(denominator_time_unit, DENOMINATOR_TIME_UNITS)
   checkmate::assert_flag(denominator_may_be_affected)
   aggregate_units <- coerce_bpnmf_list(
     aggregate_units, "bpnmf_aggregate_unit", "bpnmf_aggregate_unit",
@@ -647,6 +658,7 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
       draws_format = draws_format,
       rate_normalizer = rate_normalizer,
       denominator_label = denominator_label,
+      denominator_time_unit = denominator_time_unit,
       denominator_may_be_affected = denominator_may_be_affected
     ),
     "bpnmf_output_opts"
