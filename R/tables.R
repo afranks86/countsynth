@@ -123,10 +123,16 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 #' deaths, given the births that were actually observed under treatment"
 #' rather than "how many deaths under a world with no treatment at all"
 #' (which would need a counterfactual birth count too, and in general a
-#' counterfactual denominator is not identified by this model at all). See
-#' `denominator_may_be_affected` in [bpnmf_output_opts()] to surface that
-#' second caveat in the rendered report, where it is a footnote on
-#' `Expected`.
+#' counterfactual denominator is not identified by this model at all).
+#'
+#' When the effect on the *count* is the target, fit with no denominator at
+#' all: `mu_ctrl` is then the untreated log-count surface itself, so the
+#' counterfactual count is extrapolated from the factor structure rather than
+#' conditioned on an observed denominator treatment may have moved. The
+#' trade is that nothing adjusts for exposure any more -- whatever the
+#' denominator would have done has to be carried by the factors. See
+#' `denominator_may_be_affected` in [bpnmf_output_opts()] to surface this
+#' caveat in the rendered report, where it is a footnote on `Expected`.
 #'
 #' @param draws A `bpnmf_draws` frame.
 #' @param target_unit Unit to summarize.

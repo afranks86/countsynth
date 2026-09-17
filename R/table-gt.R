@@ -146,7 +146,11 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
         "births as the denominator for an infant mortality rate, when the",
         "exposure could also change the number of births). The rate columns",
         "do not share this assumption -- the denominator cancels out of",
-        "them. Set output.denominator_may_be_affected: false to silence this."
+        "them. If the effect on the count is what you are after, fit the",
+        "model with no denominator: the counterfactual count is then",
+        "extrapolated in its own right rather than conditioned on an",
+        "observed denominator treatment may have moved. Set",
+        "output.denominator_may_be_affected: false to silence this."
       ),
       locations = gt::cells_column_labels(columns = "Expected")
     )

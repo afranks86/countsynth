@@ -316,9 +316,10 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
           "observed denominator -- it multiplies the estimated counterfactual",
           "rate by the denominator as actually observed, which treatment may",
           "itself have changed. The rate columns do not share this",
-          "assumption (the denominator cancels out of them). Set",
-          "{.field output.denominator_may_be_affected} to FALSE to silence",
-          "this."
+          "assumption (the denominator cancels out of them). To estimate the",
+          "causal effect on the count itself, fit the model with no",
+          "denominator. Set {.field output.denominator_may_be_affected} to",
+          "FALSE to silence this."
         ))
       }
     } else {

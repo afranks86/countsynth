@@ -155,7 +155,12 @@ Requirements and gotchas:
     column of the `gt` tables, and as a note under the printed table; set it
     `false` once you've confirmed the denominator is exogenous to treatment
     for your outcome. With no denominator nothing is being held fixed, so
-    there is no such assumption and no caveat is shown.
+    there is no such assumption and no caveat is shown — which is also the
+    fix when the count effect is what you want: **fit with no denominator**
+    and the counterfactual count is extrapolated in its own right rather
+    than conditioned on an observed denominator treatment may have moved.
+    The trade is that nothing adjusts for exposure any more, so whatever the
+    denominator would have done has to be carried by the factor structure.
 - **Suppressed small counts should be blank/`NA`** in the outcome column, not
   zero. See `adjust_for_missingness` below.
 
