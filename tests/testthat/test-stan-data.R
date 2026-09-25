@@ -113,3 +113,45 @@ test_that("time_fac_shape reaches the Stan data with the historical default", {
     1
   )
 })
+
+test_that("rank_shrinkage reaches the Stan data and is off by default", {
+  data <- fixture_data()$data
+  off <- stan_data_joint(data, rank = 4)
+  expect_equal(off$rank_shrink, 0L)
+  # Placeholders, not meaningful values: with rank_shrink = 0 every parameter
+  # the block declares is zero-size, so Stan never reads them. They must
+  # still be present and positive or the data list would fail validation.
+  expect_true(all(vapply(
+    off[c("group_mass_shape", "group_mass_rate", "unit_sd_scale")],
+    function(x) is.numeric(x) && x > 0, logical(1)
+  )))
+
+  on <- stan_data_joint(
+    data, rank = 4,
+    rank_shrinkage = bpnmf_rank_shrinkage_opts(
+      group_mass_prior = c(3, 1.5), unit_sd_prior = 0.5
+    )
+  )
+  expect_equal(on$rank_shrink, 1L)
+  expect_equal(on$group_mass_shape, 3)
+  expect_equal(on$group_mass_rate, 1.5)
+  expect_equal(on$unit_sd_scale, 0.5)
+
+  # Adding the fields must not disturb the rest of the data list, which the
+  # log-density parity fixture depends on.
+  expect_equal(off[names(off) != "rank_shrink"][["y"]], on[["y"]])
+})
+
+test_that("rank_shrinkage is disabled at rank 1 rather than aborting", {
+  data <- fixture_data()$data
+  # A ranks_to_test sweep including 1 must still run: with one component
+  # there is nothing to shrink and both hyperparameters would be sampled
+  # straight from their priors.
+  expect_warning(
+    sd <- stan_data_joint(
+      data, rank = 1, rank_shrinkage = bpnmf_rank_shrinkage_opts()
+    ),
+    "ignored at rank 1"
+  )
+  expect_equal(sd$rank_shrink, 0L)
+})

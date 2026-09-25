@@ -16,6 +16,8 @@
 #' @param adjust_for_missingness Integrate over censored small counts.
 #' @param gen_ypred Emit the counterfactual posterior predictive in
 #'   `generated quantities`.
+#' @param rank_shrinkage Optional [bpnmf_rank_shrinkage_opts()]; `NULL`
+#'   leaves the component weights iid uniform on the simplex.
 #' @param te_design Optional `bpnmf_te_design` (see [build_te_design()])
 #'   replacing the legacy treatment-effect hierarchy with a covariate
 #'   regression; requires `model_treated = TRUE`.
@@ -28,7 +30,8 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
                             adjust_for_missingness = TRUE,
                             gen_ypred = TRUE, te_design = NULL,
                             time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
-                            time_fe_shape = DEFAULT_TIME_FE_SHAPE) {
+                            time_fe_shape = DEFAULT_TIME_FE_SHAPE,
+                            rank_shrinkage = NULL) {
   if (!is.null(te_design) && !model_treated) {
     cli::cli_abort(
       "te_design requires {.field model_treated} = TRUE."
@@ -95,10 +98,46 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
     time_fac_shape = time_fac_shape,
     time_fe_shape = time_fe_shape
   )
+  sd <- c(sd, rank_shrinkage_stan_fields(rank_shrinkage, rank))
   sd <- c(sd, te_stan_fields(te_design, length(exp_cell)))
   attr(sd, "dims") <- c(K = K, D = D, N = N)
   attr(sd, "exposed") <- exp_sub
   sd
+}
+
+# Stan fields for the two-level (finite HDP) weight prior. Off gives
+# rank_shrink = 0 with placeholder hyperparameters: every parameter the block
+# declares is then zero-size, so the values are never read and the
+# unconstrained vector is identical to the pre-shrinkage model's.
+#
+# Rank 1 disables it whatever the config says: there is no rank to select,
+# the profile is the constant 1, and both hyperparameters would be sampled
+# from their priors with nothing in the likelihood to inform them. Warned
+# rather than aborted so that a `ranks_to_test` sweep including 1 still runs.
+rank_shrinkage_stan_fields <- function(rank_shrinkage, rank) {
+  off <- list(
+    rank_shrink = 0L,
+    group_mass_shape = 1, group_mass_rate = 1,
+    unit_sd_scale = 1
+  )
+  if (is.null(rank_shrinkage)) {
+    return(off)
+  }
+  checkmate::assert_class(rank_shrinkage, "bpnmf_rank_shrinkage_opts")
+  if (rank < 2) {
+    cli::cli_warn(c(
+      "{.field rank_shrinkage} is ignored at rank 1.",
+      i = "With one component there is no rank to shrink; the fit runs with
+           the flat weight prior."
+    ))
+    return(off)
+  }
+  list(
+    rank_shrink = 1L,
+    group_mass_shape = rank_shrinkage$group_mass_prior[[1]],
+    group_mass_rate = rank_shrinkage$group_mass_prior[[2]],
+    unit_sd_scale = rank_shrinkage$unit_sd_prior
+  )
 }
 
 #' Build the Stan data list for the cut stage-2 model

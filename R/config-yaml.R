@@ -78,8 +78,11 @@ parse_yaml_model <- function(x, path = "model") {
     c("outcome_distribution", "types", "nb_disp", "sample_disp",
       "adjust_for_missingness", "model_treated", "inference_mode",
       "treatment_effects", "factor_variation_pct",
-      "time_level_variation_pct"),
+      "time_level_variation_pct", "rank_shrinkage"),
     path
+  )
+  rank_shrinkage <- parse_yaml_rank_shrinkage(
+    x$rank_shrinkage, glue::glue("{path}.rank_shrinkage")
   )
   treatment_effects <- NULL
   if (!is.null(x$treatment_effects)) {
@@ -133,7 +136,37 @@ parse_yaml_model <- function(x, path = "model") {
     inference_mode = x$inference_mode,
     treatment_effects = treatment_effects,
     factor_variation_pct = x$factor_variation_pct,
-    time_level_variation_pct = x$time_level_variation_pct
+    time_level_variation_pct = x$time_level_variation_pct,
+    rank_shrinkage = rank_shrinkage
+  )
+}
+
+# `rank_shrinkage: true` is the shorthand for the defaults; a mapping
+# overrides individual hyperparameters. The two Gamma priors are written as
+# two-element `[shape, rate]` sequences, which YAML gives us as a list.
+parse_yaml_rank_shrinkage <- function(x, path) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  if (is.logical(x) && length(x) == 1 && !is.na(x)) {
+    return(if (x) bpnmf_rank_shrinkage_opts() else NULL)
+  }
+  check_known_keys(
+    x, c("group_mass_prior", "unit_sd_prior"), path
+  )
+  num <- function(key, default) {
+    if (is.null(x[[key]])) {
+      return(default)
+    }
+    v <- unlist(x[[key]], use.names = FALSE)
+    if (!is.numeric(v)) {
+      cli::cli_abort("{.field {path}.{key}} must be numeric.")
+    }
+    v
+  }
+  bpnmf_rank_shrinkage_opts(
+    group_mass_prior = num("group_mass_prior", c(2, 1)),
+    unit_sd_prior = num("unit_sd_prior", 1)
   )
 }
 
