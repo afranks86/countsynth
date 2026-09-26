@@ -454,3 +454,17 @@ test_that("rank_shrinkage round-trips through YAML", {
     "Unknown"
   )
 })
+
+test_that("shared_curves and the crossed-effect priors round-trip through YAML", {
+  with_model <- function(block) {
+    sub("model:", paste0("model:\n", block), BASE_YAML, fixed = TRUE)
+  }
+  cfg <- read_bpnmf_config(write_yaml_config(with_model(paste0(
+    "  shared_curves: true\n",
+    "  rank_shrinkage:\n    group_sd_prior: 0.25\n    shared_unit_sd_prior: 2"
+  ))))
+  expect_true(cfg$model$shared_curves)
+  expect_equal(cfg$model$rank_shrinkage$group_sd_prior, 0.25)
+  expect_equal(cfg$model$rank_shrinkage$shared_unit_sd_prior, 2)
+  expect_false(read_bpnmf_config(write_yaml_config(BASE_YAML))$model$shared_curves)
+})

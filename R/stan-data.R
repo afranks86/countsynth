@@ -16,6 +16,8 @@
 #' @param adjust_for_missingness Integrate over censored small counts.
 #' @param gen_ypred Emit the counterfactual posterior predictive in
 #'   `generated quantities`.
+#' @param shared_curves Share one set of temporal curves across groups (see
+#'   [bpnmf_model_opts()]). Ignored with a single group or at rank 1.
 #' @param rank_shrinkage Optional [bpnmf_rank_shrinkage_opts()]; `NULL`
 #'   leaves the component weights iid uniform on the simplex.
 #' @param te_design Optional `bpnmf_te_design` (see [build_te_design()])
@@ -31,7 +33,8 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
                             gen_ypred = TRUE, te_design = NULL,
                             time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
                             time_fe_shape = DEFAULT_TIME_FE_SHAPE,
-                            rank_shrinkage = NULL) {
+                            rank_shrinkage = NULL,
+                            shared_curves = FALSE) {
   if (!is.null(te_design) && !model_treated) {
     cli::cli_abort(
       "te_design requires {.field model_treated} = TRUE."
@@ -99,6 +102,12 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
     time_fe_shape = time_fe_shape
   )
   sd <- c(sd, rank_shrinkage_stan_fields(rank_shrinkage, rank))
+  # Sharing needs more than one group to share across, and curves to share:
+  # with K = 1 the shared and per-group models are the same model, and at
+  # rank 1 there are no curves at all. Silent rather than warned, since a
+  # model-level `shared_curves: true` legitimately covers a config's
+  # single-group types too.
+  sd$share_fac <- as.integer(isTRUE(shared_curves) && K >= 2 && rank >= 2)
   sd <- c(sd, te_stan_fields(te_design, length(exp_cell)))
   attr(sd, "dims") <- c(K = K, D = D, N = N)
   attr(sd, "exposed") <- exp_sub
@@ -118,7 +127,7 @@ rank_shrinkage_stan_fields <- function(rank_shrinkage, rank) {
   off <- list(
     rank_shrink = 0L,
     group_mass_shape = 1, group_mass_rate = 1,
-    unit_sd_scale = 1
+    unit_sd_scale = 1, group_sd_scale = 1, shared_unit_sd_scale = 1
   )
   if (is.null(rank_shrinkage)) {
     return(off)
@@ -127,8 +136,8 @@ rank_shrinkage_stan_fields <- function(rank_shrinkage, rank) {
   if (rank < 2) {
     cli::cli_warn(c(
       "{.field rank_shrinkage} is ignored at rank 1.",
-      i = "With one component there is no rank to shrink; the fit runs with
-           the flat weight prior."
+      i = "At rank 1 the model is the common time level alone, with no curves
+           or weights, so there is nothing to shrink."
     ))
     return(off)
   }
@@ -136,7 +145,10 @@ rank_shrinkage_stan_fields <- function(rank_shrinkage, rank) {
     rank_shrink = 1L,
     group_mass_shape = rank_shrinkage$group_mass_prior[[1]],
     group_mass_rate = rank_shrinkage$group_mass_prior[[2]],
-    unit_sd_scale = rank_shrinkage$unit_sd_prior
+    unit_sd_scale = rank_shrinkage$unit_sd_prior,
+    # %||% so an options object saved before these fields existed still works.
+    group_sd_scale = rank_shrinkage$group_sd_prior %||% 0.5,
+    shared_unit_sd_scale = rank_shrinkage$shared_unit_sd_prior %||% 1
   )
 }
 

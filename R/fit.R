@@ -77,7 +77,8 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
     time_fe_shape = gamma_shape_from_pct(
       config$model$time_level_variation_pct, DEFAULT_TIME_FE_SHAPE
     ),
-    rank_shrinkage = config$model$rank_shrinkage
+    rank_shrinkage = config$model$rank_shrinkage,
+    shared_curves = isTRUE(config$model$shared_curves)
   )
   if (model_treated && sd$n_exposed == 0) {
     cli::cli_abort(

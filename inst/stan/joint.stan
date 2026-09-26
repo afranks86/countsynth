@@ -8,12 +8,20 @@
 // reshape(-1); all index vectors are precomputed in R (stan-data.R).
 functions {
   #include censoring.stanfunctions
-  // Component weights for one unit under rank shrinkage: its group's log
-  // profile perturbed multiplicatively and renormalized. Defined once and
-  // called from both transformed parameters (what the likelihood uses) and
-  // generated quantities (what the report reads), so the two cannot drift.
-  vector hdp_unit_weight(vector log_profile, real spread, vector z) {
-    return softmax(log_profile + spread * z);
+  // Log weights of a truncated stick-breaking draw, the final stick taking
+  // the whole remainder so the weights sum to one. Built in logs because a
+  // component nothing uses can underflow to exactly zero, and log(0) would
+  // hand autodiff an infinite gradient.
+  vector log_stick_breaking(vector nu) {
+    int R = rows(nu) + 1;
+    vector[R] out;
+    real log_rem = 0;
+    for (r in 1 : (R - 1)) {
+      out[r] = log_rem + log(nu[r]);
+      log_rem += log1m(nu[r]);
+    }
+    out[R] = log_rem;
+    return out;
   }
 }
 data {
@@ -83,6 +91,18 @@ data {
   real<lower=0> group_mass_rate;
   real<lower=0> unit_sd_scale;           // HalfNormal prior on unit_weight_sd
 
+  // Shared temporal curves (share_fac == 1; R side sets it only for K >= 2
+  // and R >= 2): one set of R curves for every group instead of one set per
+  // group, so component r is the same temporal pattern in each group and its
+  // loadings are comparable across groups. With rank shrinkage the weights
+  // then get crossed effects on the log-ratio scale around one global
+  // profile: group, unit (shared across groups), and group x unit -- the
+  // (1 | group) + (1 | unit) + (1 | group:unit) structure the legacy
+  // treatment effect uses, applied to the loadings.
+  int<lower=0, upper=1> share_fac;
+  real<lower=0> group_sd_scale;          // HalfNormal prior on group_profile_sd
+  real<lower=0> shared_unit_sd_scale;    // HalfNormal prior on unit_shared_sd
+
   // Optional treatment-effect regression (te_reg == 1, requires
   // model_treated == 1): the legacy group/unit/group:unit hierarchy is
   // replaced by a linear fixed-effect surface X * te_beta plus J ragged
@@ -119,19 +139,33 @@ transformed data {
   real phi_fixed = inv(nb_disp);
   real log_phi_fixed = log(phi_fixed);
   vector[9] b_fixed = nb_censor_coeff(phi_fixed, sup, lgamma_sup1);
+
+  // Curves and weights exist only for R >= 2. At R = 1 every weight is 1 and
+  // the lone curve multiplies every unit's rate alike, so the likelihood sees
+  // only its product with time_fe and it is exactly absorbed: the model is
+  // the rank-1 surface time_fe[n, k] * exp(unit_fe[d, k]) either way, and
+  // dropping the curve removes a factor nothing but the priors could split.
+  // More generally R counts the rank of the multiplicative rate surface:
+  // time_fe supplies one direction and R curves on a simplex add R - 1.
+  int R_fac = R >= 2 ? R : 0;
+  int K_fac = share_fac == 1 ? 1 : K;    // curve sets
+  int K_stick = rank_shrink == 1 ? K_fac : 0;   // one global or one per group
+  int crossed = (rank_shrink == 1 && share_fac == 1) ? 1 : 0;
 }
 parameters {
-  array[K] matrix<lower=0>[N, R] time_fac;   // Gamma(shape, shape), logged
+  // One curve set per group, or one shared set; none at R = 1.
+  array[K_fac] matrix<lower=0>[N, R_fac] time_fac; // Gamma(shape, shape)
   vector[K] unit_fe_mu;                     // improper flat (no statement)
   vector<lower=0>[K] unit_fe_sigma;         // HalfNormal(0.5)
   matrix[D, K] unit_fe_z;                   // std normal (non-centered)
   matrix<lower=0>[N, K] time_fe;             // Gamma(shape, shape), logged
   // Flat weights, Dirichlet(1,...,1) per (k, d). Rank shrinkage replaces
   // them wholesale (zero-size here, weights built in transformed parameters
-  // from the two blocks below), so with rank_shrink == 0 this declaration --
-  // its name, size and position -- is exactly the pre-shrinkage model's.
-  array[rank_shrink == 1 ? 0 : K, rank_shrink == 1 ? 0 : D] simplex[R]
-    unit_weight;
+  // from the blocks below), so with rank_shrink == 0 and R >= 2 this
+  // declaration -- name, size and position -- is exactly the pre-shrinkage
+  // model's. At R = 1 a simplex[1] has no free coordinates anyway.
+  array[(rank_shrink == 1 || R_fac == 0) ? 0 : K,
+        (rank_shrink == 1 || R_fac == 0) ? 0 : D] simplex[R] unit_weight;
 
   // Rank shrinkage, all zero-size when rank_shrink == 0.
   //
@@ -143,7 +177,7 @@ parameters {
   // so runs out to z ~ -1/alpha, and NUTS diverges getting there. Here the
   // same near-zero weight is a *product* of moderate stick fractions -- an
   // unused eighth component needs no extreme coordinate anywhere.
-  array[rank_shrink == 1 ? K : 0] vector<lower=0, upper=1>[R - 1] stick;
+  array[K_stick] vector<lower=0, upper=1>[R - 1] stick;
   array[rank_shrink] real<lower=0> group_weight_mass; // DP mass, Beta(1, mass)
   // Per-unit deviation from the group profile: logistic-normal rather than
   // Dirichlet, and non-centered. unit_weight_sd is the multiplicative spread
@@ -174,6 +208,16 @@ parameters {
   // the flat cell index uses; R rows so each unit's deviation is one
   // contiguous column.
   matrix[rank_shrink == 1 ? R : 0, rank_shrink == 1 ? K * D : 0] unit_weight_z;
+  // Crossed effects, zero-size unless curves are shared under shrinkage.
+  // Group k's profile departs from the global one by group_profile_sd *
+  // group_profile_z[, k]; unit d departs the same way in every group by
+  // unit_shared_sd * unit_shared_z[, d]; unit_weight_sd * unit_weight_z is
+  // then the group x unit remainder. Each has the softmax's flat shift
+  // direction, proper under std_normal and harmless for the same reason.
+  array[crossed] real<lower=0> group_profile_sd;
+  matrix[crossed == 1 ? R : 0, crossed == 1 ? K : 0] group_profile_z;
+  array[crossed] real<lower=0> unit_shared_sd;
+  matrix[crossed == 1 ? R : 0, crossed == 1 ? D : 0] unit_shared_z;
 
   // Treatment block; zero-size when model_treated == 0. Declaration order
   // matches the pre-regression model, and the legacy hierarchy is zero-size
@@ -198,56 +242,81 @@ parameters {
 }
 transformed parameters {
   vector[KDN] mu_ctrl;                   // untreated log-count surface
-  // Shared component-popularity profile per group, in logs: the truncated
-  // stick-breaking weights, with the final stick taking the whole remainder
-  // so the profile sums to one. Kept logged because that is the form the
-  // weights are built from below -- a profile weight can underflow to zero
-  // for a component nothing uses, and log(0) would then hand autodiff an
-  // infinite gradient. `generated quantities` reports the natural scale.
+  // Component-popularity profile per group, in logs (generated quantities
+  // reports the natural scale). Without shared curves each group has its own
+  // stick-breaking draw; with them there is one global draw, and each group's
+  // profile is a log-ratio deviation from it -- so a component the global
+  // profile has zeroed out stays near zero in every group.
   array[rank_shrink == 1 ? K : 0] vector[R] log_group_weight;
+  array[crossed] vector[R] log_global_weight;
+  // The realized per-unit weights under rank shrinkage, where the sampled
+  // simplex is empty: each unit's group profile perturbed multiplicatively
+  // and renormalized, so every column still sums to one and the level stays
+  // with unit_fe exactly as in the flat model. Computed once here, for the
+  // likelihood and the output alike.
+  array[rank_shrink == 1 ? K : 0, rank_shrink == 1 ? D : 0]
+    vector[R] unit_weight_fitted;
   vector[model_treated == 1 ? n_exposed : 0] te;
   vector[is_nb == 1 ? D : 0] phi_unit;   // NB2 concentration per unit
 
-  for (k in 1 : (rank_shrink == 1 ? K : 0)) {
-    real log_rem = 0;
-    for (r in 1 : (R - 1)) {
-      log_group_weight[k][r] = log_rem + log(stick[k][r]);
-      log_rem += log1m(stick[k][r]);
+  if (crossed == 1) {
+    log_global_weight[1] = log_stick_breaking(stick[1]);
+    for (k in 1 : K) {
+      log_group_weight[k] = log_softmax(
+        log_global_weight[1] + group_profile_sd[1] * col(group_profile_z, k)
+      );
     }
-    log_group_weight[k][R] = log_rem;
+  } else {
+    for (k in 1 : K_stick) {
+      log_group_weight[k] = log_stick_breaking(stick[k]);
+    }
+  }
+  for (k in 1 : (rank_shrink == 1 ? K : 0)) {
+    for (d in 1 : D) {
+      vector[R] dev = unit_weight_sd[1] * col(unit_weight_z, (k - 1) * D + d);
+      if (crossed == 1) {
+        dev += unit_shared_sd[1] * col(unit_shared_z, d);
+      }
+      unit_weight_fitted[k, d] = softmax(log_group_weight[k] + dev);
+    }
   }
 
   for (k in 1 : K) {
-    // Natural-scale low-rank product: log(TF_k %*% W_k) equals the Python
-    // log-sum-exp assembly of log time_fac + log weights; both factors are
-    // positive and O(1), so the direct product is stable and faster.
-    matrix[R, D] W;
-    if (rank_shrink == 1) {
-      // softmax(log profile + sd * z) is the profile perturbed
-      // multiplicatively and renormalized, so each column still sums to one
-      // and the level stays with unit_fe exactly as in the flat model. The
-      // softmax is invariant to shifting z by a constant, which leaves one
-      // flat direction per unit; std_normal keeps it proper and perfectly
-      // conditioned, and constraining it away would buy nothing.
-      for (d in 1 : D) {
-        W[, d] = hdp_unit_weight(log_group_weight[k], unit_weight_sd[1],
-                                 col(unit_weight_z, (k - 1) * D + d));
-      }
-    } else {
-      for (d in 1 : D) {
-        W[, d] = unit_weight[k, d];
-      }
-    }
-    matrix[N, D] factor_kd = time_fac[k] * W;
     row_vector[D] fe_k = unit_fe_mu[k]
                          + unit_fe_sigma[k] * to_row_vector(unit_fe_z[, k]);
     int base = (k - 1) * DN;
     // to_vector is column-major: column d contributes N contiguous entries,
     // exactly the row-major (k, d, n) flat layout of this group's cells.
-    mu_ctrl[(base + 1) : (base + DN)]
-      = to_vector(log(factor_kd) + rep_matrix(log(time_fe[, k]), D)
-                  + rep_matrix(fe_k, N))
-        + log_denom[(base + 1) : (base + DN)];
+    if (R_fac > 0) {
+      // Natural-scale low-rank product: log(TF_k %*% W_k) equals the Python
+      // log-sum-exp assembly of log time_fac + log weights; both factors are
+      // positive and O(1), so the direct product is stable and faster.
+      matrix[R, D] W;
+      if (rank_shrink == 1) {
+        for (d in 1 : D) {
+          W[, d] = unit_weight_fitted[k, d];
+        }
+      } else {
+        for (d in 1 : D) {
+          W[, d] = unit_weight[k, d];
+        }
+      }
+      matrix[N, D] factor_kd = time_fac[share_fac == 1 ? 1 : k] * W;
+      // Summation order kept exactly as before shared curves existed, so a
+      // flat-weight configuration reproduces its draws bit for bit. (A
+      // rank_shrinkage one reproduces the same log density but not the same
+      // bits: restructuring how its weights are built changed the autodiff
+      // graph, and a last-ulp gradient difference eventually flips a
+      // trajectory decision -- verified identical lp__ for 12 iterations.)
+      mu_ctrl[(base + 1) : (base + DN)]
+        = to_vector(log(factor_kd) + rep_matrix(log(time_fe[, k]), D)
+                    + rep_matrix(fe_k, N))
+          + log_denom[(base + 1) : (base + DN)];
+    } else {
+      mu_ctrl[(base + 1) : (base + DN)]
+        = to_vector(rep_matrix(log(time_fe[, k]), D) + rep_matrix(fe_k, N))
+          + log_denom[(base + 1) : (base + DN)];
+    }
   }
 
   if (model_treated == 1) {
@@ -288,7 +357,7 @@ model {
   }
 
   // Baseline priors (joint.py:32-63).
-  for (k in 1 : K) {
+  for (k in 1 : (R_fac > 0 ? K_fac : 0)) {
     to_vector(time_fac[k]) ~ gamma(time_fac_shape, time_fac_shape);
   }
   unit_fe_sigma ~ normal(0, 0.5);           // half-normal via <lower=0>
@@ -324,8 +393,16 @@ model {
     group_weight_mass[1] ~ gamma(group_mass_shape, group_mass_rate);
     unit_weight_sd[1] ~ normal(0, unit_sd_scale); // half-normal via <lower=0>
     to_vector(unit_weight_z) ~ std_normal();
-    for (k in 1 : K) {
+    for (k in 1 : K_stick) {
       stick[k] ~ beta(1, group_weight_mass[1]);
+    }
+    // The group level is informed by K profiles, so group_sd_scale should
+    // usually be tighter than unit_sd_scale: with K = 4 its prior matters.
+    if (crossed == 1) {
+      group_profile_sd[1] ~ normal(0, group_sd_scale);
+      to_vector(group_profile_z) ~ std_normal();
+      unit_shared_sd[1] ~ normal(0, shared_unit_sd_scale);
+      to_vector(unit_shared_z) ~ std_normal();
     }
   }
 
@@ -423,25 +500,24 @@ generated quantities {
   // orders the profile only in expectation, not within a draw). Its prior
   // mean is about 1 + mass. If it sits well below R the truncation was
   // generous enough; if it presses against R, raise the rank and refit.
+  //
+  // Because time_fe carries the common direction, eff_rank near 1 means the
+  // units share one curve that time_fe absorbs -- no deviation beyond the
+  // trend -- and eff_rank tracks the rank of the rate surface, trend
+  // included. With shared curves, global_eff_rank is the same summary of the
+  // global profile: the rank the panel uses overall, of which each group's
+  // eff_rank uses a subset.
   array[rank_shrink == 1 ? K : 0] vector[R] group_weight;
   vector[rank_shrink == 1 ? K : 0] eff_rank;
-  // The realized per-unit component weights. Under rank shrinkage the
-  // sampled simplex is empty and the weights are a function of the profile
-  // and each unit's deviation, so without this they would not reach the
-  // output at all -- the flat model exposes `unit_weight` only incidentally,
-  // because it happens to be a parameter there. Whichever of the two is
-  // non-empty holds the weights the likelihood actually used.
-  array[rank_shrink == 1 ? K : 0, rank_shrink == 1 ? D : 0]
-    vector[R] unit_weight_fitted;
+  array[crossed] vector[R] global_weight;
+  vector[crossed] global_eff_rank;
   for (k in 1 : (rank_shrink == 1 ? K : 0)) {
     group_weight[k] = exp(log_group_weight[k]);
     eff_rank[k] = inv(dot_self(group_weight[k]));
-    for (d in 1 : D) {
-      unit_weight_fitted[k, d] = hdp_unit_weight(
-        log_group_weight[k], unit_weight_sd[1],
-        col(unit_weight_z, (k - 1) * D + d)
-      );
-    }
+  }
+  if (crossed == 1) {
+    global_weight[1] = exp(log_global_weight[1]);
+    global_eff_rank[1] = inv(dot_self(global_weight[1]));
   }
 
   // Counterfactual untreated posterior predictive: rate exp(mu_ctrl), never

@@ -422,6 +422,27 @@ absorbing the treatment effect itself. Give it several values
 them. Rank 3 is a reasonable starting point for panels the size of the
 bundled example (≈50 units × ≈50 periods).
 
+The rank counts directions of the multiplicative rate surface, and the common
+time level (`time_fe`) is one of them, so rank 1 is the trend alone: every unit
+follows its group's `time_fe`, and the model carries no temporal curves or
+weights at all (a single curve would be exactly absorbed by `time_fe`). Each
+rank above 1 adds one direction in which units can depart from that trend.
+
+Two options change how rank behaves:
+
+- `rank_shrinkage` (see `?bpnmf_rank_shrinkage_opts`) shrinks unused
+  components, so a generous rank stops changing the fit. Pick one rank
+  comfortably above what you need rather than sweeping, and read the
+  effective rank the fit reports in `figs/ppc/rank_eff_rank.csv`: if its upper
+  interval presses against the rank, raise it.
+- `shared_curves: true` fits one set of temporal curves for all groups in a
+  type instead of one set per group. Each group keeps its own `time_fe`, so
+  only the way units depart from their group's trend is shared, and a small
+  group borrows its curves from the large ones. With `rank_shrinkage` the
+  loadings then get group, unit, and group × unit effects around one global
+  profile, and a `(global)` row joins the effective-rank output. It has no
+  effect on a type with a single group.
+
 **Likelihood.** `NB` is the default and the safe choice for count data with
 any overdispersion; `Poisson` is a good deal faster if the mean-variance
 relationship really holds. `nb_disp` fixes the dispersion (concentration

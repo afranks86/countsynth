@@ -15,7 +15,8 @@ bpnmf_model_opts(
   treatment_effects = NULL,
   factor_variation_pct = NULL,
   time_level_variation_pct = NULL,
-  rank_shrinkage = NULL
+  rank_shrinkage = NULL,
+  shared_curves = FALSE
 )
 }
 \arguments{
@@ -61,6 +62,17 @@ shrinking unused factor components, so that an over-specified rank stops
 changing the fit. \code{NULL} (default) keeps the flat
 \code{Dirichlet(1, ..., 1)} weights, in which case results do depend on the
 rank chosen and should be checked by sweeping \code{ranks_to_test}.}
+
+\item{shared_curves}{Share one set of temporal curves across all groups
+instead of fitting one set per group. Component r is then the same
+temporal pattern in every group, so groups borrow strength for it (a
+small, heavily suppressed group inherits curves estimated mostly from the
+large ones) and loadings are comparable across groups. Each group keeps
+its own common time level (\code{time_fe}), so only the way units deviate from
+their group's trend is shared. With \code{rank_shrinkage} the weights get
+crossed group / unit / group-by-unit effects around one global profile.
+A no-op for a type with a single group or at rank 1, where there is
+nothing to share. Default \code{FALSE}.}
 }
 \description{
 Model options: likelihood family, model types, dispersion, treatment

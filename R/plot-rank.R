@@ -69,10 +69,53 @@ rank_draws <- function(src) {
   rv <- posterior::as_draws_rvars(
     src$fit$draws(variables = c("group_weight", "eff_rank"))
   )
-  list(
+  out <- list(
     profile = posterior::draws_of(rv$group_weight),
     eff_rank = posterior::draws_of(rv$eff_rank)
   )
+  # With shared curves there is also one global profile, reported as its own
+  # "(global)" row ahead of the groups. Zero-size otherwise, and CmdStan
+  # writes no columns for a zero-size variable, so its absence is the signal.
+  if (fit_has_variable(src$fit, "global_weight")) {
+    gv <- posterior::as_draws_rvars(
+      src$fit$draws(variables = c("global_weight", "global_eff_rank"))
+    )
+    out$global_profile <- posterior::draws_of(gv$global_weight)
+    out$global_eff_rank <- posterior::draws_of(gv$global_eff_rank)
+  }
+  out
+}
+
+RANK_GLOBAL_LABEL <- "(global)"
+
+# TRUE when the fit wrote at least one column for `variable`.
+fit_has_variable <- function(fit, variable) {
+  sizes <- tryCatch(
+    fit$metadata()$stan_variable_sizes[[variable]],
+    error = function(e) NULL
+  )
+  !is.null(sizes) && prod(sizes) > 0
+}
+
+# The profile / eff_rank frames with the global row first when there is one.
+rank_profile_frame <- function(dr, groups) {
+  f <- component_weight_frame(dr$profile, groups)
+  if (!is.null(dr$global_profile)) {
+    f <- dplyr::bind_rows(
+      component_weight_frame(dr$global_profile, RANK_GLOBAL_LABEL), f
+    )
+  }
+  f
+}
+
+rank_eff_frame <- function(dr, groups) {
+  f <- eff_rank_frame(dr$eff_rank, groups)
+  if (!is.null(dr$global_eff_rank)) {
+    f <- dplyr::bind_rows(
+      eff_rank_frame(dr$global_eff_rank, RANK_GLOBAL_LABEL), f
+    )
+  }
+  f
 }
 
 # Order statistics of the shared profile. Sorting within the draw is what
@@ -120,7 +163,7 @@ eff_rank_frame <- function(eff_rank, groups = NULL) {
 #' @export
 bpnmf_component_weight_summary <- function(x) {
   src <- rank_source_or_abort(x)
-  component_weight_frame(rank_draws(src)$profile, src$groups)
+  rank_profile_frame(rank_draws(src), src$groups)
 }
 
 #' Posterior of the effective number of factor components in use
@@ -137,7 +180,7 @@ bpnmf_component_weight_summary <- function(x) {
 #' @export
 bpnmf_eff_rank_summary <- function(x) {
   src <- rank_source_or_abort(x)
-  eff_rank_frame(rank_draws(src)$eff_rank, src$groups)
+  rank_eff_frame(rank_draws(src), src$groups)
 }
 
 #' Scree plot of the shared component-popularity profile
@@ -157,8 +200,8 @@ bpnmf_eff_rank_summary <- function(x) {
 bpnmf_component_weight_plot <- function(x) {
   src <- rank_source_or_abort(x)
   dr <- rank_draws(src)
-  prof <- component_weight_frame(dr$profile, src$groups)
-  eff <- eff_rank_frame(dr$eff_rank, src$groups)
+  prof <- rank_profile_frame(dr, src$groups)
+  eff <- rank_eff_frame(dr, src$groups)
   R <- max(prof$component)
 
   # The effective rank belongs in the strip label rather than a legend: it is
@@ -211,13 +254,18 @@ bpnmf_component_weight_plot <- function(x) {
     theme_bpnmf()
 }
 
-# Facet labels for the two hyperparameters: the parameter name plus what
-# moving it does, so the figure is readable without the help page.
+# Facet labels for the hyperparameters: the parameter name plus what moving
+# it does, so the figure is readable without the help page. The last two
+# exist only with shared curves.
 RANK_HYPER_LABELS <- c(
   unit_weight_sd =
     "unit_weight_sd \u2014 how far units depart from the group profile",
   group_weight_mass =
-    "group_weight_mass \u2014 DP mass behind the profile (sparser when small)"
+    "group_weight_mass \u2014 DP mass behind the profile (sparser when small)",
+  group_profile_sd =
+    "group_profile_sd \u2014 how far groups depart from the global profile",
+  unit_shared_sd =
+    "unit_shared_sd \u2014 a unit's departure shared across groups"
 )
 
 # Prior density functions as passed to Stan, or NULL for a fit whose data
@@ -227,22 +275,26 @@ rank_hyper_priors <- function(stan_data) {
   if (is.null(stan_data)) {
     return(NULL)
   }
+  half_normal <- function(scale) function(x) 2 * stats::dnorm(x, 0, scale)
   list(
-    unit_weight_sd = function(x) {
-      2 * stats::dnorm(x, 0, stan_data$unit_sd_scale)
-    },
+    unit_weight_sd = half_normal(stan_data$unit_sd_scale),
     group_weight_mass = function(x) {
       stats::dgamma(x, stan_data$group_mass_shape, stan_data$group_mass_rate)
-    }
+    },
+    group_profile_sd = half_normal(stan_data$group_sd_scale %||% 1),
+    unit_shared_sd = half_normal(stan_data$shared_unit_sd_scale %||% 1)
   )
 }
 
-#' Posterior of the two rank-shrinkage hyperparameters
+#' Posterior of the rank-shrinkage hyperparameters
 #'
 #' Densities for `unit_weight_sd` (how far each unit's component loadings
 #' depart from its group's profile, multiplicatively) and
 #' `group_weight_mass` (the DP mass behind the stick-breaking profile, which
-#' sets how sparse it is), with their priors overlaid.
+#' sets how sparse it is), with their priors overlaid. With
+#' `shared_curves = TRUE` two more join them: `group_profile_sd` (how far
+#' each group's profile departs from the global one) and `unit_shared_sd`
+#' (how far a unit departs in the same way across every group).
 #'
 #' The prior overlay is the point of the figure: these two scalars are what
 #' the shrinkage estimates rather than assumes, so a posterior that has not
@@ -256,10 +308,11 @@ rank_hyper_priors <- function(stan_data) {
 #' @export
 bpnmf_rank_hyper_plot <- function(x, prior = TRUE) {
   src <- rank_source_or_abort(x)
-  rv <- posterior::as_draws_rvars(
-    src$fit$draws(variables = c("unit_weight_sd", "group_weight_mass"))
+  present <- Filter(
+    function(v) fit_has_variable(src$fit, v), names(RANK_HYPER_LABELS)
   )
-  df <- dplyr::bind_rows(lapply(names(RANK_HYPER_LABELS), function(nm) {
+  rv <- posterior::as_draws_rvars(src$fit$draws(variables = present))
+  df <- dplyr::bind_rows(lapply(present, function(nm) {
     tibble::tibble(
       parameter = nm, value = as.vector(posterior::draws_of(rv[[nm]]))
     )
@@ -271,7 +324,7 @@ bpnmf_rank_hyper_plot <- function(x, prior = TRUE) {
   priors <- if (prior) rank_hyper_priors(src$stan_data) else NULL
   prior_df <- NULL
   if (!is.null(priors)) {
-    prior_df <- dplyr::bind_rows(lapply(names(priors), function(nm) {
+    prior_df <- dplyr::bind_rows(lapply(present, function(nm) {
       v <- df$value[df$parameter == nm]
       # Over the posterior's own range: the prior is here for comparison, and
       # letting its tail set the axis would squeeze the posterior flat.

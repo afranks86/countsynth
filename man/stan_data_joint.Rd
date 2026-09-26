@@ -16,7 +16,8 @@ stan_data_joint(
   te_design = NULL,
   time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
   time_fe_shape = DEFAULT_TIME_FE_SHAPE,
-  rank_shrinkage = NULL
+  rank_shrinkage = NULL,
+  shared_curves = FALSE
 )
 }
 \arguments{
@@ -44,6 +45,9 @@ regression; requires \code{model_treated = TRUE}.}
 
 \item{rank_shrinkage}{Optional \code{\link[=bpnmf_rank_shrinkage_opts]{bpnmf_rank_shrinkage_opts()}}; \code{NULL}
 leaves the component weights iid uniform on the simplex.}
+
+\item{shared_curves}{Share one set of temporal curves across groups (see
+\code{\link[=bpnmf_model_opts]{bpnmf_model_opts()}}). Ignored with a single group or at rank 1.}
 }
 \value{
 A named list for \code{cmdstanr}'s \code{data} argument, plus attributes

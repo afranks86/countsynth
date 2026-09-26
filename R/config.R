@@ -335,22 +335,39 @@ bpnmf_type <- function(groups, ranks_to_test, total_from = NULL,
 #'   and no floor is both large enough to do that and small enough to keep
 #'   the rank-invariance. A concentration `c` corresponds to `unit_sd_prior`
 #'   near `sqrt(2 / c)`.
+#' @param group_sd_prior Half-normal prior scale for `group_profile_sd`, how
+#'   far each group's profile departs from the global one (log-ratio scale).
+#'   Used only with `shared_curves = TRUE` in [bpnmf_model_opts()], where
+#'   component r is the same curve in every group. Default `0.5`, tighter than
+#'   `unit_sd_prior` because it is estimated from only K groups' profiles, so
+#'   with few groups its prior carries real weight.
+#' @param shared_unit_sd_prior Half-normal prior scale for `unit_shared_sd`,
+#'   how far a unit's loadings depart from its group's profile *in the same
+#'   way in every group* -- a state whose regional pattern shows up across all
+#'   race groups, say. Used only with `shared_curves = TRUE`; `unit_sd_prior`
+#'   then governs the group-by-unit remainder. Default `1`.
 #' @return A `bpnmf_rank_shrinkage_opts` object.
 #' @export
 bpnmf_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
-                                      unit_sd_prior = 1) {
+                                      unit_sd_prior = 1,
+                                      group_sd_prior = 0.5,
+                                      shared_unit_sd_prior = 1) {
   checkmate::assert_numeric(
     group_mass_prior,
     lower = .Machine$double.xmin, finite = TRUE, any.missing = FALSE, len = 2,
     .var.name = "group_mass_prior"
   )
-  checkmate::assert_number(
-    unit_sd_prior, lower = .Machine$double.xmin, finite = TRUE
-  )
+  for (nm in c("unit_sd_prior", "group_sd_prior", "shared_unit_sd_prior")) {
+    checkmate::assert_number(
+      get(nm), lower = .Machine$double.xmin, finite = TRUE, .var.name = nm
+    )
+  }
   new_bpnmf_class(
     list(
       group_mass_prior = as.numeric(group_mass_prior),
-      unit_sd_prior = as.numeric(unit_sd_prior)
+      unit_sd_prior = as.numeric(unit_sd_prior),
+      group_sd_prior = as.numeric(group_sd_prior),
+      shared_unit_sd_prior = as.numeric(shared_unit_sd_prior)
     ),
     "bpnmf_rank_shrinkage_opts"
   )
@@ -382,6 +399,16 @@ bpnmf_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 #'   changing the fit. `NULL` (default) keeps the flat
 #'   `Dirichlet(1, ..., 1)` weights, in which case results do depend on the
 #'   rank chosen and should be checked by sweeping `ranks_to_test`.
+#' @param shared_curves Share one set of temporal curves across all groups
+#'   instead of fitting one set per group. Component r is then the same
+#'   temporal pattern in every group, so groups borrow strength for it (a
+#'   small, heavily suppressed group inherits curves estimated mostly from the
+#'   large ones) and loadings are comparable across groups. Each group keeps
+#'   its own common time level (`time_fe`), so only the way units deviate from
+#'   their group's trend is shared. With `rank_shrinkage` the weights get
+#'   crossed group / unit / group-by-unit effects around one global profile.
+#'   A no-op for a type with a single group or at rank 1, where there is
+#'   nothing to share. Default `FALSE`.
 #' @param time_level_variation_pct Expected multiplicative variation of the
 #'   *common* time level (`time_fe`, shared by all units within a group), in
 #'   percent. `NULL` (default) keeps the historical `Gamma(1, 1)`, which is
@@ -398,7 +425,8 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
                              treatment_effects = NULL,
                              factor_variation_pct = NULL,
                              time_level_variation_pct = NULL,
-                             rank_shrinkage = NULL) {
+                             rank_shrinkage = NULL,
+                             shared_curves = FALSE) {
   checkmate::assert_choice(outcome_distribution, c("NB", "Poisson"))
   types <- coerce_bpnmf_list(types, "bpnmf_type", "bpnmf_type", "types")
   checkmate::assert_list(types, types = "bpnmf_type")
@@ -439,6 +467,7 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
     rank_shrinkage, "bpnmf_rank_shrinkage_opts", "bpnmf_rank_shrinkage_opts",
     "rank_shrinkage"
   )
+  checkmate::assert_flag(shared_curves)
   checkmate::assert_class(treatment_effects, "bpnmf_te_opts", null.ok = TRUE)
   if (!is.null(treatment_effects) && !is.null(treatment_effects$formula) &&
     !model_treated) {
@@ -455,7 +484,8 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
       treatment_effects = treatment_effects,
       factor_variation_pct = factor_variation_pct,
       time_level_variation_pct = time_level_variation_pct,
-      rank_shrinkage = rank_shrinkage
+      rank_shrinkage = rank_shrinkage,
+      shared_curves = shared_curves
     ),
     "bpnmf_model_opts"
   )

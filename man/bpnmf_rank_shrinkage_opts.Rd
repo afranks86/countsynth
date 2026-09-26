@@ -4,7 +4,12 @@
 \alias{bpnmf_rank_shrinkage_opts}
 \title{Rank-shrinkage options: shrink unused factor components}
 \usage{
-bpnmf_rank_shrinkage_opts(group_mass_prior = c(2, 1), unit_sd_prior = 1)
+bpnmf_rank_shrinkage_opts(
+  group_mass_prior = c(2, 1),
+  unit_sd_prior = 1,
+  group_sd_prior = 0.5,
+  shared_unit_sd_prior = 1
+)
 }
 \arguments{
 \item{group_mass_prior}{\code{Gamma(shape, rate)} prior on
@@ -32,6 +37,19 @@ concentration floor to keep unused components off the simplex boundary,
 and no floor is both large enough to do that and small enough to keep
 the rank-invariance. A concentration \code{c} corresponds to \code{unit_sd_prior}
 near \code{sqrt(2 / c)}.}
+
+\item{group_sd_prior}{Half-normal prior scale for \code{group_profile_sd}, how
+far each group's profile departs from the global one (log-ratio scale).
+Used only with \code{shared_curves = TRUE} in \code{\link[=bpnmf_model_opts]{bpnmf_model_opts()}}, where
+component r is the same curve in every group. Default \code{0.5}, tighter than
+\code{unit_sd_prior} because it is estimated from only K groups' profiles, so
+with few groups its prior carries real weight.}
+
+\item{shared_unit_sd_prior}{Half-normal prior scale for \code{unit_shared_sd},
+how far a unit's loadings depart from its group's profile \emph{in the same
+way in every group} -- a state whose regional pattern shows up across all
+race groups, say. Used only with \code{shared_curves = TRUE}; \code{unit_sd_prior}
+then governs the group-by-unit remainder. Default \code{1}.}
 }
 \value{
 A \code{bpnmf_rank_shrinkage_opts} object.

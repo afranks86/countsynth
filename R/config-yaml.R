@@ -78,7 +78,7 @@ parse_yaml_model <- function(x, path = "model") {
     c("outcome_distribution", "types", "nb_disp", "sample_disp",
       "adjust_for_missingness", "model_treated", "inference_mode",
       "treatment_effects", "factor_variation_pct",
-      "time_level_variation_pct", "rank_shrinkage"),
+      "time_level_variation_pct", "rank_shrinkage", "shared_curves"),
     path
   )
   rank_shrinkage <- parse_yaml_rank_shrinkage(
@@ -137,7 +137,10 @@ parse_yaml_model <- function(x, path = "model") {
     treatment_effects = treatment_effects,
     factor_variation_pct = x$factor_variation_pct,
     time_level_variation_pct = x$time_level_variation_pct,
-    rank_shrinkage = rank_shrinkage
+    rank_shrinkage = rank_shrinkage,
+    shared_curves = yaml_flag(
+      x$shared_curves, glue::glue("{path}.shared_curves"), FALSE
+    )
   )
 }
 
@@ -152,7 +155,8 @@ parse_yaml_rank_shrinkage <- function(x, path) {
     return(if (x) bpnmf_rank_shrinkage_opts() else NULL)
   }
   check_known_keys(
-    x, c("group_mass_prior", "unit_sd_prior"), path
+    x, c("group_mass_prior", "unit_sd_prior", "group_sd_prior",
+         "shared_unit_sd_prior"), path
   )
   num <- function(key, default) {
     if (is.null(x[[key]])) {
@@ -166,7 +170,9 @@ parse_yaml_rank_shrinkage <- function(x, path) {
   }
   bpnmf_rank_shrinkage_opts(
     group_mass_prior = num("group_mass_prior", c(2, 1)),
-    unit_sd_prior = num("unit_sd_prior", 1)
+    unit_sd_prior = num("unit_sd_prior", 1),
+    group_sd_prior = num("group_sd_prior", 0.5),
+    shared_unit_sd_prior = num("shared_unit_sd_prior", 1)
   )
 }
 

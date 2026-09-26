@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot-rank.R
 \name{bpnmf_rank_hyper_plot}
 \alias{bpnmf_rank_hyper_plot}
-\title{Posterior of the two rank-shrinkage hyperparameters}
+\title{Posterior of the rank-shrinkage hyperparameters}
 \usage{
 bpnmf_rank_hyper_plot(x, prior = TRUE)
 }
@@ -18,7 +18,10 @@ A ggplot object.
 Densities for \code{unit_weight_sd} (how far each unit's component loadings
 depart from its group's profile, multiplicatively) and
 \code{group_weight_mass} (the DP mass behind the stick-breaking profile, which
-sets how sparse it is), with their priors overlaid.
+sets how sparse it is), with their priors overlaid. With
+\code{shared_curves = TRUE} two more join them: \code{group_profile_sd} (how far
+each group's profile departs from the global one) and \code{unit_shared_sd}
+(how far a unit departs in the same way across every group).
 }
 \details{
 The prior overlay is the point of the figure: these two scalars are what
