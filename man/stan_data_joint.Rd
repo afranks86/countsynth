@@ -16,7 +16,8 @@ stan_data_joint(
   te_design = NULL,
   time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
   time_fe_shape = DEFAULT_TIME_FE_SHAPE,
-  rank_shrinkage = NULL
+  rank_shrinkage = NULL,
+  time_level = c("centered", "uncentered")
 )
 }
 \arguments{
@@ -44,6 +45,9 @@ regression; requires \code{model_treated = TRUE}.}
 
 \item{rank_shrinkage}{Optional \code{\link[=bpnmf_rank_shrinkage_opts]{bpnmf_rank_shrinkage_opts()}}; \code{NULL}
 leaves the component weights iid uniform on the simplex.}
+
+\item{time_level}{\code{"centered"} (default) or \code{"uncentered"}; see
+\code{\link[=bpnmf_model_opts]{bpnmf_model_opts()}}.}
 }
 \value{
 A named list for \code{cmdstanr}'s \code{data} argument, plus attributes

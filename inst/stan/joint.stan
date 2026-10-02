@@ -57,11 +57,26 @@ data {
   // swing multiplicatively away from a unit's own level. 20 is the historical
   // default (about a +/-25% swing).
   real<lower=0> time_fac_shape;
-  // Gamma(shape, shape) on the common time level. 1 is the historical
-  // default (Gamma(1, 1)) and is very diffuse: sd(log) = 1.28. Since
-  // unit_fe_mu is flat and the likelihood sees only log(time_fe) +
-  // unit_fe_mu, this prior alone separates the two.
+  // The common time level time_fe[n, k]. The likelihood sees it only
+  // through log(time_fe) + unit_fe_mu, and unit_fe_mu is flat, so its overall
+  // level is not identified by the data -- the two-way fixed-effects
+  // normalization problem. center_time == 1 (the default) resolves it the
+  // way TWFE does: log time_fe is constrained to sum to zero over periods
+  // within each group, so unit_fe_mu owns the level and time_fe is each
+  // period relative to its group's geometric mean. center_time == 0 is the
+  // historical parameterization, where only time_fe's Gamma prior separates
+  // the two: a ridge that measured -0.97 to -0.99 in correlation on the
+  // bundled panel and kept the sampler at its tree-depth cap. Centering cut
+  // gradient evaluations per iteration 2-5x at equal or better ESS of mu_ctrl,
+  // which is invariant to where the level sits.
+  int<lower=0, upper=1> center_time;
+  // Uncentered: Gamma(shape, shape) on time_fe (1 = the historical, very
+  // diffuse Gamma(1, 1), sd(log) = 1.28).
   real<lower=0> time_fe_shape;
+  // Centered: marginal sd of each log time_fe[n, k] about its group's level;
+  // R passes sqrt(trigamma(time_fe_shape)), so time_level_variation_pct
+  // means the same spread under either parameterization.
+  real<lower=0> time_fe_sd;
 
   // Optional rank shrinkage (rank_shrink == 1): the per-unit component
   // weights stop being iid uniform on the simplex and become multiplicative
@@ -125,7 +140,14 @@ parameters {
   vector[K] unit_fe_mu;                     // improper flat (no statement)
   vector<lower=0>[K] unit_fe_sigma;         // HalfNormal(0.5)
   matrix[D, K] unit_fe_z;                   // std normal (non-centered)
-  matrix<lower=0>[N, K] time_fe;             // Gamma(shape, shape), logged
+  // Uncentered time level, Gamma(shape, shape); zero-size when centered. Same
+  // size and position as the historical time_fe, so center_time == 0
+  // reproduces earlier fits draw for draw (the name moved: time_fe is now
+  // the transformed parameter both parameterizations report).
+  matrix<lower=0>[center_time == 1 ? 0 : N, center_time == 1 ? 0 : K]
+    time_fe_free;
+  // Centered time level: sum to zero over periods, per group.
+  array[center_time == 1 ? K : 0] sum_to_zero_vector[N] log_time_fe;
   // Flat weights, Dirichlet(1,...,1) per (k, d). Rank shrinkage replaces
   // them wholesale (zero-size here, weights built in transformed parameters
   // from the two blocks below), so with rank_shrink == 0 this declaration --
@@ -198,6 +220,16 @@ parameters {
 }
 transformed parameters {
   vector[KDN] mu_ctrl;                   // untreated log-count surface
+  // The common time level on the natural scale, whichever way it is
+  // parameterized; everything downstream reads this.
+  matrix<lower=0>[N, K] time_fe;
+  if (center_time == 1) {
+    for (k in 1 : K) {
+      time_fe[, k] = exp(log_time_fe[k]);
+    }
+  } else {
+    time_fe = time_fe_free;
+  }
   // Shared component-popularity profile per group, in logs: the truncated
   // stick-breaking weights, with the final stick taking the whole remainder
   // so the profile sums to one. Kept logged because that is the form the
@@ -293,7 +325,17 @@ model {
   }
   unit_fe_sigma ~ normal(0, 0.5);           // half-normal via <lower=0>
   to_vector(unit_fe_z) ~ std_normal();
-  to_vector(time_fe) ~ gamma(time_fe_shape, time_fe_shape);
+  if (center_time == 1) {
+    // The constraint removes one direction, which leaves each element with
+    // marginal variance sigma^2 (N - 1) / N under normal(0, sigma); scaling
+    // sigma by sqrt(N / (N - 1)) makes the marginal sd time_fe_sd exactly.
+    real tfe_scale = N > 1 ? time_fe_sd * sqrt(N / (N - 1.0)) : time_fe_sd;
+    for (k in 1 : K) {
+      log_time_fe[k] ~ normal(0, tfe_scale);
+    }
+  } else {
+    to_vector(time_fe_free) ~ gamma(time_fe_shape, time_fe_shape);
+  }
   // Component weights. Without rank shrinkage, unit_weight ~
   // Dirichlet(1,...,1) is uniform on the simplex and the declaration alone
   // supplies the prior (a dirichlet statement would add only a constant).

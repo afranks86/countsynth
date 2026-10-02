@@ -78,7 +78,7 @@ parse_yaml_model <- function(x, path = "model") {
     c("outcome_distribution", "types", "nb_disp", "sample_disp",
       "adjust_for_missingness", "model_treated", "inference_mode",
       "treatment_effects", "factor_variation_pct",
-      "time_level_variation_pct", "rank_shrinkage"),
+      "time_level_variation_pct", "rank_shrinkage", "time_level"),
     path
   )
   rank_shrinkage <- parse_yaml_rank_shrinkage(
@@ -137,7 +137,10 @@ parse_yaml_model <- function(x, path = "model") {
     treatment_effects = treatment_effects,
     factor_variation_pct = x$factor_variation_pct,
     time_level_variation_pct = x$time_level_variation_pct,
-    rank_shrinkage = rank_shrinkage
+    rank_shrinkage = rank_shrinkage,
+    # [[ ]], not $: `$` partial-matches, and with no `time_level` key it
+    # would return time_level_variation_pct's value instead.
+    time_level = x[["time_level"]] %||% "centered"
   )
 }
 

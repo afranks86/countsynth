@@ -229,7 +229,9 @@ model:
   # factor_variation_pct: 25     # expected swing of the unit-specific temporal
                                  # factors; unset = Gamma(20, 20)
   # time_level_variation_pct: 60 # expected swing of the common time level;
-                                 # unset = Gamma(1, 1), which is very diffuse
+                                 # unset = sd(log) 1.28, which is very diffuse
+  # time_level: centered         # centered (default) | uncentered (pre-2026-10
+                                 # parameterization, reproduces older fits)
   types:
     total:                       # name of the model type -> output subdirectory
       groups: [total]            # which outcome labels this type models
@@ -457,32 +459,35 @@ something estimated: a fixed multiple of the empirical scale would be
 reasonable for one grouping and degenerate for another.
 
 **The common time level.** `time_fe` carries the group-wide temporal level,
-shared by every unit, and has the same `Gamma(shape, shape)` form set by
-`time_level_variation_pct`. Unset it is `Gamma(1, 1)`, which is far more
-diffuse than it looks: `sd(log time_fe) = 1.28` — a central 95% range of ×0.03
-to ×3.7 — making it the loosest prior in the model.
+shared by every unit. The likelihood sees it only through
+`log(time_fe) + unit_fe_mu`, and `unit_fe_mu` has a flat prior, so the
+*overall* level of `time_fe` is not identified by the data — the same
+normalization problem two-way fixed effects has. By default
+(`time_level: centered`) it is resolved the way TWFE resolves it:
+`log(time_fe)` sums to zero over the periods of each group, so `unit_fe_mu`
+owns the level and `time_fe` reads as each period relative to the group's
+geometric mean. `time_level_variation_pct` sets the spread of those period
+effects; unset, `sd(log time_fe) = 1.28`, a central 95% range of ×0.08 to
+×12.3 about the group's level — the loosest prior in the model, and harmless
+now that the level no longer leans on it.
 
-That matters beyond prior belief. `unit_fe_mu` has a flat prior and the
-likelihood sees only `log(time_fe) + unit_fe_mu`, so the two trade off exactly
-and this prior is the *only* thing separating them. On the bundled example
-their posterior correlation is −0.99, and they are the worst-mixing parameters
-in the model. Tightening `time_level_variation_pct` narrows that ridge: at a
-50% swing (shape 6.6) the correlation falls to about −0.91 — and keeps
-falling as you tighten further, to about −0.82 at 25% — while `unit_fe_mu`'s
-worst R-hat drops from ~1.27 to ~1.02, and `time_fe`'s from ~1.24 to ~1.10
-with bulk ESS improving by something between 1.5× and 3×. Those figures come
-from short two-chain runs and move around a fair bit between replicates — the
-direction is reliable, the magnitudes are not.
-
-What it does *not* do is change the answer. `mu_ctrl`'s worst R-hat does not
-improve materially at any setting — across replicates it wanders between
-about 1.10 and 1.19 with no clear relation to the prior — because only the sum
-was ever identified — tightening reallocates
-it between two parameters rather than learning anything new. So this knob
-buys cleaner diagnostics on the nuisance parameters, not a better posterior,
-which is why the loose default is left alone. It is worth reaching for if you
-gate on all parameters rather than the `mu_ctrl` / `te` default, where the
-split otherwise dominates the verdict.
+Before centering became the default (still available as
+`time_level: uncentered`, which reproduces older fits draw for draw), the
+time level had an uncentered `Gamma(shape, shape)` prior — `Gamma(1, 1)` by
+default, with the same `sd(log) = 1.28` but left-skewed — and that prior was
+the *only* thing separating its level from `unit_fe_mu`. On the bundled panel
+the two correlated at −0.97 to −0.99 in the posterior, were the worst-mixing
+parameters in the model, and kept the sampler at its tree-depth cap.
+Centering removes that ridge by construction: in side-by-side fits on the
+bundled panel, gradient evaluations per iteration fell from the cap (1023) to
+about 190–250 at rank 1 and to about 520–545 at rank 8, with the worst-case
+ESS of `mu_ctrl` unchanged at rank 1 and up 1.5–3× at rank 8 (two seeds) —
+roughly 2.7–6× more effective samples per gradient. Posterior means of
+`mu_ctrl` moved by at most 0.004 on the log scale: where the level
+sits never changed the answer, only how hard the sampler had to work to get
+there. (Under `uncentered`, tightening `time_level_variation_pct` narrows the
+ridge — at 25% the correlation falls to about −0.82 — but only reallocates
+the level between two parameters; centering removes the choice.)
 
 Both knobs are read as an expected multiplicative swing and inverted exactly
 (`trigamma(shape) = log(1 + p/100)²`), not through the usual `1/sd²`

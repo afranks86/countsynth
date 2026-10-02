@@ -384,12 +384,29 @@ bpnmf_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 #'   rank chosen and should be checked by sweeping `ranks_to_test`.
 #' @param time_level_variation_pct Expected multiplicative variation of the
 #'   *common* time level (`time_fe`, shared by all units within a group), in
-#'   percent. `NULL` (default) keeps the historical `Gamma(1, 1)`, which is
-#'   very diffuse: `sd(log time_fe)` is 1.28, a central 95% range of x0.03 to
-#'   x3.7. Because `unit_fe_mu` has a flat prior and the likelihood sees only
-#'   `log(time_fe) + unit_fe_mu`, this prior is the only thing separating the
-#'   two, so tightening it improves identification as well as encoding a
-#'   belief.
+#'   percent: the spread of `log(time_fe)` across periods. `NULL` (default)
+#'   keeps the historical spread, `sd(log time_fe) = 1.28` -- very diffuse, a
+#'   central 95% range of x0.08 to x12.3 about the group's level. Under
+#'   `time_level = "uncentered"` it sets the `Gamma(shape, shape)` prior as it
+#'   always has; under `"centered"` it sets the sd of the centered (normal) log
+#'   time level to the same value. The spread matches, the shape does not: the
+#'   Gamma's log is left-skewed (x0.045 to x6.6 about its geometric mean at
+#'   the default), the centered prior symmetric.
+#' @param time_level How the common time level is identified against the
+#'   unit levels. The likelihood sees only `log(time_fe) + unit_fe_mu`, and
+#'   `unit_fe_mu` has a flat prior, so the overall level of `time_fe` is not
+#'   identified by the data -- the normalization problem two-way fixed
+#'   effects has. `"centered"` (default) resolves it the way TWFE does:
+#'   `log(time_fe)` sums to zero over periods within each group, so
+#'   `unit_fe_mu` owns the level and `time_fe` is each period relative to the
+#'   group's geometric mean. `"uncentered"` is the historical
+#'   parameterization, where only `time_fe`'s Gamma prior separates the two;
+#'   it reproduces fits made before centering became the default, draw for
+#'   draw. Neither changes `mu_ctrl` or any reported estimand, which do not
+#'   depend on where the level sits. What changes is sampling: on the bundled
+#'   panel the uncentered ridge correlated at -0.97 to -0.99 and kept the
+#'   sampler at its tree-depth cap, and centering cut gradient evaluations
+#'   per iteration 2-5x at equal or better ESS of `mu_ctrl`.
 #' @export
 bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
                              nb_disp = 1e-4, sample_disp = FALSE,
@@ -398,7 +415,9 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
                              treatment_effects = NULL,
                              factor_variation_pct = NULL,
                              time_level_variation_pct = NULL,
-                             rank_shrinkage = NULL) {
+                             rank_shrinkage = NULL,
+                             time_level = c("centered", "uncentered")) {
+  time_level <- match.arg(time_level)
   checkmate::assert_choice(outcome_distribution, c("NB", "Poisson"))
   types <- coerce_bpnmf_list(types, "bpnmf_type", "bpnmf_type", "types")
   checkmate::assert_list(types, types = "bpnmf_type")
@@ -455,7 +474,8 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
       treatment_effects = treatment_effects,
       factor_variation_pct = factor_variation_pct,
       time_level_variation_pct = time_level_variation_pct,
-      rank_shrinkage = rank_shrinkage
+      rank_shrinkage = rank_shrinkage,
+      time_level = time_level
     ),
     "bpnmf_model_opts"
   )
