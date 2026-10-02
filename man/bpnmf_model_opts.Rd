@@ -16,7 +16,8 @@ bpnmf_model_opts(
   factor_variation_pct = NULL,
   time_level_variation_pct = NULL,
   rank_shrinkage = NULL,
-  shared_curves = FALSE
+  shared_curves = FALSE,
+  time_level = c("centered", "uncentered")
 )
 }
 \arguments{
@@ -50,12 +51,14 @@ than that; lower it for smooth series.}
 
 \item{time_level_variation_pct}{Expected multiplicative variation of the
 \emph{common} time level (\code{time_fe}, shared by all units within a group), in
-percent. \code{NULL} (default) keeps the historical \code{Gamma(1, 1)}, which is
-very diffuse: \verb{sd(log time_fe)} is 1.28, a central 95\% range of x0.03 to
-x3.7. Because \code{unit_fe_mu} has a flat prior and the likelihood sees only
-\code{log(time_fe) + unit_fe_mu}, this prior is the only thing separating the
-two, so tightening it improves identification as well as encoding a
-belief.}
+percent: the spread of \code{log(time_fe)} across periods. \code{NULL} (default)
+keeps the historical spread, \verb{sd(log time_fe) = 1.28} -- very diffuse, a
+central 95\% range of x0.08 to x12.3 about the group's level. Under
+\code{time_level = "uncentered"} it sets the \code{Gamma(shape, shape)} prior as it
+always has; under \code{"centered"} it sets the sd of the centered (normal) log
+time level to the same value. The spread matches, the shape does not: the
+Gamma's log is left-skewed (x0.045 to x6.6 about its geometric mean at
+the default), the centered prior symmetric.}
 
 \item{rank_shrinkage}{Optional \code{\link[=bpnmf_rank_shrinkage_opts]{bpnmf_rank_shrinkage_opts()}} object
 shrinking unused factor components, so that an over-specified rank stops
@@ -73,6 +76,22 @@ their group's trend is shared. With \code{rank_shrinkage} the weights get
 crossed group / unit / group-by-unit effects around one global profile.
 A no-op for a type with a single group or at rank 1, where there is
 nothing to share. Default \code{FALSE}.}
+
+\item{time_level}{How the common time level is identified against the
+unit levels. The likelihood sees only \code{log(time_fe) + unit_fe_mu}, and
+\code{unit_fe_mu} has a flat prior, so the overall level of \code{time_fe} is not
+identified by the data -- the normalization problem two-way fixed
+effects has. \code{"centered"} (default) resolves it the way TWFE does:
+\code{log(time_fe)} sums to zero over periods within each group, so
+\code{unit_fe_mu} owns the level and \code{time_fe} is each period relative to the
+group's geometric mean. \code{"uncentered"} is the historical
+parameterization, where only \code{time_fe}'s Gamma prior separates the two;
+it reproduces fits made before centering became the default, draw for
+draw. Neither changes \code{mu_ctrl} or any reported estimand, which do not
+depend on where the level sits. What changes is sampling: on the bundled
+panel the uncentered ridge correlated at -0.97 to -0.99 and kept the
+sampler at its tree-depth cap, and centering cut gradient evaluations
+per iteration 2-5x at equal or better ESS of \code{mu_ctrl}.}
 }
 \description{
 Model options: likelihood family, model types, dispersion, treatment

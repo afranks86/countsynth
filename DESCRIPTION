@@ -46,7 +46,7 @@ Suggests:
     testthat (>= 3.0.0),
     vdiffr
 Additional_repositories: https://stan-dev.r-universe.dev
-SystemRequirements: CmdStan (>= 2.34)
+SystemRequirements: CmdStan (>= 2.36)
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 URL: https://github.com/afranks86/bpnmf-r

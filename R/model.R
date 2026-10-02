@@ -49,8 +49,20 @@ check_cmdstan <- function() {
            {.code cmdstanr::set_cmdstan_path()}."
     ))
   }
+  # The centered time level is a sum_to_zero_vector, which older stanc
+  # rejects with an error that says nothing about versions.
+  version <- tryCatch(cmdstanr::cmdstan_version(), error = function(e) NULL)
+  if (!is.null(version) &&
+    utils::compareVersion(version, CMDSTAN_MIN_VERSION) < 0) {
+    cli::cli_abort(c(
+      "bpnmf needs CmdStan >= {CMDSTAN_MIN_VERSION}; found {version}.",
+      i = "Update with {.code cmdstanr::install_cmdstan()}."
+    ))
+  }
   invisible(TRUE)
 }
+
+CMDSTAN_MIN_VERSION <- "2.36"
 
 #' Resolve chain settings from MCMC options
 #'

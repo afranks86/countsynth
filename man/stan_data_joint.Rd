@@ -17,7 +17,8 @@ stan_data_joint(
   time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
   time_fe_shape = DEFAULT_TIME_FE_SHAPE,
   rank_shrinkage = NULL,
-  shared_curves = FALSE
+  shared_curves = FALSE,
+  time_level = c("centered", "uncentered")
 )
 }
 \arguments{
@@ -48,6 +49,9 @@ leaves the component weights iid uniform on the simplex.}
 
 \item{shared_curves}{Share one set of temporal curves across groups (see
 \code{\link[=bpnmf_model_opts]{bpnmf_model_opts()}}). Ignored with a single group or at rank 1.}
+
+\item{time_level}{\code{"centered"} (default) or \code{"uncentered"}; see
+\code{\link[=bpnmf_model_opts]{bpnmf_model_opts()}}.}
 }
 \value{
 A named list for \code{cmdstanr}'s \code{data} argument, plus attributes

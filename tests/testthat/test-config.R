@@ -483,3 +483,16 @@ test_that("max_treedepth defaults to Stan's 10 and round-trips through YAML", {
   )))
   expect_equal(set$mcmc$max_treedepth, 12L)
 })
+
+test_that("time_level round-trips through YAML and defaults to centered", {
+  with_model <- function(block) {
+    sub("model:", paste0("model:\n", block), BASE_YAML, fixed = TRUE)
+  }
+  expect_equal(read_bpnmf_config(write_yaml_config(BASE_YAML))$model$time_level, "centered")
+  set <- read_bpnmf_config(write_yaml_config(with_model("  time_level: uncentered")))
+  expect_equal(set$model$time_level, "uncentered")
+  expect_error(
+    read_bpnmf_config(write_yaml_config(with_model("  time_level: pinned"))),
+    "should be one of"
+  )
+})

@@ -16,7 +16,9 @@ py_to_stan_params <- function(p, treated, sample_disp) {
     unit_fe_mu = p$state_fe_mu,
     unit_fe_sigma = p$state_fe_sigma,
     unit_fe_z = p$state_fe_z,
-    time_fe = p$time_fe,
+    # The Python model has the uncentered Gamma time level, so parity is
+    # checked against time_level = "uncentered", whose parameter this is.
+    time_fe_free = p$time_fe,
     # numpyro (D, K, R) -> Stan array[K, D] simplex[R]
     unit_weight = aperm(p$unit_weight, c(2, 1, 3))
   )
@@ -97,6 +99,7 @@ test_that("Stan joint model log-density matches numpyro up to a constant", {
       model_treated = first$model_treated,
       outcome_distribution = first$outcome_dist,
       nb_disp = 1e-4,
+      time_level = "uncentered",
       sample_disp = first$sample_disp,
       adjust_for_missingness = first$adjust,
       gen_ypred = FALSE

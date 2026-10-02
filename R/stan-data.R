@@ -18,6 +18,8 @@
 #'   `generated quantities`.
 #' @param shared_curves Share one set of temporal curves across groups (see
 #'   [bpnmf_model_opts()]). Ignored with a single group or at rank 1.
+#' @param time_level `"centered"` (default) or `"uncentered"`; see
+#'   [bpnmf_model_opts()].
 #' @param rank_shrinkage Optional [bpnmf_rank_shrinkage_opts()]; `NULL`
 #'   leaves the component weights iid uniform on the simplex.
 #' @param te_design Optional `bpnmf_te_design` (see [build_te_design()])
@@ -34,7 +36,9 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
                             time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
                             time_fe_shape = DEFAULT_TIME_FE_SHAPE,
                             rank_shrinkage = NULL,
-                            shared_curves = FALSE) {
+                            shared_curves = FALSE,
+                            time_level = c("centered", "uncentered")) {
+  time_level <- match.arg(time_level)
   if (!is.null(te_design) && !model_treated) {
     cli::cli_abort(
       "te_design requires {.field model_treated} = TRUE."
@@ -99,7 +103,11 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
     nb_disp = nb_disp,
     gen_ypred = as.integer(gen_ypred),
     time_fac_shape = time_fac_shape,
-    time_fe_shape = time_fe_shape
+    center_time = as.integer(time_level == "centered"),
+    time_fe_shape = time_fe_shape,
+    # The centered prior's sd is the Gamma's own sd(log), so one knob --
+    # time_level_variation_pct -- means the same spread either way.
+    time_fe_sd = sqrt(trigamma(time_fe_shape))
   )
   sd <- c(sd, rank_shrinkage_stan_fields(rank_shrinkage, rank))
   # Sharing needs more than one group to share across, and curves to share:

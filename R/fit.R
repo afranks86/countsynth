@@ -78,7 +78,11 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
       config$model$time_level_variation_pct, DEFAULT_TIME_FE_SHAPE
     ),
     rank_shrinkage = config$model$rank_shrinkage,
-    shared_curves = isTRUE(config$model$shared_curves)
+    shared_curves = isTRUE(config$model$shared_curves),
+    # A config built before this option existed gets the new default. [[ ]],
+    # not $: on such a config `$` would partial-match
+    # time_level_variation_pct.
+    time_level = config$model[["time_level"]] %||% "centered"
   )
   if (model_treated && sd$n_exposed == 0) {
     cli::cli_abort(
