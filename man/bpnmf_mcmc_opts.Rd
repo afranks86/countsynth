@@ -15,6 +15,7 @@ bpnmf_mcmc_opts(
   adapt_delta = 0.8,
   seed = 8675309,
   progress = TRUE,
+  max_treedepth = 10,
   gate_params = DEFAULT_GATE_PARAMS,
   convergence = bpnmf_convergence()
 )
@@ -36,6 +37,13 @@ iterations and retain \code{iter_sampling / thin}).}
 \item{seed}{Base RNG seed (cut-mode stage seeds derive from it).}
 
 \item{progress}{Show sampler progress.}
+
+\item{max_treedepth}{NUTS maximum tree depth (default 10, Stan's own).
+Each level doubles the most leapfrog steps a single iteration may take,
+so it is the remedy when the run reports a large share of transitions at
+the cap -- at up to twice the cost per iteration for each level added.
+Raising \code{adapt_delta} does the opposite: it shrinks the step size, so
+trajectories need more steps and hit the cap more often.}
 
 \item{gate_params}{Parameter-name prefixes the convergence gate is
 restricted to (divergences always count run-wide). Defaults to

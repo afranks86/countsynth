@@ -299,6 +299,10 @@ test_that("diagnostic context notes explain treedepth and reassure on divergence
   expect_match(hot_notes, "500 transitions", all = FALSE)
   expect_match(hot_notes, "does not bias the posterior", all = FALSE)
   expect_match(hot_notes, "large enough to be slowing", all = FALSE)
+  # The remedy is the tree-depth cap. Raising target_accept shrinks the step
+  # size and makes the cap bind more often, so it must not be offered as one.
+  expect_match(hot_notes, "Raising .*max_treedepth.* lets those", all = FALSE)
+  expect_match(hot_notes, "target_accept.* does not help here", all = FALSE)
 
   mild <- hot
   mild$treedepth_hits <- 1L
@@ -316,4 +320,20 @@ test_that("diagnostic context notes explain treedepth and reassure on divergence
     ),
     character()
   )
+})
+
+test_that("mcmc.max_treedepth reaches the sampler", {
+  skip_on_cran()
+  skip_if_no_cmdstan()
+  td <- withr::local_tempdir()
+  csv <- write_test_csv(make_test_data(), file.path(td, "panel.csv"))
+  cfg <- make_test_config(csv, file.path(td, "out"))
+  cfg$mcmc <- bpnmf_mcmc_opts(
+    auto_parallelism = FALSE, chains = 1, iter_warmup = 30, iter_sampling = 10,
+    thin = 1, seed = 3, progress = FALSE, max_treedepth = 7
+  )
+  fit <- bpnmf_fit(bpnmf_data(cfg, type = "both"), rank = 2, config = cfg)
+  expect_equal(fit$fit$metadata()$max_treedepth, 7)
+  # And the gate measures saturation against the configured cap, not 10.
+  expect_equal(convergence_gate(fit)$max_treedepth, 7)
 })

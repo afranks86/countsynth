@@ -153,6 +153,7 @@ run_stage2_component <- function(model, sd2, stage2_mcmc, seed_i, quiet = TRUE) 
     iter_sampling = stage2_mcmc$iter_sampling,
     thin = stage2_mcmc$thin,
     adapt_delta = stage2_mcmc$adapt_delta,
+    max_treedepth = stage2_mcmc$max_treedepth %||% 10L,
     seed = seed_i,
     refresh = 0,
     show_messages = FALSE,

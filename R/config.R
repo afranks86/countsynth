@@ -508,6 +508,12 @@ bpnmf_convergence <- function(rhat_warn = 1.01, rhat_fail = 1.05,
 #'   retention stride (both implementations run `iter_sampling` post-warmup
 #'   iterations and retain `iter_sampling / thin`).
 #' @param adapt_delta NUTS target acceptance probability in (0, 1).
+#' @param max_treedepth NUTS maximum tree depth (default 10, Stan's own).
+#'   Each level doubles the most leapfrog steps a single iteration may take,
+#'   so it is the remedy when the run reports a large share of transitions at
+#'   the cap -- at up to twice the cost per iteration for each level added.
+#'   Raising `adapt_delta` does the opposite: it shrinks the step size, so
+#'   trajectories need more steps and hit the cap more often.
 #' @param seed Base RNG seed (cut-mode stage seeds derive from it).
 #' @param progress Show sampler progress.
 #' @param gate_params Parameter-name prefixes the convergence gate is
@@ -523,7 +529,7 @@ bpnmf_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
                             chains = NULL, parallel_chains = NULL,
                             iter_warmup = 1000, iter_sampling = 2500,
                             thin = 10, adapt_delta = 0.8, seed = 8675309,
-                            progress = TRUE,
+                            progress = TRUE, max_treedepth = 10,
                             gate_params = DEFAULT_GATE_PARAMS,
                             convergence = bpnmf_convergence()) {
   checkmate::assert_flag(auto_parallelism)
@@ -539,6 +545,7 @@ bpnmf_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
   }
   checkmate::assert_int(seed)
   checkmate::assert_flag(progress)
+  checkmate::assert_int(max_treedepth, lower = 1)
   # Resolve here rather than relying on the signature default: the YAML
   # loader passes gate_params = NULL explicitly when the key is absent, and an
   # explicit NULL skips an R default.
@@ -556,6 +563,7 @@ bpnmf_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
       iter_warmup = as.integer(iter_warmup),
       iter_sampling = as.integer(iter_sampling), thin = as.integer(thin),
       adapt_delta = adapt_delta, seed = as.integer(seed), progress = progress,
+      max_treedepth = as.integer(max_treedepth),
       gate_params = gate_params, convergence = convergence
     ),
     "bpnmf_mcmc_opts"
@@ -931,7 +939,7 @@ print.bpnmf_config <- function(x, ...) {
     }
   }
   cli::cli_li(
-    "mcmc: warmup {x$mcmc$iter_warmup}, sampling {x$mcmc$iter_sampling}, thin {x$mcmc$thin}, adapt_delta {x$mcmc$adapt_delta}, seed {x$mcmc$seed}"
+    "mcmc: warmup {x$mcmc$iter_warmup}, sampling {x$mcmc$iter_sampling}, thin {x$mcmc$thin}, adapt_delta {x$mcmc$adapt_delta}, max_treedepth {x$mcmc$max_treedepth %||% 10L}, seed {x$mcmc$seed}"
   )
   invisible(x)
 }
