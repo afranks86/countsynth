@@ -247,6 +247,7 @@ mcmc:
   num_samples: 2500
   thinning: 10                   # retain num_samples / thinning draws
   target_accept: 0.8             # NUTS adapt_delta
+  max_treedepth: 10              # NUTS tree-depth cap (cmdstanr's name)
   random_seed: 8675309
   progress_bar: true
   gate_params: [mu_ctrl, te]     # gate on these prefixes (this is the default;
@@ -543,7 +544,11 @@ The older key name `aggregation` still loads, with a deprecation warning.
 **Sampling and the convergence gate.** The defaults (1000 warmup, 2500
 sampling, thin 10) are a real run, not a smoke test; expect a substantial
 wait on a full panel. Raise `target_accept` toward 0.95 if you see
-divergences. `converged` requires a PASS on both R-hat and ESS *and* a
+divergences. If instead a large share of transitions hit the maximum
+treedepth, raise `max_treedepth` (to 12, say), not `target_accept`: a higher
+target shrinks the step size and makes the cap bind more often. Treedepth
+hits slow mixing but do not bias the posterior, so they are reported
+alongside the gate rather than failing it. `converged` requires a PASS on both R-hat and ESS *and* a
 divergent-transition rate at or below `divergence_fail_fraction` — 1% of the
 retained draws by default, with 0 demanding none at all. The gate uses the
 rate rather than a raw count so that the threshold means the same thing

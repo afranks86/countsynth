@@ -468,3 +468,18 @@ test_that("shared_curves and the crossed-effect priors round-trip through YAML",
   expect_equal(cfg$model$rank_shrinkage$shared_unit_sd_prior, 2)
   expect_false(read_bpnmf_config(write_yaml_config(BASE_YAML))$model$shared_curves)
 })
+
+test_that("max_treedepth defaults to Stan's 10 and round-trips through YAML", {
+  expect_equal(bpnmf_mcmc_opts()$max_treedepth, 10L)
+  expect_equal(bpnmf_mcmc_opts(max_treedepth = 12)$max_treedepth, 12L)
+  expect_error(bpnmf_mcmc_opts(max_treedepth = 0), "not >= 1")
+  expect_error(bpnmf_mcmc_opts(max_treedepth = 2.5), "integerish")
+
+  absent <- read_bpnmf_config(write_yaml_config(BASE_YAML))
+  expect_equal(absent$mcmc$max_treedepth, 10L)
+  set <- read_bpnmf_config(write_yaml_config(sub(
+    "  target_accept: 0.85", "  target_accept: 0.85\n  max_treedepth: 12",
+    BASE_YAML, fixed = TRUE
+  )))
+  expect_equal(set$mcmc$max_treedepth, 12L)
+})

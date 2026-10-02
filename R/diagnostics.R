@@ -489,10 +489,16 @@ diagnostic_context_notes <- function(gate, thresholds = NULL) {
   }
 
   if (isTRUE(gate$treedepth_hits > 0)) {
+    # Not target_accept: raising it shrinks the step size, so trajectories
+    # need more steps and hit the cap more often. That is the remedy for
+    # divergences, and it makes this worse.
     action <- if (isTRUE(gate$treedepth_fraction >= 0.1)) {
-      "This share is large enough to be slowing the run down substantially;
-       raising {.field mcmc.target_accept} or simplifying/reparameterizing
-       the model can help mixing."
+      "This share is large enough to be slowing the run down substantially.
+       Raising {.field mcmc.max_treedepth} (e.g. to 12) lets those
+       trajectories finish, at up to twice the cost per iteration for each
+       level added; reparameterizing the model is the durable fix. Raising
+       {.field mcmc.target_accept} does not help here -- it shrinks the step
+       size, so trajectories need more steps and hit the cap more often."
     } else {
       "A share this small is common and rarely worth acting on."
     }
