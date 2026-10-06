@@ -22,7 +22,7 @@ make_te_data <- function() {
   arrays <- build_model_arrays(grid, groups)
   arrays$df <- grid
   arrays$type <- "test"
-  structure(arrays, class = c("bpnmf_data", "list"))
+  structure(arrays, class = c("countsynth_data", "list"))
 }
 
 test_that("covariate frame has one row per exposed cell in flat order", {
@@ -51,7 +51,7 @@ test_that("covariate frame has one row per exposed cell in flat order", {
 test_that("fixed-effect design matches model.matrix on the same variables", {
   data <- make_te_data()
   design <- build_te_design(
-    bpnmf_te_opts(formula = ~ 1 + event_time, standardize = FALSE), data
+    countsynth_te_opts(formula = ~ 1 + event_time, standardize = FALSE), data
   )
   frame <- te_covariate_frame(data)
   expect_equal(design$x_names, c("(Intercept)", "event_time"))
@@ -62,7 +62,7 @@ test_that("fixed-effect design matches model.matrix on the same variables", {
 test_that("random-effect terms carry levels, indices, and their own design", {
   data <- make_te_data()
   design <- build_te_design(
-    bpnmf_te_opts(
+    countsynth_te_opts(
       formula = ~ 1 + event_time + (1 + event_time | group),
       standardize = FALSE
     ),
@@ -81,7 +81,7 @@ test_that("random-effect terms carry levels, indices, and their own design", {
 test_that("interaction grouping factors are supported", {
   data <- make_te_data()
   design <- build_te_design(
-    bpnmf_te_opts(formula = ~ 1 + (1 | group:unit)), data
+    countsynth_te_opts(formula = ~ 1 + (1 | group:unit)), data
   )
   term <- design$terms[[1]]
   expect_equal(term$label, "group:unit")
@@ -95,7 +95,7 @@ test_that("standardization centers and scales continuous covariates only", {
   data <- make_te_data()
   covs <- data.frame(unit = data$units, dist = c(0, 10, 20, 30))
   design <- build_te_design(
-    bpnmf_te_opts(formula = ~ 1 + dist, covariates = covs), data
+    countsynth_te_opts(formula = ~ 1 + dist, covariates = covs), data
   )
   expect_named(design$centers, "dist")
   expect_equal(mean(design$frame$dist), 0, tolerance = 1e-12)
@@ -113,7 +113,7 @@ test_that("indicator covariates keep their 0/1 coding", {
   data <- make_te_data()
   covs <- data.frame(unit = data$units, flag = c(0, 0, 1, 0))
   design <- build_te_design(
-    bpnmf_te_opts(formula = ~ 1 + flag, covariates = covs), data
+    countsynth_te_opts(formula = ~ 1 + flag, covariates = covs), data
   )
   expect_false("flag" %in% names(design$centers))
   expect_setequal(design$frame$flag, c(0, 1))
@@ -126,7 +126,7 @@ test_that("a rank-deficient fixed design is refused", {
   covs <- data.frame(unit = data$units, dist = c(0, 10, 20, 20))
   expect_error(
     build_te_design(
-      bpnmf_te_opts(formula = ~ 1 + dist, covariates = covs), data
+      countsynth_te_opts(formula = ~ 1 + dist, covariates = covs), data
     ),
     "rank deficient"
   )
@@ -136,7 +136,7 @@ test_that("a rank-deficient fixed design is refused", {
   )
   expect_error(
     build_te_design(
-      bpnmf_te_opts(formula = ~ 0 + a + b, covariates = covs2), data
+      countsynth_te_opts(formula = ~ 0 + a + b, covariates = covs2), data
     ),
     "rank deficient"
   )
@@ -159,32 +159,32 @@ test_that("covariates join on whichever key columns they carry", {
 test_that("covariate problems are caught with actionable messages", {
   data <- make_te_data()
   expect_error(
-    build_te_design(bpnmf_te_opts(formula = ~nosuchvar), data),
+    build_te_design(countsynth_te_opts(formula = ~nosuchvar), data),
     "neither a built-in variable"
   )
   expect_error(
-    build_te_design(bpnmf_te_opts(formula = ~ 1 + (1 | event_time)), data),
+    build_te_design(countsynth_te_opts(formula = ~ 1 + (1 | event_time)), data),
     "must be categorical"
   )
   expect_error(
-    build_te_design(bpnmf_te_opts(formula = ~time), data),
+    build_te_design(countsynth_te_opts(formula = ~time), data),
     "Date column"
   )
   # Missing on some exposed cells: covariate defined for one unit only.
   partial <- data.frame(unit = data$units[[1]], z = 1)
   expect_error(
     build_te_design(
-      bpnmf_te_opts(formula = ~z, covariates = partial), data
+      countsynth_te_opts(formula = ~z, covariates = partial), data
     ),
     "is missing on"
   )
   expect_error(
-    bpnmf_te_opts(covariates = data.frame(unit = "A", z = 1)),
+    countsynth_te_opts(covariates = data.frame(unit = "A", z = 1)),
     "without a .*formula"
   )
   expect_error(
     build_te_design(
-      bpnmf_te_opts(
+      countsynth_te_opts(
         formula = ~z,
         covariates = data.frame(nokey = "A", z = 1)
       ),
@@ -197,7 +197,7 @@ test_that("covariate problems are caught with actionable messages", {
 test_that("te_stan_fields lays out the ragged random-effect blocks", {
   data <- make_te_data()
   design <- build_te_design(
-    bpnmf_te_opts(
+    countsynth_te_opts(
       formula = ~ 1 + event_time + (1 + event_time | group) + (1 | unit),
       standardize = FALSE
     ),
@@ -245,15 +245,15 @@ test_that("no design gives the legacy stan-data block", {
 
 test_that("a design requires model_treated", {
   data <- make_te_data()
-  design <- build_te_design(bpnmf_te_opts(formula = ~ 1 + event_time), data)
+  design <- build_te_design(countsynth_te_opts(formula = ~ 1 + event_time), data)
   expect_error(
     stan_data_joint(data, rank = 2, model_treated = FALSE, te_design = design),
     "requires .*model_treated"
   )
   expect_error(
-    bpnmf_model_opts(
+    countsynth_model_opts(
       model_treated = FALSE,
-      treatment_effects = bpnmf_te_opts(formula = ~event_time)
+      treatment_effects = countsynth_te_opts(formula = ~event_time)
     ),
     "requires .*model_treated"
   )
@@ -280,9 +280,9 @@ test_that("the YAML loader round-trips a treatment_effects section", {
     "    standardize: false",
     "    coef_prior_scale: 2.5"
   ), yml)
-  config <- read_bpnmf_config(yml)
+  config <- read_countsynth_config(yml)
   te <- config$model$treatment_effects
-  expect_s3_class(te, "bpnmf_te_opts")
+  expect_s3_class(te, "countsynth_te_opts")
   expect_false(te$standardize)
   expect_equal(te$coef_prior_scale, 2.5)
   expect_equal(
@@ -309,5 +309,5 @@ test_that("unknown treatment_effects keys are rejected", {
     "    formula: ~ event_time",
     "    bogus_key: 1"
   ), yml)
-  expect_error(read_bpnmf_config(yml), "bogus_key")
+  expect_error(read_countsynth_config(yml), "bogus_key")
 })

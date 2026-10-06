@@ -56,18 +56,18 @@ ppc_plot_dims <- function(n_facets, ncol,
 #' `figs/<group>/` when more than one group is reported; cross-group figures
 #' and all tables go directly under `figs/`.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param output_dir Run directory; artifacts go to `<output_dir>/figs/`.
 #' @param target_unit Headline unit (auto-detected when `NULL`).
 #' @param groups Groups to render per-unit figures for (`NULL` = all).
 #' @param figures Character vector of figure names to render (see
-#'   [bpnmf_output_opts()]); `NULL` renders everything, `character()` renders
+#'   [countsynth_output_opts()]); `NULL` renders everything, `character()` renders
 #'   tables only.
-#' @param aggregate_units List of [bpnmf_aggregate_unit()] specs.
+#' @param aggregate_units List of [countsynth_aggregate_unit()] specs.
 #' @param ppc_draws Alternative draws frame for the PPC suite only (cut mode:
 #'   the stage-1 PPC frame).
 #' @param ppc_units,ppc_exclude_units,ppc_acf_lags,ppc_unit_corr_max_time
-#'   PPC options (see [bpnmf_output_opts()]).
+#'   PPC options (see [countsynth_output_opts()]).
 #' @param fit_gap_per_unit Also render fit/gap for every treated unit
 #'   (restricted to the `"total"` group).
 #' @param interval_aggregates Include the `aggregate_units` in `interval.png`,
@@ -78,17 +78,17 @@ ppc_plot_dims <- function(n_facets, ncol,
 #'   are the target unit's slice of the by-unit table, so this is off by
 #'   default when `target_unit` is not set explicitly.
 #' @param html_tables Also write `summary_table.html` and
-#'   `summary_table_by_unit.html` via [bpnmf_gt_table()]. Needs the `gt`
+#'   `summary_table_by_unit.html` via [countsynth_gt_table()]. Needs the `gt`
 #'   package; warns and skips when it is missing.
-#' @param fit Optional `bpnmf_fit` / `bpnmf_cut_fit` the draws came from.
+#' @param fit Optional `countsynth_fit` / `countsynth_cut_fit` the draws came from.
 #'   Required for the `"te_regression"` and `"rank_shrinkage"` figures, which
 #'   read the treatment-effect design and the factor block rather than the
 #'   draws frame; without it those figures are skipped.
-#' @inheritParams bpnmf_output_opts
+#' @inheritParams countsynth_output_opts
 #' @return Invisible list with `summary`, `per_unit`, `detail`,
 #'   `target_unit`, `figs_dir`, `treated_units`.
 #' @export
-bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
+countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
                          figures = NULL, aggregate_units = NULL,
                          ppc_draws = NULL, ppc_units = NULL,
                          ppc_exclude_units = NULL, ppc_acf_lags = NULL,
@@ -158,20 +158,20 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
       slug <- unit_slug(unit)
       if ("unit_fit" %in% selected) {
         save_plot(
-          bpnmf_unit_fit_plot(quantiles, unit, grp),
+          countsynth_unit_fit_plot(quantiles, unit, grp),
           file.path(grp_dir, sprintf("fit_%s.png", slug))
         )
       }
       if ("unit_gap" %in% selected) {
         save_plot(
-          bpnmf_unit_gap_plot(quantiles, unit, grp),
+          countsynth_unit_gap_plot(quantiles, unit, grp),
           file.path(grp_dir, sprintf("gap_%s.png", slug))
         )
       }
     }
     if ("raw_rate" %in% selected) {
       save_plot(
-        bpnmf_raw_rate_plot(
+        countsynth_raw_rate_plot(
           draws,
           group = grp, separate_unit = target_unit,
           rate_multiplier = rate_normalizer,
@@ -188,7 +188,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     # shown in its own band rather than ranked among them; `interval_aggregates
     # = FALSE` drops it from the figure entirely.
     save_plot(
-      bpnmf_interval_plot(
+      countsynth_interval_plot(
         if (interval_aggregates) reporting else draws,
         estimand = "ratio", method = "mu",
         rate_normalizer = rate_normalizer,
@@ -202,7 +202,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
   }
   if ("group_comparison" %in% selected) {
     save_plot(
-      bpnmf_group_comparison_plot(
+      countsynth_group_comparison_plot(
         draws,
         rate_multiplier = rate_normalizer,
         denominator_label = denominator_label
@@ -222,7 +222,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
       )
     }
     write_table_csv(
-      bpnmf_te_coef_table(fit), file.path(te_dir, "te_coefficients.csv")
+      countsynth_te_coef_table(fit), file.path(te_dir, "te_coefficients.csv")
     )
   }
   if ("ppc" %in% selected) {
@@ -232,7 +232,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     if (!is.null(ppc_draws) && !is.null(aggregate_units)) {
       ppc_source <- add_aggregate_units(ppc_draws, aggregate_units)
     }
-    ppc <- bpnmf_ppc_plots(
+    ppc <- countsynth_ppc_plots(
       ppc_source,
       acf_lags = ppc_acf_lags %||% 1,
       max_treat_date = ppc_unit_corr_max_time,
@@ -267,11 +267,11 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
       save_plot(rank_figs[[nm]], file.path(ppc_dir, paste0(nm, ".png")))
     }
     write_table_csv(
-      bpnmf_component_weight_summary(fit),
+      countsynth_component_weight_summary(fit),
       file.path(ppc_dir, "rank_component_weight.csv")
     )
     write_table_csv(
-      bpnmf_eff_rank_summary(fit),
+      countsynth_eff_rank_summary(fit),
       file.path(ppc_dir, "rank_eff_rank.csv")
     )
   }
@@ -279,13 +279,13 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
   # Tables: always written, never gated by `figures`.
   # Returned (and printed) but not written: its rows are the target unit's
   # slice of summary_table_by_unit.csv below.
-  summary_tbl <- bpnmf_summary_table(
+  summary_tbl <- countsynth_summary_table(
     reporting, target_unit,
     rate_normalizer = rate_normalizer,
     denominator_label = denominator_label,
     denominator_time_unit = denominator_time_unit
   )
-  by_unit_tbl <- bpnmf_summary_table_by_unit(
+  by_unit_tbl <- countsynth_summary_table_by_unit(
     reporting, treated_units,
     rate_normalizer = rate_normalizer,
     denominator_label = denominator_label,
@@ -294,11 +294,11 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
   write_table_csv(
     by_unit_tbl, file.path(figs_dir, "summary_table_by_unit.csv")
   )
-  detail <- bpnmf_expected_vs_observed(reporting, target_unit)
+  detail <- countsynth_expected_vs_observed(reporting, target_unit)
   write_table_csv(
     detail, file.path(figs_dir, "expected_vs_observed.csv")
   )
-  per_unit <- bpnmf_post_treatment_summary(reporting)
+  per_unit <- countsynth_post_treatment_summary(reporting)
   write_table_csv(
     per_unit, file.path(figs_dir, "post_treatment_summary.csv")
   )
@@ -324,7 +324,7 @@ bpnmf_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
     cli::cli_h1("Post-treatment effect by unit")
     print(as.data.frame(drop_unused_imputed(by_unit_tbl)), row.names = FALSE)
     # The terminal table can't carry the gt version's spanners or its
-    # column-anchored footnote (see bpnmf_gt_table()), so say in words what
+    # column-anchored footnote (see countsynth_gt_table()), so say in words what
     # "Pct Change" estimates -- and, with a denominator, what Expected
     # assumes. Without a denominator nothing is being held fixed, so there is
     # no such assumption to caveat.

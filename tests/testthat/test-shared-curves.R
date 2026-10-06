@@ -10,7 +10,7 @@ sc_data <- function(groups = c("g1", "g2")) {
   arrays <- build_model_arrays(df, groups)
   arrays$df <- df
   arrays$type <- "both"
-  structure(arrays, class = c("bpnmf_data", "list"))
+  structure(arrays, class = c("countsynth_data", "list"))
 }
 
 # Draws come back through CmdStan's CSV, so rebuilt values agree only to its
@@ -19,7 +19,7 @@ sc_data <- function(groups = c("g1", "g2")) {
 SC_TOL <- 1e-5
 
 sc_fit <- function(sd) {
-  bpnmf_stan_model("joint")$sample(
+  countsynth_stan_model("joint")$sample(
     data = sd, chains = 1, iter_warmup = 120, iter_sampling = 40, seed = 7,
     refresh = 0, show_messages = FALSE, show_exceptions = FALSE
   )
@@ -76,7 +76,7 @@ test_that("share_fac is set only when there is something to share", {
 
   sd <- stan_data_joint(
     two, rank = 3, shared_curves = TRUE,
-    rank_shrinkage = bpnmf_rank_shrinkage_opts(
+    rank_shrinkage = countsynth_rank_shrinkage_opts(
       group_sd_prior = 0.3, shared_unit_sd_prior = 0.7
     )
   )
@@ -85,13 +85,13 @@ test_that("share_fac is set only when there is something to share", {
 })
 
 test_that("shared_curves and the crossed-effect priors validate", {
-  expect_false(bpnmf_model_opts()$shared_curves)
-  expect_true(bpnmf_model_opts(shared_curves = TRUE)$shared_curves)
-  expect_error(bpnmf_model_opts(shared_curves = "yes"), "flag")
-  o <- bpnmf_rank_shrinkage_opts()
+  expect_false(countsynth_model_opts()$shared_curves)
+  expect_true(countsynth_model_opts(shared_curves = TRUE)$shared_curves)
+  expect_error(countsynth_model_opts(shared_curves = "yes"), "flag")
+  o <- countsynth_rank_shrinkage_opts()
   expect_equal(o$group_sd_prior, 0.5)
   expect_equal(o$shared_unit_sd_prior, 1)
-  expect_error(bpnmf_rank_shrinkage_opts(group_sd_prior = 0), "not >= ")
+  expect_error(countsynth_rank_shrinkage_opts(group_sd_prior = 0), "not >= ")
   # The YAML round trip lives in test-config.R, beside the helpers it needs.
 })
 
@@ -123,7 +123,7 @@ test_that("shared curves with rank shrinkage: crossed effects around one profile
   skip_if_no_cmdstan()
   sd <- stan_data_joint(
     sc_data(), rank = 4, gen_ypred = FALSE, shared_curves = TRUE,
-    rank_shrinkage = bpnmf_rank_shrinkage_opts()
+    rank_shrinkage = countsynth_rank_shrinkage_opts()
   )
   fit <- sc_fit(sd)
   sizes <- fit$metadata()$stan_variable_sizes
@@ -154,10 +154,10 @@ test_that("shared curves with rank shrinkage: crossed effects around one profile
   expect_lt(err, SC_TOL)
 
   # The report gains a global row ahead of the groups.
-  obj <- new_bpnmf_class(
-    list(fit = fit, stan_data = sd, data = sc_data(), rank = 4L), "bpnmf_fit"
+  obj <- new_countsynth_class(
+    list(fit = fit, stan_data = sd, data = sc_data(), rank = 4L), "countsynth_fit"
   )
-  eff <- bpnmf_eff_rank_summary(obj)
+  eff <- countsynth_eff_rank_summary(obj)
   expect_equal(eff$group, c("(global)", "g1", "g2"))
   expect_true(all(eff$median >= 1 & eff$median <= 4))
 })

@@ -13,7 +13,7 @@
 # `warn_variational_stage1()`.
 
 resolve_cut_settings <- function(config) {
-  cut <- config$cut %||% bpnmf_cut_opts()
+  cut <- config$cut %||% countsynth_cut_opts()
   seed <- config$mcmc$seed
   selection_seed <- cut$selection_seed %||% (seed + 2L)
   stage2_seed <- cut$stage2_seed %||% (seed + 3L)
@@ -162,28 +162,28 @@ run_stage2_component <- function(model, sd2, stage2_mcmc, seed_i, quiet = TRUE) 
   fit
 }
 
-#' Fit the bpnmf model with two-stage cut inference
+#' Fit the countsynth model with two-stage cut inference
 #'
-#' @param data A `bpnmf_data` object.
+#' @param data A `countsynth_data` object.
 #' @param rank Factorization rank (defaults to the type's first
 #'   `ranks_to_test`).
-#' @param config The [bpnmf_config()] object; `config$cut` supplies the cut
-#'   settings (defaults from [bpnmf_cut_opts()] otherwise). Set
+#' @param config The [countsynth_config()] object; `config$cut` supplies the cut
+#'   settings (defaults from [countsynth_cut_opts()] otherwise). Set
 #'   `config$cut$stage1_method = "variational"` to fit stage 1 with ADVI
 #'   instead of NUTS -- much faster, but approximate and ungated; see
-#'   [bpnmf_cut_opts()].
+#'   [countsynth_cut_opts()].
 #' @param parallel `"none"` (sequential stage-2 loop, default) or `"future"`
 #'   (requires \pkg{furrr}; stage-2 components run on the active future plan
 #'   with one parallel chain each).
-#' @return A `bpnmf_cut_fit` object with the pooled tidy `draws` frame
+#' @return A `countsynth_cut_fit` object with the pooled tidy `draws` frame
 #'   (provenance columns `cut_component`, `stage1_draw`, `stage1_chain`,
-#'   `stage1_iteration`), the stage-1 `bpnmf_fit`, a `stage1_ppc` draws frame
+#'   `stage1_iteration`), the stage-1 `countsynth_fit`, a `stage1_ppc` draws frame
 #'   for the PPC suite, per-component records, and the convergence `manifest`.
 #' @export
-bpnmf_cut_fit <- function(data, rank = NULL, config,
+countsynth_cut_fit <- function(data, rank = NULL, config,
                           parallel = c("none", "future")) {
-  checkmate::assert_class(data, "bpnmf_data")
-  checkmate::assert_class(config, "bpnmf_config")
+  checkmate::assert_class(data, "countsynth_data")
+  checkmate::assert_class(config, "countsynth_config")
   parallel <- match.arg(parallel)
   if (!identical(config$model$inference_mode, "cut")) {
     cli::cli_warn(
@@ -205,7 +205,7 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
   cli::cli_alert_info(
     "Cut stage 1: fitting baseline model (rank {rank}, {fit_method_label(stage1_method)})"
   )
-  stage1 <- bpnmf_fit(
+  stage1 <- countsynth_fit(
     data,
     rank = rank, config = config, model_treated = FALSE, gen_ypred = TRUE,
     method = stage1_method, variational = settings$stage1_variational
@@ -220,14 +220,14 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
     NULL
   }
 
-  stage1_ppc <- bpnmf_draws(stage1)
+  stage1_ppc <- countsynth_draws(stage1)
 
   refs <- select_stage1_draws(
     ci$n_chains, ci$per_chain, settings$num_stage1_draws,
     settings$selection_seed
   )
 
-  model2 <- bpnmf_stan_model("cut_stage2")
+  model2 <- countsynth_stan_model("cut_stage2")
   exposed_cell <- as.integer(stage1$stan_data$exp_cell)
   cell_unit <- as.integer(stage1$stan_data$cell_unit)
 
@@ -375,12 +375,12 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
   attr(draws, "units") <- data$units
   attr(draws, "times") <- data$times
   attr(draws, "has_denominator") <- "denominator" %in% names(data$df)
-  class(draws) <- c("bpnmf_draws", class(draws))
+  class(draws) <- c("countsynth_draws", class(draws))
 
   te_draws <- NULL
   if (!is.null(te_design)) {
     te_draws <- dplyr::bind_rows(component_te_frames)
-    class(te_draws) <- c("bpnmf_te_draws", class(te_draws))
+    class(te_draws) <- c("countsynth_te_draws", class(te_draws))
   }
 
   all_converged <- all(vapply(component_records, function(r) isTRUE(r$converged), logical(1)))
@@ -401,7 +401,7 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
     )
   )
 
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       draws = draws,
       te_draws = te_draws,
@@ -419,15 +419,15 @@ bpnmf_cut_fit <- function(data, rank = NULL, config,
       stage1_method = stage1_method,
       fit = stage1$fit
     ),
-    "bpnmf_cut_fit"
+    "countsynth_cut_fit"
   )
 }
 
 #' Terminal table of per-component cut diagnostics
-#' @param x A `bpnmf_cut_fit` object.
+#' @param x A `countsynth_cut_fit` object.
 #' @export
 cut_component_table <- function(x) {
-  checkmate::assert_class(x, "bpnmf_cut_fit")
+  checkmate::assert_class(x, "countsynth_cut_fit")
   recs <- x$component_records
   fmt <- "%9s %8s %10s %12s %5s %8s  %s"
   cli::cli_h1("Cut stage-2 components")

@@ -7,12 +7,12 @@
 build_te_design(opts, data)
 }
 \arguments{
-\item{opts}{A \code{\link[=bpnmf_te_opts]{bpnmf_te_opts()}} object with a non-\code{NULL} formula.}
+\item{opts}{A \code{\link[=countsynth_te_opts]{countsynth_te_opts()}} object with a non-\code{NULL} formula.}
 
-\item{data}{A \code{bpnmf_data} object.}
+\item{data}{A \code{countsynth_data} object.}
 }
 \value{
-A \code{bpnmf_te_design} object.
+A \code{countsynth_te_design} object.
 }
 \description{
 Parses the lme4-style formula in \code{opts}, evaluates it on the exposed-cell

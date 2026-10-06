@@ -21,23 +21,23 @@ te_fit_data <- function() {
   arrays <- build_model_arrays(grid, groups)
   arrays$df <- grid
   arrays$type <- "both"
-  structure(arrays, class = c("bpnmf_data", "list"))
+  structure(arrays, class = c("countsynth_data", "list"))
 }
 
 te_fit_config <- function(data, te_opts, inference_mode = NULL) {
-  bpnmf_config(
+  countsynth_config(
     input_file = "unused.csv", output_dir = tempfile(),
-    schema = bpnmf_schema(
+    schema = countsynth_schema(
       unit_col = "unit", time_col = "time", treatment_col = "treatment",
-      outcomes = list(bpnmf_outcome("outcome_g1", "g1"))
+      outcomes = list(countsynth_outcome("outcome_g1", "g1"))
     ),
-    model = bpnmf_model_opts(
+    model = countsynth_model_opts(
       outcome_distribution = "NB",
-      types = list(both = bpnmf_type(groups = data$groups, ranks_to_test = 2)),
+      types = list(both = countsynth_type(groups = data$groups, ranks_to_test = 2)),
       inference_mode = inference_mode,
       treatment_effects = te_opts
     ),
-    mcmc = bpnmf_mcmc_opts(
+    mcmc = countsynth_mcmc_opts(
       auto_parallelism = FALSE, chains = 1, parallel_chains = 1,
       iter_warmup = 100, iter_sampling = 100, thin = 1, seed = 99,
       progress = FALSE
@@ -68,17 +68,17 @@ test_that("joint fit's te equals the R-side design reconstruction", {
   skip_on_cran()
   skip_if_no_cmdstan()
   data <- te_fit_data()
-  opts <- bpnmf_te_opts(
+  opts <- countsynth_te_opts(
     formula = ~ 1 + event_time + (1 + event_time | group) + (1 | unit)
   )
-  fit <- bpnmf_fit(data, rank = 2, config = te_fit_config(data, opts))
+  fit <- countsynth_fit(data, rank = 2, config = te_fit_config(data, opts))
 
   expect_equal(fit$stan_data$te_reg, 1L)
   expect_false(is.null(fit$te_design))
 
   te_stan <- extract_var_matrix(fit$fit, "te")
   recon <- reconstruct_te(
-    fit$te_design, bpnmf_te_draws(fit),
+    fit$te_design, countsynth_te_draws(fit),
     extract_var_matrix(fit$fit, "treatment_kt_z"),
     as.numeric(extract_var_matrix(fit$fit, "treatment_it_scale"))
   )
@@ -91,8 +91,8 @@ test_that("the regression replaces the legacy hierarchy in the sampler", {
   skip_on_cran()
   skip_if_no_cmdstan()
   data <- te_fit_data()
-  opts <- bpnmf_te_opts(formula = ~ 1 + event_time)
-  fit <- bpnmf_fit(data, rank = 2, config = te_fit_config(data, opts))
+  opts <- countsynth_te_opts(formula = ~ 1 + event_time)
+  fit <- countsynth_fit(data, rank = 2, config = te_fit_config(data, opts))
   vars <- fit$fit$metadata()$stan_variables
   expect_true(all(c("te_beta", "te") %in% vars))
   # Legacy blocks are declared zero-size, and CmdStan omits zero-size
@@ -107,24 +107,24 @@ test_that("without a formula the legacy treatment block is used", {
   skip_on_cran()
   skip_if_no_cmdstan()
   data <- te_fit_data()
-  fit <- bpnmf_fit(data, rank = 2, config = te_fit_config(data, NULL))
+  fit <- countsynth_fit(data, rank = 2, config = te_fit_config(data, NULL))
   expect_equal(fit$stan_data$te_reg, 0L)
   expect_null(fit$te_design)
   legacy <- posterior::as_draws_matrix(
     fit$fit$draws(variables = "category_treatment_effect")
   )
   expect_equal(ncol(legacy), length(data$groups))
-  expect_error(bpnmf_te_draws(fit), "no treatment-effect regression")
+  expect_error(countsynth_te_draws(fit), "no treatment-effect regression")
 })
 
 test_that("te draws and summaries have the documented shape", {
   skip_on_cran()
   skip_if_no_cmdstan()
   data <- te_fit_data()
-  opts <- bpnmf_te_opts(formula = ~ 1 + event_time + (1 + event_time | group))
-  fit <- bpnmf_fit(data, rank = 2, config = te_fit_config(data, opts))
+  opts <- countsynth_te_opts(formula = ~ 1 + event_time + (1 + event_time | group))
+  fit <- countsynth_fit(data, rank = 2, config = te_fit_config(data, opts))
 
-  te <- bpnmf_te_draws(fit)
+  te <- countsynth_te_draws(fit)
   expect_true(all(
     c(".draw", ".chain", ".iteration", "term", "predictor", "level", "value")
       %in% names(te)
@@ -135,7 +135,7 @@ test_that("te draws and summaries have the documented shape", {
   expect_true(all(is.na(te$level[te$term == "(fixed)"])))
   expect_setequal(unique(te$term), c("(fixed)", "group"))
 
-  tbl <- bpnmf_te_coef_table(fit)
+  tbl <- countsynth_te_coef_table(fit)
   expect_equal(nrow(tbl), n_coef)
   expect_true(all(tbl$p_positive >= 0 & tbl$p_positive <= 1))
   expect_true(all(tbl$lower_95 <= tbl$median & tbl$median <= tbl$upper_95))
@@ -145,16 +145,16 @@ test_that("regression summaries and plots cover population and by-level", {
   skip_on_cran()
   skip_if_no_cmdstan()
   data <- te_fit_data()
-  opts <- bpnmf_te_opts(formula = ~ 1 + event_time + (1 + event_time | group))
-  fit <- bpnmf_fit(data, rank = 2, config = te_fit_config(data, opts))
+  opts <- countsynth_te_opts(formula = ~ 1 + event_time + (1 + event_time | group))
+  fit <- countsynth_fit(data, rank = 2, config = te_fit_config(data, opts))
 
-  pop <- bpnmf_te_regression_summary(fit, predictor = "event_time")
+  pop <- countsynth_te_regression_summary(fit, predictor = "event_time")
   expect_equal(sort(unique(pop$x)), c(0, 1, 2))
   expect_equal(unique(pop$level), "population")
   expect_true(all(pop$lower_95 <= pop$lower_67))
   expect_true(all(pop$upper_67 <= pop$upper_95))
 
-  by_group <- bpnmf_te_regression_summary(
+  by_group <- countsynth_te_regression_summary(
     fit,
     predictor = "event_time", by = "group"
   )
@@ -162,7 +162,7 @@ test_that("regression summaries and plots cover population and by-level", {
   # The percent scale transforms each draw before summarizing, so it agrees
   # with transforming the log-scale summary only up to the interpolation
   # between the two central draws (an even draw count here).
-  pct <- bpnmf_te_regression_summary(
+  pct <- countsynth_te_regression_summary(
     fit,
     predictor = "event_time", scale = "percent"
   )
@@ -170,20 +170,20 @@ test_that("regression summaries and plots cover population and by-level", {
   expect_equal(order(pct$median), order(pop$median))
 
   expect_s3_class(
-    bpnmf_te_regression_plot(fit, predictor = "event_time"), "ggplot"
+    countsynth_te_regression_plot(fit, predictor = "event_time"), "ggplot"
   )
   expect_s3_class(
-    bpnmf_te_regression_plot(fit, predictor = "event_time", by = "group"),
+    countsynth_te_regression_plot(fit, predictor = "event_time", by = "group"),
     "ggplot"
   )
-  expect_s3_class(bpnmf_te_coef_plot(fit, terms = "all"), "ggplot")
+  expect_s3_class(countsynth_te_coef_plot(fit, terms = "all"), "ggplot")
   expect_s3_class(plot(fit, which = "te_regression"), "ggplot")
   expect_error(
-    bpnmf_te_regression_plot(fit, predictor = "event_time", by = "nosuch"),
+    countsynth_te_regression_plot(fit, predictor = "event_time", by = "nosuch"),
     "not a random-effect grouping term"
   )
   expect_error(
-    bpnmf_te_regression_plot(fit, predictor = "group"),
+    countsynth_te_regression_plot(fit, predictor = "group"),
     "categorical"
   )
 })
@@ -192,15 +192,15 @@ test_that("cut mode pools coefficient draws with matching provenance", {
   skip_on_cran()
   skip_if_no_cmdstan()
   data <- te_fit_data()
-  opts <- bpnmf_te_opts(formula = ~ 1 + event_time + (1 + event_time | group))
+  opts <- countsynth_te_opts(formula = ~ 1 + event_time + (1 + event_time | group))
   config <- te_fit_config(data, opts, inference_mode = "cut")
-  config$cut <- bpnmf_cut_opts(
+  config$cut <- countsynth_cut_opts(
     num_stage1_draws = 2, stage2_draws_per_component = 5,
     stage2_mcmc = list(num_warmup = 100, num_samples = 100)
   )
-  fit <- suppressWarnings(bpnmf_cut_fit(data, rank = 2, config = config))
+  fit <- suppressWarnings(countsynth_cut_fit(data, rank = 2, config = config))
 
-  te <- bpnmf_te_draws(fit)
+  te <- countsynth_te_draws(fit)
   expect_true(all(
     c("cut_component", "stage1_draw", "stage1_chain", "stage1_iteration")
       %in% names(te)
@@ -211,7 +211,7 @@ test_that("cut mode pools coefficient draws with matching provenance", {
   expect_setequal(unique(te$cut_component), unique(fit$draws$cut_component))
   expect_equal(length(unique(te$.draw)), 2L * 5L)
   expect_s3_class(
-    bpnmf_te_regression_plot(fit, predictor = "event_time", by = "group"),
+    countsynth_te_regression_plot(fit, predictor = "event_time", by = "group"),
     "ggplot"
   )
 })

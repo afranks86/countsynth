@@ -33,24 +33,24 @@ make_test_data <- function(seed = 42) {
 
 make_test_config <- function(df_path, output_dir,
                              inference_mode = NULL, ...) {
-  bpnmf_config(
+  countsynth_config(
     input_file = df_path,
     output_dir = output_dir,
-    schema = bpnmf_schema(
+    schema = countsynth_schema(
       unit_col = "unit", time_col = "time", treatment_col = "treatment",
       outcomes = list(
-        bpnmf_outcome("outcome_g1", "g1", denominator_col = "denom_g1"),
-        bpnmf_outcome("outcome_g2", "g2", denominator_col = "denom_g2")
+        countsynth_outcome("outcome_g1", "g1", denominator_col = "denom_g1"),
+        countsynth_outcome("outcome_g2", "g2", denominator_col = "denom_g2")
       )
     ),
-    model = bpnmf_model_opts(
+    model = countsynth_model_opts(
       outcome_distribution = "NB",
       types = list(
-        both = bpnmf_type(groups = c("g1", "g2"), ranks_to_test = 2)
+        both = countsynth_type(groups = c("g1", "g2"), ranks_to_test = 2)
       ),
       inference_mode = inference_mode
     ),
-    mcmc = bpnmf_mcmc_opts(
+    mcmc = countsynth_mcmc_opts(
       auto_parallelism = FALSE, chains = 2, parallel_chains = 2,
       iter_warmup = 150, iter_sampling = 150, thin = 1, seed = 99
     ),
@@ -94,6 +94,6 @@ make_draws_frame <- function() {
     g$ypred <- 100 + d
     g
   }))
-  class(draws) <- c("bpnmf_draws", class(draws))
+  class(draws) <- c("countsynth_draws", class(draws))
   draws
 }

@@ -7,7 +7,7 @@
 auto_detect_target(draws)
 }
 \arguments{
-\item{draws}{A \code{bpnmf_draws} frame.}
+\item{draws}{A \code{countsynth_draws} frame.}
 }
 \description{
 A synthetic aggregate unit wins when the frame has one (see

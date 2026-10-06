@@ -10,7 +10,7 @@ tl_data <- function() {
   arrays <- build_model_arrays(df, c("g1", "g2"))
   arrays$df <- df
   arrays$type <- "both"
-  structure(arrays, class = c("bpnmf_data", "list"))
+  structure(arrays, class = c("countsynth_data", "list"))
 }
 
 test_that("time_level reaches the Stan data, centered by default", {
@@ -33,11 +33,11 @@ test_that("time_level reaches the Stan data, centered by default", {
 })
 
 test_that("time_level validates and defaults to centered", {
-  expect_equal(bpnmf_model_opts()$time_level, "centered")
+  expect_equal(countsynth_model_opts()$time_level, "centered")
   expect_equal(
-    bpnmf_model_opts(time_level = "uncentered")$time_level, "uncentered"
+    countsynth_model_opts(time_level = "uncentered")$time_level, "uncentered"
   )
-  expect_error(bpnmf_model_opts(time_level = "pinned"), "should be one of")
+  expect_error(countsynth_model_opts(time_level = "pinned"), "should be one of")
 })
 
 test_that("the centered time level sums to zero and has the promised spread", {
@@ -56,7 +56,7 @@ test_that("the centered time level sums to zero and has the promised spread", {
   sd$n_obs <- 0L
   sd$n_cens <- 0L
   sd$n_notcens <- 0L
-  fit <- bpnmf_stan_model("joint")$sample(
+  fit <- countsynth_stan_model("joint")$sample(
     data = sd, chains = 1, iter_warmup = 300, iter_sampling = 1500, seed = 5,
     refresh = 0, show_messages = FALSE, show_exceptions = FALSE
   )

@@ -21,7 +21,7 @@
 #' rate difference).
 #'
 #' That numeric equivalence is not an interpretive one, though -- see
-#' [bpnmf_summary_table()] for the full explanation, in short: with a
+#' [countsynth_summary_table()] for the full explanation, in short: with a
 #' denominator, the offset it contributes to `mu`/`mu_treated` is identical
 #' on both sides of the ratio, so the percent change is an estimate of the
 #' percent change in the **rate** (holding the measured exposure fixed).
@@ -74,7 +74,7 @@ compute_draw_effects <- function(df, estimand, method, rate_normalizer,
 #' segment, a thick 67% segment, and a point at the posterior median; units
 #' are ordered by median effect.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param units Units to include (`NULL` = every treated unit).
 #' @param categories Groups to include (`NULL` = all).
 #' @param estimand `"diff"` (rate difference) or `"ratio"` (percent change
@@ -91,7 +91,7 @@ compute_draw_effects <- function(df, estimand, method, rate_normalizer,
 #'   `draws` are ignored. Each band is still sorted by median effect.
 #' @return A ggplot object.
 #' @export
-bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
+countsynth_interval_plot <- function(draws, units = NULL, categories = NULL,
                                 estimand = c("ratio", "diff"),
                                 method = c("mu", "pred"),
                                 rate_normalizer = 1000,
@@ -118,7 +118,7 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
     cli::cli_abort("No post-treatment rows to plot.")
   }
   df$years <- time_weight_per_row(df, denominator_time_unit)
-  # bpnmf_draws() always emits a denominator column (1 everywhere when none
+  # countsynth_draws() always emits a denominator column (1 everywhere when none
   # was configured -- see build_cell_table()), but a hand-built frame may not.
   if (!"denominator" %in% names(df)) {
     df$denominator <- 1
@@ -203,7 +203,7 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
       subtitle = "Thick segment: 67% CI. Thin segment: 95% CI. Point: posterior median.",
       x = xlab, y = NULL
     ) +
-    theme_bpnmf()
+    theme_countsynth()
   if (faceted) {
     p <- p +
       ggplot2::facet_grid(

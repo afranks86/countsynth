@@ -7,7 +7,7 @@
 aggregate_unit_names(draws)
 }
 \arguments{
-\item{draws}{A \code{bpnmf_draws} frame.}
+\item{draws}{A \code{countsynth_draws} frame.}
 }
 \value{
 Character vector of unit names.

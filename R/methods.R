@@ -1,8 +1,8 @@
 # S3 methods for fit objects.
 
 #' @export
-print.bpnmf_fit <- function(x, ...) {
-  cli::cli_h1("bpnmf fit ({x$type}, rank {x$rank})")
+print.countsynth_fit <- function(x, ...) {
+  cli::cli_h1("countsynth fit ({x$type}, rank {x$rank})")
   cli::cli_li("model: {if (x$model_treated) 'joint (treated)' else 'baseline (untreated)'}")
   cli::cli_li("method: {fit_method_label(x$fit_method %||% 'sample')}")
   cli::cli_li(
@@ -17,7 +17,7 @@ print.bpnmf_fit <- function(x, ...) {
 }
 
 #' @export
-summary.bpnmf_fit <- function(object, ...) {
+summary.countsynth_fit <- function(object, ...) {
   print(object)
   gate <- convergence_gate(object)
   if (is.na(gate$converged)) {
@@ -34,8 +34,8 @@ summary.bpnmf_fit <- function(object, ...) {
 }
 
 #' @export
-print.bpnmf_cut_fit <- function(x, ...) {
-  cli::cli_h1("bpnmf cut fit ({x$type}, rank {x$rank})")
+print.countsynth_cut_fit <- function(x, ...) {
+  cli::cli_h1("countsynth cut fit ({x$type}, rank {x$rank})")
   n_comp <- length(x$component_records)
   n_pass <- sum(vapply(
     x$component_records, function(r) isTRUE(r$converged), logical(1)
@@ -55,15 +55,15 @@ print.bpnmf_cut_fit <- function(x, ...) {
 }
 
 #' @export
-summary.bpnmf_cut_fit <- function(object, ...) {
+summary.countsynth_cut_fit <- function(object, ...) {
   print(object)
   cut_component_table(object)
   invisible(object$manifest)
 }
 
-#' Plot method for bpnmf fits
+#' Plot method for countsynth fits
 #'
-#' @param x A `bpnmf_fit` or `bpnmf_cut_fit`.
+#' @param x A `countsynth_fit` or `countsynth_cut_fit`.
 #' @param which One of `"unit_fit"`, `"unit_gap"`, `"raw_rate"`,
 #'   `"group_comparison"`, `"interval"`, `"trace"`, `"te_regression"`, or
 #'   `"te_coef"` (the last two require a `treatment_effects` formula).
@@ -72,7 +72,7 @@ summary.bpnmf_cut_fit <- function(object, ...) {
 #' @param group Group for the per-unit figures.
 #' @param ... Passed to the underlying figure function.
 #' @export
-plot.bpnmf_fit <- function(x, which = "unit_fit", unit = NULL, group = NULL,
+plot.countsynth_fit <- function(x, which = "unit_fit", unit = NULL, group = NULL,
                            ...) {
   checkmate::assert_choice(
     which,
@@ -80,26 +80,26 @@ plot.bpnmf_fit <- function(x, which = "unit_fit", unit = NULL, group = NULL,
       "trace", "te_regression", "te_coef")
   )
   if (which == "trace") {
-    return(bpnmf_trace_plot(x, ...))
+    return(countsynth_trace_plot(x, ...))
   }
   # The treatment-effect figures read the design and coefficient draws off
   # the fit, not the tidy draws frame.
   if (which == "te_regression") {
-    return(bpnmf_te_regression_plot(x, ...))
+    return(countsynth_te_regression_plot(x, ...))
   }
   if (which == "te_coef") {
-    return(bpnmf_te_coef_plot(x, ...))
+    return(countsynth_te_coef_plot(x, ...))
   }
-  draws <- bpnmf_draws(x)
+  draws <- countsynth_draws(x)
   unit <- unit %||% auto_detect_target(draws)
   switch(which,
-    unit_fit = bpnmf_unit_fit_plot(draws, unit, group),
-    unit_gap = bpnmf_unit_gap_plot(draws, unit, group),
-    raw_rate = bpnmf_raw_rate_plot(draws, group = group, separate_unit = unit, ...),
-    group_comparison = bpnmf_group_comparison_plot(draws, ...),
-    interval = bpnmf_interval_plot(draws, ...)
+    unit_fit = countsynth_unit_fit_plot(draws, unit, group),
+    unit_gap = countsynth_unit_gap_plot(draws, unit, group),
+    raw_rate = countsynth_raw_rate_plot(draws, group = group, separate_unit = unit, ...),
+    group_comparison = countsynth_group_comparison_plot(draws, ...),
+    interval = countsynth_interval_plot(draws, ...)
   )
 }
 
 #' @export
-plot.bpnmf_cut_fit <- plot.bpnmf_fit
+plot.countsynth_cut_fit <- plot.countsynth_fit

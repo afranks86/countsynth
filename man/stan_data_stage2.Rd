@@ -14,7 +14,7 @@ stan_data_stage2(
 )
 }
 \arguments{
-\item{data}{A \code{bpnmf_data} object.}
+\item{data}{A \code{countsynth_data} object.}
 
 \item{mu_ctrl_flat}{One stage-1 draw of the baseline log-rate surface, as a
 flat vector in canonical row-major order (length \code{K*D*N}).}
