@@ -16,7 +16,7 @@ prior_only_data <- function(rank, rank_shrinkage) {
     arrays <- build_model_arrays(df, c("g1", "g2"))
     arrays$df <- df
     arrays$type <- "both"
-    structure(arrays, class = c("bpnmf_data", "list"))
+    structure(arrays, class = c("countsynth_data", "list"))
   })()
   sd <- stan_data_joint(
     data,
@@ -42,7 +42,7 @@ prior_only_data <- function(rank, rank_shrinkage) {
 # so it is what `factor_variation_pct` is implicitly scaled by; its inverse
 # is the effective number of components a unit loads on.
 prior_weight_concentration <- function(rank, rank_shrinkage, seed = 4242) {
-  model <- bpnmf_stan_model("joint")
+  model <- countsynth_stan_model("joint")
   fit <- model$sample(
     data = prior_only_data(rank, rank_shrinkage),
     chains = 1, iter_warmup = 400, iter_sampling = 600, seed = seed,
@@ -79,7 +79,7 @@ test_that("the flat weight prior makes the low-rank amplitude depend on R", {
 test_that("rank shrinkage makes the low-rank amplitude R-invariant", {
   skip_on_cran()
   skip_if_no_cmdstan()
-  opts <- bpnmf_rank_shrinkage_opts()
+  opts <- countsynth_rank_shrinkage_opts()
   small <- prior_weight_concentration(6, opts)
   large <- prior_weight_concentration(18, opts)
   # Tripling the truncation moves this by a few percent, where the flat prior
@@ -106,9 +106,9 @@ test_that("rank_shrink = 0 reproduces the pre-shrinkage model draw for draw", {
     arrays <- build_model_arrays(df, c("g1", "g2"))
     arrays$df <- df
     arrays$type <- "both"
-    structure(arrays, class = c("bpnmf_data", "list"))
+    structure(arrays, class = c("countsynth_data", "list"))
   })()
-  model <- bpnmf_stan_model("joint")
+  model <- countsynth_stan_model("joint")
   sd <- stan_data_joint(data, rank = 3, gen_ypred = FALSE)
   draws_at <- function(seed) {
     fit <- model$sample(

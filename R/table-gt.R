@@ -1,5 +1,5 @@
 # Publication-ready HTML rendering of the headline summary table. The tibble
-# from bpnmf_summary_table() is already display-shaped -- counts rounded, CIs
+# from countsynth_summary_table() is already display-shaped -- counts rounded, CIs
 # pre-formatted as strings -- so this module is presentation only: column
 # labels, spanners, grouping, and the footnotes that explain the `*` and the
 # dagger. gt lives in Suggests, so every entry point checks for it first.
@@ -17,28 +17,28 @@ GT_LABELS <- list(
 
 #' Render a summary table as a `gt` HTML table
 #'
-#' Formats [bpnmf_summary_table()] (or [bpnmf_summary_table_by_unit()], when
+#' Formats [countsynth_summary_table()] (or [countsynth_summary_table_by_unit()], when
 #' `by_unit` is `TRUE`) for display: counts and rates split under their own
 #' spanners, one row group per unit, and footnotes for the significance star
 #' and the imputation dagger. Requires the `gt` package.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param target_unit Unit to summarize. Ignored when `by_unit` is `TRUE`;
 #'   auto-detected when `NULL` (an aggregate unit wins -- see
 #'   [auto_detect_target()]).
 #' @param by_unit Show every treated unit, grouped by unit, instead of one.
 #' @param title,subtitle Header text. `NULL` builds a default from the unit.
-#' @inheritParams bpnmf_output_opts
+#' @inheritParams countsynth_output_opts
 #' @return A `gt_tbl`. Print it to view, or save with [gt::gtsave()].
 #' @export
 #' @examples
 #' \dontrun{
-#' draws <- bpnmf_draws(fit)
-#' bpnmf_gt_table(draws)                  # headline unit, one row per group
-#' bpnmf_gt_table(draws, by_unit = TRUE)  # every treated unit
-#' gt::gtsave(bpnmf_gt_table(draws), "summary.html")
+#' draws <- countsynth_draws(fit)
+#' countsynth_gt_table(draws)                  # headline unit, one row per group
+#' countsynth_gt_table(draws, by_unit = TRUE)  # every treated unit
+#' gt::gtsave(countsynth_gt_table(draws), "summary.html")
 #' }
-bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
+countsynth_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
                            rate_normalizer = 1000,
                            title = NULL, subtitle = NULL,
                            denominator_label = "denominator",
@@ -48,7 +48,7 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
   checkmate::assert_flag(by_unit)
 
   if (by_unit) {
-    tbl <- bpnmf_summary_table_by_unit(
+    tbl <- countsynth_summary_table_by_unit(
       draws,
       rate_normalizer = rate_normalizer,
       denominator_label = denominator_label,
@@ -57,7 +57,7 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
     title <- title %||% "Post-treatment effect by unit"
   } else {
     target_unit <- target_unit %||% auto_detect_target(draws)
-    tbl <- bpnmf_summary_table(
+    tbl <- countsynth_summary_table(
       draws, target_unit,
       rate_normalizer = rate_normalizer,
       denominator_label = denominator_label,
@@ -83,7 +83,7 @@ bpnmf_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
   # the treated and untreated side, so "Pct Change" estimates the percent
   # change in the RATE (holding that measured exposure fixed) and belongs
   # with the rate columns. Without one there is no measured exposure at all:
-  # bpnmf_summary_table() drops the rate columns entirely, and the same
+  # countsynth_summary_table() drops the rate columns entirely, and the same
   # number is a change in the raw COUNT, so it belongs under Counts.
   has_denom <- draws_has_denominator(draws)
   count_cols <- c("Observed", "Expected", "Diff (95% CI)")
@@ -182,7 +182,7 @@ write_gt_tables <- function(draws, target_unit, figs_dir,
     ok <- tryCatch(
       {
         gt::gtsave(
-          bpnmf_gt_table(
+          countsynth_gt_table(
             draws, target_unit, by_unit = spec$by_unit,
             rate_normalizer = rate_normalizer,
             denominator_label = denominator_label,

@@ -22,7 +22,7 @@ the same \emph{number} whether or not a denominator is configured at all. Only
 rate difference).
 
 That numeric equivalence is not an interpretive one, though -- see
-\code{\link[=bpnmf_summary_table]{bpnmf_summary_table()}} for the full explanation, in short: with a
+\code{\link[=countsynth_summary_table]{countsynth_summary_table()}} for the full explanation, in short: with a
 denominator, the offset it contributes to \code{mu}/\code{mu_treated} is identical
 on both sides of the ratio, so the percent change is an estimate of the
 percent change in the \strong{rate} (holding the measured exposure fixed).

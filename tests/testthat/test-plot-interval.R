@@ -22,7 +22,7 @@ make_interval_draws <- function() {
     g$ypred <- 100
     g
   }))
-  class(draws) <- c("bpnmf_draws", class(draws))
+  class(draws) <- c("countsynth_draws", class(draws))
   draws
 }
 
@@ -30,9 +30,9 @@ test_that("separate_units puts named units in their own band", {
   draws <- make_interval_draws()
   agg <- add_aggregate_units(
     draws,
-    list(bpnmf_aggregate_unit(unit = "All treated", include_treated_units = TRUE))
+    list(countsynth_aggregate_unit(unit = "All treated", include_treated_units = TRUE))
   )
-  p <- bpnmf_interval_plot(agg, separate_units = "All treated")
+  p <- countsynth_interval_plot(agg, separate_units = "All treated")
 
   expect_s3_class(p$facet, "FacetGrid")
   bands <- stats::setNames(as.character(p$data$.band), as.character(p$data$unit))
@@ -48,35 +48,35 @@ test_that("separate_units puts named units in their own band", {
 test_that("aggregate units are split off by default, and can be opted out of", {
   agg <- add_aggregate_units(
     make_interval_draws(),
-    list(bpnmf_aggregate_unit(unit = "All treated", include_treated_units = TRUE))
+    list(countsynth_aggregate_unit(unit = "All treated", include_treated_units = TRUE))
   )
   # No separate_units argument at all: the frame names its own aggregates.
-  auto <- bpnmf_interval_plot(agg)
+  auto <- countsynth_interval_plot(agg)
   expect_s3_class(auto$facet, "FacetGrid")
   expect_equal(
     as.character(auto$data$.band[auto$data$unit == "All treated"]), "separate"
   )
   # character() ranks everything in one band.
-  flat <- bpnmf_interval_plot(agg, separate_units = character())
+  flat <- countsynth_interval_plot(agg, separate_units = character())
   expect_s3_class(flat$facet, "FacetNull")
   expect_true("All treated" %in% flat$data$unit)
 })
 
 test_that("separate_units is inert when it names no present unit", {
   draws <- make_interval_draws()
-  expect_s3_class(bpnmf_interval_plot(draws, separate_units = "Nope")$facet, "FacetNull")
-  expect_s3_class(bpnmf_interval_plot(draws)$facet, "FacetNull")
-  expect_false(".band" %in% names(bpnmf_interval_plot(draws)$data))
+  expect_s3_class(countsynth_interval_plot(draws, separate_units = "Nope")$facet, "FacetNull")
+  expect_s3_class(countsynth_interval_plot(draws)$facet, "FacetNull")
+  expect_false(".band" %in% names(countsynth_interval_plot(draws)$data))
 })
 
 test_that("interval_aggregates gates whether the aggregate reaches the plot", {
   draws <- make_interval_draws()
   spec <- list(
-    bpnmf_aggregate_unit(unit = "All treated", include_treated_units = TRUE)
+    countsynth_aggregate_unit(unit = "All treated", include_treated_units = TRUE)
   )
   for (on in c(FALSE, TRUE)) {
     dir <- withr::local_tempdir()
-    bpnmf_report(
+    countsynth_report(
       draws, dir,
       target_unit = "C", figures = "interval",
       aggregate_units = spec, interval_aggregates = on, print_tables = FALSE
@@ -85,8 +85,8 @@ test_that("interval_aggregates gates whether the aggregate reaches the plot", {
   }
   # The gate is on the plot data, which the PNG hides -- check it directly.
   agg <- add_aggregate_units(draws, spec)
-  expect_false("All treated" %in% bpnmf_interval_plot(draws)$data$unit)
-  expect_true("All treated" %in% bpnmf_interval_plot(agg)$data$unit)
+  expect_false("All treated" %in% countsynth_interval_plot(draws)$data$unit)
+  expect_true("All treated" %in% countsynth_interval_plot(agg)$data$unit)
 })
 
 test_that("a configured aggregate unit becomes the default headline unit", {
@@ -95,10 +95,10 @@ test_that("a configured aggregate unit becomes the default headline unit", {
   # longest name; neither should win over the pooled unit.
   draws <- make_interval_draws()
   spec <- list(
-    bpnmf_aggregate_unit(unit = "All treated", include_treated_units = TRUE)
+    countsynth_aggregate_unit(unit = "All treated", include_treated_units = TRUE)
   )
   dir <- withr::local_tempdir()
-  res <- bpnmf_report(
+  res <- countsynth_report(
     draws, dir,
     figures = character(), aggregate_units = spec, print_tables = FALSE
   )
@@ -109,7 +109,7 @@ test_that("a configured aggregate unit becomes the default headline unit", {
   expect_true("All treated" %in% by_unit$Unit)
 
   # Without any aggregate the old rule still applies: most treated periods.
-  plain <- bpnmf_report(
+  plain <- countsynth_report(
     draws, withr::local_tempdir(),
     figures = character(), print_tables = FALSE
   )
@@ -121,7 +121,7 @@ test_that("aggregate_unit_names round-trips and survives row subsetting", {
   expect_equal(aggregate_unit_names(draws), character())
   agg <- add_aggregate_units(
     draws,
-    list(bpnmf_aggregate_unit(unit = "All treated", include_treated_units = TRUE))
+    list(countsynth_aggregate_unit(unit = "All treated", include_treated_units = TRUE))
   )
   expect_equal(aggregate_unit_names(agg), "All treated")
   # The report subsets to post-treatment rows before plotting, so the marker
@@ -131,8 +131,8 @@ test_that("aggregate_unit_names round-trips and survives row subsetting", {
 })
 
 test_that("output opts and YAML carry interval_aggregates", {
-  expect_true(bpnmf_output_opts()$interval_aggregates)
-  expect_false(bpnmf_output_opts(interval_aggregates = FALSE)$interval_aggregates)
+  expect_true(countsynth_output_opts()$interval_aggregates)
+  expect_false(countsynth_output_opts(interval_aggregates = FALSE)$interval_aggregates)
   expect_true(parse_yaml_output(list())$interval_aggregates)
   expect_false(parse_yaml_output(list(interval_aggregates = FALSE))$interval_aggregates)
 })

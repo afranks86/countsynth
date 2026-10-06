@@ -47,10 +47,10 @@ DEFAULT_GATE_PARAMS <- c("mu_ctrl", "te")
 #' stream of independent draws from an approximating family -- so none of them
 #' exist for a variational fit, and computing them anyway (split-R-hat over a
 #' single chain) would report a number that means nothing.
-#' @param fit A `bpnmf_fit` / `bpnmf_cut_fit`, or a raw CmdStan fit object.
+#' @param fit A `countsynth_fit` / `countsynth_cut_fit`, or a raw CmdStan fit object.
 #' @keywords internal
 is_variational_fit <- function(fit) {
-  if (inherits(fit, "bpnmf_fit") || inherits(fit, "bpnmf_cut_fit")) {
+  if (inherits(fit, "countsynth_fit") || inherits(fit, "countsynth_cut_fit")) {
     fit <- fit$fit
   }
   inherits(fit, "CmdStanVB")
@@ -142,7 +142,7 @@ divergence_summary <- function(fit) {
 # depth ceiling is still a valid Hamiltonian proposal -- it costs mixing
 # efficiency, not correctness -- so unlike a divergence this is never gated
 # (see convergence_gate()) and never fails a run. It is tracked here purely
-# so bpnmf can report it with that context instead of leaving cmdstanr's own
+# so countsynth can report it with that context instead of leaving cmdstanr's own
 # unglossed "N transitions hit the maximum treedepth" warning as the only
 # signal a user sees.
 treedepth_summary <- function(fit) {
@@ -169,11 +169,11 @@ treedepth_summary <- function(fit) {
 #' below `divergence_fail_fraction` (0 for that threshold restores the older
 #' zero-divergence rule).
 #'
-#' @param fit A `bpnmf_fit` / `bpnmf_cut_fit`, or a raw `CmdStanMCMC`.
+#' @param fit A `countsynth_fit` / `countsynth_cut_fit`, or a raw `CmdStanMCMC`.
 #' @param gate_params Optional character vector of variable-name prefixes the
 #'   R-hat/ESS gate is restricted to (defaults to the config's
-#'   `mcmc$gate_params` when `fit` is a `bpnmf_fit`).
-#' @param thresholds A [bpnmf_convergence()] object.
+#'   `mcmc$gate_params` when `fit` is a `countsynth_fit`).
+#' @param thresholds A [countsynth_convergence()] object.
 #' @return A list: `rhat_max`, `ess_bulk_min`, `ess_tail_min`, `divergences`,
 #'   `divergence_fraction`, `treedepth_hits`, `treedepth_fraction`,
 #'   `max_treedepth`, `converged` (+ `gate_params` when set). Treedepth is
@@ -183,7 +183,7 @@ treedepth_summary <- function(fit) {
 #'   gated", not "failed".
 #' @export
 convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
-  if (inherits(fit, "bpnmf_fit") || inherits(fit, "bpnmf_cut_fit")) {
+  if (inherits(fit, "countsynth_fit") || inherits(fit, "countsynth_cut_fit")) {
     gate_params <- gate_params %||% fit$config$mcmc$gate_params
     thresholds <- thresholds %||% fit$config$mcmc$convergence
     fit <- fit$fit
@@ -191,7 +191,7 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
   if (is_variational_fit(fit)) {
     return(variational_gate())
   }
-  thresholds <- thresholds %||% bpnmf_convergence()
+  thresholds <- thresholds %||% countsynth_convergence()
   gate_params <- gate_params %||% DEFAULT_GATE_PARAMS
 
   summ <- element_diagnostics(fit, diag_variables(fit))
@@ -240,7 +240,7 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
 #'   `gated`.
 #' @export
 parameter_diagnostics <- function(fit, gate_params = NULL, thresholds = NULL) {
-  if (inherits(fit, "bpnmf_fit") || inherits(fit, "bpnmf_cut_fit")) {
+  if (inherits(fit, "countsynth_fit") || inherits(fit, "countsynth_cut_fit")) {
     gate_params <- gate_params %||% fit$config$mcmc$gate_params
     thresholds <- thresholds %||% fit$config$mcmc$convergence
     fit <- fit$fit
@@ -253,7 +253,7 @@ parameter_diagnostics <- function(fit, gate_params = NULL, thresholds = NULL) {
       i = "Re-fit with {.code method = \"sample\"} to diagnose convergence."
     ))
   }
-  thresholds <- thresholds %||% bpnmf_convergence()
+  thresholds <- thresholds %||% countsynth_convergence()
   gate_params <- gate_params %||% DEFAULT_GATE_PARAMS
 
   summ <- element_diagnostics(fit, diag_variables(fit))
@@ -298,13 +298,13 @@ parameter_diagnostics <- function(fit, gate_params = NULL, thresholds = NULL) {
   )
   rows$fixed <- NULL
   rows <- rows[order(-ifelse(is.na(rows$rhat), -Inf, rows$rhat)), ]
-  class(rows) <- c("bpnmf_diagnostics", class(rows))
+  class(rows) <- c("countsynth_diagnostics", class(rows))
   attr(rows, "thresholds") <- thresholds
   rows
 }
 
 #' @export
-print.bpnmf_diagnostics <- function(x, ...) {
+print.countsynth_diagnostics <- function(x, ...) {
   style <- c(
     PASS = "green", WARN = "yellow", FAIL = "red", fixed = "silver"
   )
@@ -341,7 +341,7 @@ print.bpnmf_diagnostics <- function(x, ...) {
 # explain nothing, so each criterion reports the level it actually reached.
 gate_failure_bullets <- function(gate, thresholds = NULL, fit = NULL,
                                  max_params = 3L) {
-  thresholds <- thresholds %||% bpnmf_convergence()
+  thresholds <- thresholds %||% countsynth_convergence()
   bullets <- character()
   warn_only <- TRUE
 
@@ -439,7 +439,7 @@ gate_worst_parameters <- function(fit, max_params = 3L) {
 # try. Silently returns nothing for a gate missing the relevant fields (e.g.
 # a cut manifest, which carries no top-level R-hat/ESS/divergence rate).
 gate_failure_advice <- function(gate, thresholds = NULL) {
-  thresholds <- thresholds %||% bpnmf_convergence()
+  thresholds <- thresholds %||% countsynth_convergence()
   advice <- character()
 
   ess <- suppressWarnings(min(gate$ess_bulk_min, gate$ess_tail_min, na.rm = TRUE))
@@ -473,7 +473,7 @@ gate_failure_advice <- function(gate, thresholds = NULL) {
 # to replace cmdstanr's own unglossed "N transitions hit the maximum
 # treedepth" warning as the thing a user actually reads, on a pass or a fail.
 diagnostic_context_notes <- function(gate, thresholds = NULL) {
-  thresholds <- thresholds %||% bpnmf_convergence()
+  thresholds <- thresholds %||% countsynth_convergence()
   notes <- character()
 
   if (isTRUE(gate$converged) && isTRUE(gate$divergences > 0)) {

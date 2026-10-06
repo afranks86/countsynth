@@ -7,7 +7,7 @@
 is_variational_fit(fit)
 }
 \arguments{
-\item{fit}{A \code{bpnmf_fit} / \code{bpnmf_cut_fit}, or a raw CmdStan fit object.}
+\item{fit}{A \code{countsynth_fit} / \code{countsynth_cut_fit}, or a raw CmdStan fit object.}
 }
 \description{
 R-hat, ESS and divergences are all chain-based, and ADVI produces one

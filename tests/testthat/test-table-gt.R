@@ -1,16 +1,16 @@
 # gt rendering and the consolidated report table set.
 
-test_that("bpnmf_gt_table renders one unit and every unit", {
+test_that("countsynth_gt_table renders one unit and every unit", {
   skip_if_not_installed("gt")
   draws <- make_draws_frame()
 
-  one <- bpnmf_gt_table(draws)
+  one <- countsynth_gt_table(draws)
   expect_s3_class(one, "gt_tbl")
   # Imputed becomes a source note, not a column.
   expect_false("Imputed" %in% names(one$`_data`))
   expect_true(grepl("^B", one$`_heading`$title))
 
-  many <- bpnmf_gt_table(draws, by_unit = TRUE)
+  many <- countsynth_gt_table(draws, by_unit = TRUE)
   expect_s3_class(many, "gt_tbl")
   expect_equal(many$`_heading`$title, "Post-treatment effect by unit")
   # Unit becomes the row-group column rather than a data column.
@@ -19,19 +19,19 @@ test_that("bpnmf_gt_table renders one unit and every unit", {
   # With nothing treated there is no unit to detect, so the abort comes from
   # target detection; by_unit gets past that and hits the empty-table guard.
   untreated <- draws[draws$treatment == 0, ]
-  expect_error(bpnmf_gt_table(untreated), "No treated units")
-  expect_error(bpnmf_gt_table(untreated, by_unit = TRUE), "No post-treatment rows")
+  expect_error(countsynth_gt_table(untreated), "No treated units")
+  expect_error(countsynth_gt_table(untreated, by_unit = TRUE), "No post-treatment rows")
 })
 
-test_that("bpnmf_summary_table_by_unit stacks per-unit tables", {
+test_that("countsynth_summary_table_by_unit stacks per-unit tables", {
   draws <- make_draws_frame()
-  by_unit <- bpnmf_summary_table_by_unit(draws)
+  by_unit <- countsynth_summary_table_by_unit(draws)
   expect_true("Unit" %in% names(by_unit))
   expect_equal(unique(by_unit$Unit), "B") # A is never treated
   # Identical to the single-unit table apart from the Unit column.
   expect_equal(
     by_unit[setdiff(names(by_unit), "Unit")],
-    bpnmf_summary_table(draws, "B")
+    countsynth_summary_table(draws, "B")
   )
 })
 
@@ -41,11 +41,11 @@ test_that("the report writes HTML tables and can be told not to", {
   html <- c("summary_table.html", "summary_table_by_unit.html")
 
   on_dir <- withr::local_tempdir()
-  bpnmf_report(draws, on_dir, figures = character(), print_tables = FALSE)
+  countsynth_report(draws, on_dir, figures = character(), print_tables = FALSE)
   expect_true(all(file.exists(file.path(on_dir, "figs", html))))
 
   off_dir <- withr::local_tempdir()
-  bpnmf_report(
+  countsynth_report(
     draws, off_dir,
     figures = character(), print_tables = FALSE, html_tables = FALSE
   )
@@ -60,7 +60,7 @@ test_that("terminal output is one table by default, two on request", {
   quiet <- function(...) {
     msgs <- character()
     out <- utils::capture.output(withCallingHandlers(
-      bpnmf_report(draws, withr::local_tempdir(), figures = character(),
+      countsynth_report(draws, withr::local_tempdir(), figures = character(),
                    html_tables = FALSE, ...),
       message = function(m) {
         msgs <<- c(msgs, conditionMessage(m))
@@ -81,12 +81,12 @@ test_that("terminal output is one table by default, two on request", {
 })
 
 test_that("html_tables flows through the config layers", {
-  expect_true(bpnmf_output_opts()$html_tables)
-  expect_false(bpnmf_output_opts(html_tables = FALSE)$html_tables)
+  expect_true(countsynth_output_opts()$html_tables)
+  expect_false(countsynth_output_opts(html_tables = FALSE)$html_tables)
   expect_true(parse_yaml_output(list())$html_tables)
   expect_false(parse_yaml_output(list(html_tables = FALSE))$html_tables)
   # print_target_table now defaults off, since its rows are in the by-unit table.
-  expect_false(bpnmf_output_opts()$print_target_table)
+  expect_false(countsynth_output_opts()$print_target_table)
   expect_false(parse_yaml_output(list())$print_target_table)
 })
 
@@ -94,9 +94,9 @@ test_that("denominator_may_be_affected flows through the config layers, on by de
   # Default TRUE: a user who doesn't already know about this concern has no
   # reason to go looking for a flag to turn it on, so the caution starts
   # showing and has to be deliberately silenced instead.
-  expect_true(bpnmf_output_opts()$denominator_may_be_affected)
+  expect_true(countsynth_output_opts()$denominator_may_be_affected)
   expect_false(
-    bpnmf_output_opts(denominator_may_be_affected = FALSE)$denominator_may_be_affected
+    countsynth_output_opts(denominator_may_be_affected = FALSE)$denominator_may_be_affected
   )
   expect_true(parse_yaml_output(list())$denominator_may_be_affected)
   expect_false(
@@ -110,7 +110,7 @@ test_that("the denominator caveat is a footnote on the expected columns", {
   skip_if_not_installed("gt")
   draws <- make_draws_frame()
 
-  flagged <- bpnmf_gt_table(draws)
+  flagged <- countsynth_gt_table(draws)
   # A real gt footnote anchored to the column it is about, not a loose source
   # note. Expected only, not Exp Rate: the model parameterizes the rate
   # directly, so only the count-scale counterfactual needs a denominator
@@ -121,7 +121,7 @@ test_that("the denominator caveat is a footnote on the expected columns", {
   expect_match(unlist(fn$footnotes), "conditional on the observed denominator",
                all = FALSE)
 
-  quiet <- bpnmf_gt_table(draws, denominator_may_be_affected = FALSE)
+  quiet <- countsynth_gt_table(draws, denominator_may_be_affected = FALSE)
   expect_equal(nrow(quiet[["_footnotes"]]), 0)
 
   # With a denominator, % Change belongs with the rates: it estimates a
@@ -135,7 +135,7 @@ test_that("the denominator caveat is a footnote on the expected columns", {
   # Flows through the full report, printed only alongside the table itself.
   out_dir <- withr::local_tempdir()
   msg <- utils::capture.output(
-    bpnmf_report(
+    countsynth_report(
       draws, out_dir,
       figures = character(), html_tables = FALSE, print_tables = TRUE
     ),
@@ -150,12 +150,12 @@ test_that("with no denominator, rate columns are dropped and % change is a count
   draws <- make_draws_frame()
   draws$denominator <- NULL
 
-  # Regression: bpnmf_summary_table()/bpnmf_interval_plot() used to error
+  # Regression: countsynth_summary_table()/countsynth_interval_plot() used to error
   # ("Column `denominator` not found") whenever no denominator was ever
   # configured -- they must instead treat that as denominator == 1.
-  tbl <- expect_silent(bpnmf_summary_table(draws, "B"))
+  tbl <- expect_silent(countsynth_summary_table(draws, "B"))
   expect_true(nrow(tbl) > 0)
-  expect_s3_class(bpnmf_interval_plot(draws), "ggplot")
+  expect_s3_class(countsynth_interval_plot(draws), "ggplot")
 
   # The exposure column would truncate to 0 and every rate would divide by
   # nothing, so the rate columns are omitted rather than reported as garbage.
@@ -165,7 +165,7 @@ test_that("with no denominator, rate columns are dropped and % change is a count
   ))
   expect_true("Pct Change CI" %in% names(tbl))
 
-  g <- bpnmf_gt_table(draws)
+  g <- countsynth_gt_table(draws)
   spanners <- g[["_spanners"]]
   expect_equal(unlist(spanners$spanner_label), "Counts")
   expect_true("Pct Change CI" %in% unlist(spanners$vars))
@@ -175,7 +175,7 @@ test_that("with no denominator, rate columns are dropped and % change is a count
 
   out_dir <- withr::local_tempdir()
   msg <- utils::capture.output(
-    bpnmf_report(
+    countsynth_report(
       draws, out_dir,
       figures = character(), html_tables = FALSE, print_tables = TRUE
     ),
@@ -187,7 +187,7 @@ test_that("with no denominator, rate columns are dropped and % change is a count
 
 test_that("a denominator-free run renders every figure in the report", {
   # Reported case: mortality.yml with `denominator_prefix` commented out blew
-  # up in bpnmf_group_comparison_plot() ("Column `denominator` not found").
+  # up in countsynth_group_comparison_plot() ("Column `denominator` not found").
   # Every rate-aware consumer has to tolerate a run with no denominator, so
   # exercise the whole figure set rather than the tables alone.
   draws <- make_draws_frame()
@@ -196,7 +196,7 @@ test_that("a denominator-free run renders every figure in the report", {
 
   out_dir <- withr::local_tempdir()
   expect_no_error(
-    bpnmf_report(draws, out_dir, print_tables = FALSE, html_tables = FALSE)
+    countsynth_report(draws, out_dir, print_tables = FALSE, html_tables = FALSE)
   )
   figs <- list.files(file.path(out_dir, "figs"), recursive = TRUE)
   expect_true(all(
@@ -205,11 +205,11 @@ test_that("a denominator-free run renders every figure in the report", {
 
   # A rate is undefined without an exposure, so the rate plots fall back to
   # counts rather than plotting count * rate_multiplier under a rate axis.
-  expect_equal(bpnmf_raw_rate_plot(draws)$labels$y, "Count")
-  expect_equal(bpnmf_group_comparison_plot(draws)$labels$y, "Count")
+  expect_equal(countsynth_raw_rate_plot(draws)$labels$y, "Count")
+  expect_equal(countsynth_group_comparison_plot(draws)$labels$y, "Count")
 })
 
-test_that("bpnmf_draws stamps has_denominator and always emits the column", {
+test_that("countsynth_draws stamps has_denominator and always emits the column", {
   # The column is always present (1 everywhere when unconfigured) so every
   # consumer sees one schema; the attribute is what carries the distinction.
   with_denom <- make_draws_frame()
@@ -247,21 +247,21 @@ test_that("rate scale and denominator noun are configurable, neutral by default"
   expect_equal(exposure_column_name(), "Denominator-Years")
   expect_equal(exposure_column_name("person"), "Person-Years")
   expect_equal(exposure_column_name("birth", "none"), "Births")
-  expect_true("Denominator-Years" %in% names(bpnmf_summary_table(draws, "B")))
+  expect_true("Denominator-Years" %in% names(countsynth_summary_table(draws, "B")))
   expect_true(
     "Person-Years" %in%
-      names(bpnmf_summary_table(draws, "B", denominator_label = "person"))
+      names(countsynth_summary_table(draws, "B", denominator_label = "person"))
   )
 
   spanner <- function(g) unlist(g[["_spanners"]]$spanner_label)
-  expect_true("Rate per 1,000 denominator-years" %in% spanner(bpnmf_gt_table(draws)))
+  expect_true("Rate per 1,000 denominator-years" %in% spanner(countsynth_gt_table(draws)))
   expect_true(
     "Rate per 100,000 person-years" %in%
-      spanner(bpnmf_gt_table(draws, rate_normalizer = 1e5,
+      spanner(countsynth_gt_table(draws, rate_normalizer = 1e5,
                              denominator_label = "person"))
   )
   expect_equal(
-    bpnmf_interval_plot(
+    countsynth_interval_plot(
       draws,
       estimand = "diff", rate_normalizer = 1e5, denominator_label = "person"
     )$labels$x,
@@ -270,7 +270,7 @@ test_that("rate scale and denominator noun are configurable, neutral by default"
   # The raw-rate plots don't time-weight at all (sum(outcome)/sum(denominator)),
   # so their label must not claim a per-time rate.
   expect_equal(
-    bpnmf_raw_rate_plot(
+    countsynth_raw_rate_plot(
       draws,
       rate_multiplier = 1e5, denominator_label = "birth"
     )$labels$y,
@@ -279,8 +279,8 @@ test_that("rate scale and denominator noun are configurable, neutral by default"
 
   # The time unit is part of the quantity: weighting by months rather than
   # years scales the exposure, and hence the rates, by 12.
-  yearly <- bpnmf_summary_table(draws, "B")
-  monthly <- bpnmf_summary_table(draws, "B", denominator_time_unit = "month")
+  yearly <- countsynth_summary_table(draws, "B")
+  monthly <- countsynth_summary_table(draws, "B", denominator_time_unit = "month")
   expect_equal(monthly$`Denominator-Months`, yearly$`Denominator-Years` * 12L)
   # Obs Rate is rounded to 2dp in the table, so compare on that scale.
   expect_equal(monthly$`Obs Rate`, round(yearly$`Obs Rate` / 12, 2))
@@ -288,13 +288,13 @@ test_that("rate scale and denominator noun are configurable, neutral by default"
 
 test_that("rate_normalizer and denominator_label reach the report from config", {
   # Regression: rate_normalizer was a hardcoded default on six function
-  # signatures and was never threaded through bpnmf_report(), so a bpnmf_run()
+  # signatures and was never threaded through countsynth_report(), so a countsynth_run()
   # pipeline was stuck at 1000 with no way to override it.
-  expect_equal(bpnmf_output_opts()$rate_normalizer, 1000)
-  expect_equal(bpnmf_output_opts()$denominator_label, "denominator")
-  expect_equal(bpnmf_output_opts()$denominator_time_unit, "year")
-  expect_error(bpnmf_output_opts(denominator_time_unit = "fortnight"))
-  expect_equal(bpnmf_output_opts(rate_normalizer = 1e5)$rate_normalizer, 1e5)
+  expect_equal(countsynth_output_opts()$rate_normalizer, 1000)
+  expect_equal(countsynth_output_opts()$denominator_label, "denominator")
+  expect_equal(countsynth_output_opts()$denominator_time_unit, "year")
+  expect_error(countsynth_output_opts(denominator_time_unit = "fortnight"))
+  expect_equal(countsynth_output_opts(rate_normalizer = 1e5)$rate_normalizer, 1e5)
   expect_equal(parse_yaml_output(list())$rate_normalizer, 1000)
   expect_equal(
     parse_yaml_output(list(rate_normalizer = 1e5))$rate_normalizer, 1e5
@@ -303,12 +303,12 @@ test_that("rate_normalizer and denominator_label reach the report from config", 
     parse_yaml_output(list(denominator_label = "births"))$denominator_label,
     "births"
   )
-  expect_error(bpnmf_output_opts(rate_normalizer = 0))
-  expect_error(bpnmf_output_opts(denominator_label = 42))
+  expect_error(countsynth_output_opts(rate_normalizer = 0))
+  expect_error(countsynth_output_opts(denominator_label = 42))
 
   skip_if_not_installed("gt")
   out_dir <- withr::local_tempdir()
-  bpnmf_report(
+  countsynth_report(
     make_draws_frame(), out_dir,
     figures = character(), print_tables = FALSE,
     rate_normalizer = 1e5, denominator_label = "person"

@@ -13,7 +13,7 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE, purl = FALS
 
 Joint Bayesian inference lets exposed-period outcomes inform the baseline
 (counterfactual) model. When you want the baseline learned from control data
-*only* — a "cut" or modular posterior — `bpnmf` implements the two-stage
+*only* — a "cut" or modular posterior — `countsynth` implements the two-stage
 scheme
 
 $$p_{\text{cut}}(\phi, \theta \mid Z, Y) \;=\; p(\phi \mid Z)\;
@@ -38,30 +38,30 @@ treatment block, $Z$ the control-cell data, and $Y$ the exposed-cell data.
    `stage1_iteration`.
 
 ```{r}
-library(bpnmf)
+library(countsynth)
 
-cfg <- bpnmf_example_config(
-  model = bpnmf_model_opts(
-    types = list(total = bpnmf_type("total", 3)),
+cfg <- countsynth_example_config(
+  model = countsynth_model_opts(
+    types = list(total = countsynth_type("total", 3)),
     inference_mode = "cut"
   ),
-  cut = bpnmf_cut_opts(
+  cut = countsynth_cut_opts(
     num_stage1_draws = 25,
     stage2_draws_per_component = 100,
     stage2_mcmc = list(iter_warmup = 500, iter_sampling = 1000, thin = 1)
   )
 )
 
-cfit <- bpnmf_cut_fit(bpnmf_data(cfg), config = cfg)
+cfit <- countsynth_cut_fit(countsynth_data(cfg), config = cfg)
 summary(cfit)          # stage-1 gate + per-component diagnostics
-draws <- bpnmf_draws(cfit)
+draws <- countsynth_draws(cfit)
 ```
 
 ## Seeds
 
 All cut seeds derive from `mcmc$seed`: draw selection uses `seed + 2` and
 stage 2 uses `seed + 3` (component $i$ samples at `stage2_seed + i`), unless
-set explicitly via `bpnmf_cut_opts()`. `stage2_mcmc` must not set a seed —
+set explicitly via `countsynth_cut_opts()`. `stage2_mcmc` must not set a seed —
 `stage2_seed` is the authority. Selection is deliberately on its own stream
 so it is statistically independent of the draws being selected.
 
@@ -79,5 +79,5 @@ parallel chains). With many components you can run them on a future plan:
 
 ```{r}
 future::plan(future::multisession, workers = 4)
-cfit <- bpnmf_cut_fit(bpnmf_data(cfg), config = cfg, parallel = "future")
+cfit <- countsynth_cut_fit(countsynth_data(cfg), config = cfg, parallel = "future")
 ```

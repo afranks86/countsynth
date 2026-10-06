@@ -1,8 +1,8 @@
 ---
-title: "Getting started with bpnmf"
+title: "Getting started with countsynth"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Getting started with bpnmf}
+  %\VignetteIndexEntry{Getting started with countsynth}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -11,7 +11,7 @@ vignette: >
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE, purl = FALSE)
 ```
 
-`bpnmf` estimates causal treatment effects on panel count data with a
+`countsynth` estimates causal treatment effects on panel count data with a
 Bayesian hierarchical model: the untreated log-rate surface is a low-rank
 nonnegative factorization plus unit and time fixed effects, and treatment
 effects enter hierarchically on exposed cells. Sampling runs in Stan via
@@ -46,14 +46,14 @@ Columns are mapped by a schema — either explicit outcome definitions or
 prefix-based discovery:
 
 ```{r}
-library(bpnmf)
+library(countsynth)
 
-schema <- bpnmf_schema(
+schema <- countsynth_schema(
   unit_col = "state", 
   time_col = "time", 
   treatment_col = 
   "exposed_births",
-  outcomes_from_prefixes = bpnmf_prefixes(
+  outcomes_from_prefixes = countsynth_prefixes(
     outcome_prefix = "births_", denominator_prefix = "pop_",
     include = "total"
   )
@@ -63,9 +63,9 @@ schema <- bpnmf_schema(
 ## Fitting the bundled example
 
 ```{r}
-cfg <- bpnmf_example_config()  # bundled US fertility panel, smoke settings
-dat <- bpnmf_data(cfg)
-fit <- bpnmf_fit(dat, config = cfg)
+cfg <- countsynth_example_config()  # bundled US fertility panel, smoke settings
+dat <- countsynth_data(cfg)
+fit <- countsynth_fit(dat, config = cfg)
 
 summary(fit)              # convergence gate: R-hat, ESS, divergences
 parameter_diagnostics(fit)
@@ -74,31 +74,31 @@ parameter_diagnostics(fit)
 ## Reporting
 
 ```{r}
-draws <- bpnmf_draws(fit)
+draws <- countsynth_draws(fit)
 
-bpnmf_summary_table(draws)          # observed vs expected, one row per group
-bpnmf_post_treatment_summary(draws) # per-unit excess, ranked
-bpnmf_expected_vs_observed(draws)   # per-(unit, time) detail
+countsynth_summary_table(draws)          # observed vs expected, one row per group
+countsynth_post_treatment_summary(draws) # per-unit excess, ranked
+countsynth_expected_vs_observed(draws)   # per-(unit, time) detail
 
 plot(fit, which = "unit_fit", unit = "Texas")
 plot(fit, which = "unit_gap", unit = "Texas")
-bpnmf_interval_plot(draws, estimand = "ratio", method = "mu")
-bpnmf_ppc_plots(draws)
+countsynth_interval_plot(draws, estimand = "ratio", method = "mu")
+countsynth_ppc_plots(draws)
 ```
 
 Or run the whole pipeline (all types × ranks, artifacts on disk) at once:
 
 ```{r}
-bpnmf_run(cfg)
+countsynth_run(cfg)
 ```
 
 ## Using existing Python configs
 
 Configs written for the Python `bayesian_panel_nmf` package load directly —
-`read_bpnmf_config()` accepts the same schema and translates the MCMC key
+`read_countsynth_config()` accepts the same schema and translates the MCMC key
 names (`num_warmup` → `iter_warmup`, `target_accept` → `adapt_delta`, …):
 
 ```{r}
-cfg <- read_bpnmf_config("configs/fertility_smoke_test.yaml")
-bpnmf_run(cfg)
+cfg <- read_countsynth_config("configs/fertility_smoke_test.yaml")
+countsynth_run(cfg)
 ```

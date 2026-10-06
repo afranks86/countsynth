@@ -7,14 +7,14 @@
 #' `max_elements` (highest-variance elements kept, mirroring the Python
 #' trace CLI's informative-coordinate subsampling).
 #'
-#' @param fit A `bpnmf_fit` / `bpnmf_cut_fit`, or a raw `CmdStanMCMC`.
+#' @param fit A `countsynth_fit` / `countsynth_cut_fit`, or a raw `CmdStanMCMC`.
 #' @param variables Variable names (prefixes match whole variables); defaults
 #'   to the scalar treatment/scale parameters.
 #' @param max_elements Cap on the number of parameter elements plotted.
 #' @return A ggplot object.
 #' @export
-bpnmf_trace_plot <- function(fit, variables = NULL, max_elements = 20) {
-  if (inherits(fit, "bpnmf_fit") || inherits(fit, "bpnmf_cut_fit")) {
+countsynth_trace_plot <- function(fit, variables = NULL, max_elements = 20) {
+  if (inherits(fit, "countsynth_fit") || inherits(fit, "countsynth_cut_fit")) {
     fit <- fit$fit
   }
   if (is_variational_fit(fit)) {
@@ -50,7 +50,7 @@ bpnmf_trace_plot <- function(fit, variables = NULL, max_elements = 20) {
   draws <- posterior::subset_draws(draws, variable = keep)
 
   if (requireNamespace("bayesplot", quietly = TRUE)) {
-    return(bayesplot::mcmc_trace(draws) + theme_bpnmf())
+    return(bayesplot::mcmc_trace(draws) + theme_countsynth())
   }
   long <- posterior::as_draws_df(draws) |>
     tidyr::pivot_longer(
@@ -67,5 +67,5 @@ bpnmf_trace_plot <- function(fit, variables = NULL, max_elements = 20) {
     ggplot2::geom_line(linewidth = 0.3, alpha = 0.8) +
     ggplot2::facet_wrap(ggplot2::vars(.data$parameter), scales = "free_y") +
     ggplot2::labs(x = "Iteration", y = NULL, color = "Chain") +
-    theme_bpnmf()
+    theme_countsynth()
 }

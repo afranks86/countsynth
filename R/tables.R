@@ -12,7 +12,7 @@
 #' [add_aggregate_units()] for cells where a source unit's suppressed count
 #' was filled in), is carried through so plots can mark those points.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @return A tibble keyed by unit, time, group, outcome, treatment, with an
 #'   `outcome_imputed` column (`FALSE` when `draws` doesn't have one).
 #' @export
@@ -42,7 +42,7 @@ compute_quantiles <- function(draws) {
 #' to have the longest exposure. Otherwise the unit with the most
 #' post-treatment periods wins, ties broken by unit order.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @export
 auto_detect_target <- function(draws) {
   treated <- draws[!is.na(draws$treatment) & draws$treatment == 1, ]
@@ -131,10 +131,10 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 #' conditioned on an observed denominator treatment may have moved. The
 #' trade is that nothing adjusts for exposure any more -- whatever the
 #' denominator would have done has to be carried by the factors. See
-#' `denominator_may_be_affected` in [bpnmf_output_opts()] to surface this
+#' `denominator_may_be_affected` in [countsynth_output_opts()] to surface this
 #' caveat in the rendered report, where it is a footnote on `Expected`.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param target_unit Unit to summarize.
 #' @param rate_normalizer Rates are per this many units of exposure
 #'   (default 1000). A display scale only -- it cancels out of `Pct Change`.
@@ -147,7 +147,7 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 #'   rates. `Pct Change CI` is always present (the denominator cancels out of
 #'   it), and the returned tibble carries a `has_denominator` attribute.
 #' @export
-bpnmf_summary_table <- function(draws, target_unit = NULL,
+countsynth_summary_table <- function(draws, target_unit = NULL,
                                 rate_normalizer = 1000,
                                 denominator_label = "denominator",
                                 denominator_time_unit = "year") {
@@ -161,7 +161,7 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
     return(tibble::tibble())
   }
   df$years <- time_weight_per_row(df, denominator_time_unit)
-  # bpnmf_draws() always emits a denominator column (1 everywhere when none
+  # countsynth_draws() always emits a denominator column (1 everywhere when none
   # was configured -- see build_cell_table()), but a hand-built frame may not.
   has_denom <- draws_has_denominator(draws)
   if (!"denominator" %in% names(df)) {
@@ -245,22 +245,22 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
 
 #' Headline summary table stacked over several units
 #'
-#' [bpnmf_summary_table()] run per unit and row-bound, with a `Unit` column in
+#' [countsynth_summary_table()] run per unit and row-bound, with a `Unit` column in
 #' front. Units with no post-treatment rows drop out.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param units Units to include (`NULL` = every treated unit, aggregates
 #'   included when the frame has them).
 #' @param rate_normalizer Rates are per this many units of exposure.
 #' @return A tibble, or an empty tibble when no unit has post-treatment rows.
 #' @export
-bpnmf_summary_table_by_unit <- function(draws, units = NULL,
+countsynth_summary_table_by_unit <- function(draws, units = NULL,
                                         rate_normalizer = 1000,
                                         denominator_label = "denominator",
                                         denominator_time_unit = "year") {
   units <- units %||% identify_treated_units(draws)
   dplyr::bind_rows(lapply(units, function(u) {
-    tbl <- bpnmf_summary_table(
+    tbl <- countsynth_summary_table(
       draws, u,
       rate_normalizer = rate_normalizer,
       denominator_label = denominator_label,
@@ -285,12 +285,12 @@ bpnmf_summary_table_by_unit <- function(draws, units = NULL,
 #'
 #' All raw counts here -- no denominator involved -- but `expected` still
 #' assumes the observed denominator baked into `mu` is fixed/exogenous; see
-#' [bpnmf_summary_table()] for the caveat when treatment could also affect
+#' [countsynth_summary_table()] for the caveat when treatment could also affect
 #' the denominator.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @export
-bpnmf_post_treatment_summary <- function(draws) {
+countsynth_post_treatment_summary <- function(draws) {
   post <- draws[!is.na(draws$treatment) & draws$treatment == 1, ]
   cols <- c(
     "unit", "group", "n_periods", "observed", "observed_imputed",
@@ -357,11 +357,11 @@ bpnmf_post_treatment_summary <- function(draws) {
 #' expected_mean` and `gap_pct`. `observed_imputed` flags a cell where a
 #' source unit's suppressed count was filled in by [add_aggregate_units()].
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param target_unit Unit flagged in the `treated_unit` column
 #'   (auto-detected when `NULL`).
 #' @export
-bpnmf_expected_vs_observed <- function(draws, target_unit = NULL) {
+countsynth_expected_vs_observed <- function(draws, target_unit = NULL) {
   target_unit <- target_unit %||% auto_detect_target(draws)
   detail <- compute_quantiles(draws) |>
     dplyr::rename(

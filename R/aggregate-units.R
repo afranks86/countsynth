@@ -112,15 +112,15 @@ aggregate_one <- function(source_df, unit_name, sources) {
 #' a pooled unit from a real one -- they are otherwise ordinary rows. Read it
 #' with [aggregate_unit_names()].
 #'
-#' @param draws A `bpnmf_draws` frame.
-#' @param specs A list of [bpnmf_aggregate_unit()] specs.
+#' @param draws A `countsynth_draws` frame.
+#' @param specs A list of [countsynth_aggregate_unit()] specs.
 #' @return The draws frame with aggregate-unit rows appended.
 #' @export
 add_aggregate_units <- function(draws, specs) {
   if (is.null(specs) || length(specs) == 0) {
     return(draws)
   }
-  checkmate::assert_list(specs, types = "bpnmf_aggregate_unit")
+  checkmate::assert_list(specs, types = "countsynth_aggregate_unit")
   attr_names <- c("groups", "units", "times", "has_denominator")
   attrs <- stats::setNames(lapply(attr_names, function(a) attr(draws, a)), attr_names)
   attrs <- attrs[!vapply(attrs, is.null, logical(1))]
@@ -164,8 +164,8 @@ add_aggregate_units <- function(draws, specs) {
   attr(out, "aggregate_units") <- unique(c(
     aggregate_unit_names(draws), names(aggregate_frames)
   ))
-  if (!inherits(out, "bpnmf_draws")) {
-    class(out) <- c("bpnmf_draws", class(out))
+  if (!inherits(out, "countsynth_draws")) {
+    class(out) <- c("countsynth_draws", class(out))
   }
   out
 }
@@ -176,7 +176,7 @@ add_aggregate_units <- function(draws, specs) {
 #' which survives row subsetting and `dplyr` verbs. Returns `character(0)` for
 #' a frame that never had any.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @return Character vector of unit names.
 #' @export
 aggregate_unit_names <- function(draws) {
