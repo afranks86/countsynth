@@ -1,28 +1,28 @@
 # Statistical parity vs the Python implementation on the bundled fertility
 # smoke configuration. Slow (~20 min: full Stan fit); run explicitly with
-# BPNMF_RUN_STATISTICAL_PARITY=true. Compares post-treatment estimands
+# COUNTSYNTH_RUN_STATISTICAL_PARITY=true. Compares post-treatment estimands
 # against frozen Python golden summaries (inst/python-golden).
 
 test_that("R posterior estimands match the Python golden summaries", {
   skip_on_cran()
   skip_if_no_cmdstan()
   skip_if_not(
-    identical(Sys.getenv("BPNMF_RUN_STATISTICAL_PARITY"), "true"),
-    "Set BPNMF_RUN_STATISTICAL_PARITY=true to run the slow parity fit"
+    identical(Sys.getenv("COUNTSYNTH_RUN_STATISTICAL_PARITY"), "true"),
+    "Set COUNTSYNTH_RUN_STATISTICAL_PARITY=true to run the slow parity fit"
   )
 
-  golden_dir <- system.file("python-golden", package = "bpnmf")
+  golden_dir <- system.file("python-golden", package = "countsynth")
   golden <- utils::read.csv(
     file.path(golden_dir, "post_treatment_summary.csv")
   )
 
-  cfg <- bpnmf_example_config(
+  cfg <- countsynth_example_config(
     output_dir = file.path(withr::local_tempdir(), "parity"),
-    output = bpnmf_output_opts(figures = FALSE, print_tables = FALSE)
+    output = countsynth_output_opts(figures = FALSE, print_tables = FALSE)
   )
-  dat <- bpnmf_data(cfg)
-  fit <- bpnmf_fit(dat, config = cfg)
-  pt <- bpnmf_post_treatment_summary(bpnmf_draws(fit))
+  dat <- countsynth_data(cfg)
+  fit <- countsynth_fit(dat, config = cfg)
+  pt <- countsynth_post_treatment_summary(countsynth_draws(fit))
 
   m <- merge(pt, golden, by = c("unit", "group"), suffixes = c("_r", "_py"))
   expect_equal(nrow(m), nrow(golden))

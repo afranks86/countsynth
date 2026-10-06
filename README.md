@@ -1,4 +1,4 @@
-# bpnmf
+# countsynth
 
 Estimate causal treatment effects on panel count data (births, low birth
 weight, preterm outcomes, …) with a Bayesian hierarchical model built on a
@@ -35,9 +35,9 @@ install.packages("cmdstanr",
   repos = c("https://stan-dev.r-universe.dev", getOption("repos")))
 cmdstanr::install_cmdstan()   # one-time, ~10 min
 
-# install bpnmf from source
+# install countsynth from source
 # install.packages("remotes")
-remotes::install_github("afranks86/bpnmf")
+remotes::install_github("afranks86/countsynth")
 ```
 
 Check the toolchain before a long run — `cmdstanr::cmdstan_path()` should
@@ -50,25 +50,25 @@ cmdstanr::cmdstan_path()
 ## Quick start (bundled example)
 
 ```r
-library(bpnmf)
+library(countsynth)
 
-cfg  <- bpnmf_example_config()          # bundled US fertility data
-dat  <- bpnmf_data(cfg)                 # CSV -> standardized panel + arrays
-fit  <- bpnmf_fit(dat, config = cfg)    # NUTS via cmdstanr
+cfg  <- countsynth_example_config()          # bundled US fertility data
+dat  <- countsynth_data(cfg)                 # CSV -> standardized panel + arrays
+fit  <- countsynth_fit(dat, config = cfg)    # NUTS via cmdstanr
 
 summary(fit)                            # convergence gate
 parameter_diagnostics(fit)              # per-parameter R-hat / ESS table
 
-draws <- bpnmf_draws(fit)               # tidy long draws frame
-bpnmf_summary_table(draws)              # headline observed vs expected
+draws <- countsynth_draws(fit)               # tidy long draws frame
+countsynth_summary_table(draws)              # headline observed vs expected
 plot(fit, which = "unit_fit", unit = "Texas")
-bpnmf_interval_plot(draws, estimand = "ratio")
+countsynth_interval_plot(draws, estimand = "ratio")
 
 # or run everything (fits + artifacts + figures) from the config:
-bpnmf_run(cfg)
+countsynth_run(cfg)
 ```
 
-`bpnmf_example_config()` is a smoke-test configuration (200 warmup + 200
+`countsynth_example_config()` is a smoke-test configuration (200 warmup + 200
 sampling iterations): fast enough to verify the pipeline end-to-end, not
 suitable for inference. It is also the best starting template — every field
 you would set for your own data is set there. Print it (`cfg`) or read its
@@ -76,7 +76,7 @@ source (`R/example.R`) to see a complete, working configuration.
 
 ---
 
-# Using bpnmf on your own panel data
+# Using countsynth on your own panel data
 
 ## 1. Shape your data
 
@@ -119,12 +119,12 @@ forms:
 
 | Form | How you make it | When to use it |
 |------|-----------------|----------------|
-| An R object | `bpnmf_config()` plus the `bpnmf_*_opts()` constructors | interactive work, scripts, programmatic sweeps |
-| A YAML file | any path you like, conventionally `configs/myproject.yaml`, loaded with `read_bpnmf_config("configs/myproject.yaml")` | reproducible runs, sharing, configs already written for the Python package |
+| An R object | `countsynth_config()` plus the `countsynth_*_opts()` constructors | interactive work, scripts, programmatic sweeps |
+| A YAML file | any path you like, conventionally `configs/myproject.yaml`, loaded with `read_countsynth_config("configs/myproject.yaml")` | reproducible runs, sharing, configs already written for the Python package |
 
-Both produce the same validated `bpnmf_config` object; every function
-(`bpnmf_data()`, `bpnmf_fit()`, `bpnmf_run()`) takes that object, and
-`bpnmf_run()` also accepts a path to the YAML directly. Validation happens
+Both produce the same validated `countsynth_config` object; every function
+(`countsynth_data()`, `countsynth_fit()`, `countsynth_run()`) takes that object, and
+`countsynth_run()` also accepts a path to the YAML directly. Validation happens
 the moment you build the config, before any sampling: unknown keys, missing
 cross-field requirements, and contradictory options are all errors with the
 offending YAML path named.
@@ -253,10 +253,10 @@ cut:
 Then:
 
 ```r
-cfg <- read_bpnmf_config("configs/myproject.yaml")
+cfg <- read_countsynth_config("configs/myproject.yaml")
 cfg                       # prints a summary: input, mode, types, mcmc
-dat <- bpnmf_data(cfg)    # prints K groups, D units, N periods, exposed cells
-bpnmf_run(cfg)
+dat <- countsynth_data(cfg)    # prints K groups, D units, N periods, exposed cells
+countsynth_run(cfg)
 ```
 
 Inspect `dat` before you sample — it is the cheapest check that the schema
@@ -267,36 +267,36 @@ after an hour of NUTS.
 The same config built in R:
 
 ```r
-cfg <- bpnmf_config(
+cfg <- countsynth_config(
   input_file = "data/my_panel.csv",
   output_dir = "results/my_panel",
-  schema = bpnmf_schema(
+  schema = countsynth_schema(
     unit_col = "state", time_col = "time", treatment_col = "exposed",
-    outcomes_from_prefixes = bpnmf_prefixes(
+    outcomes_from_prefixes = countsynth_prefixes(
       outcome_prefix = "births_", denominator_prefix = "pop_",
       include = c("total", "nhblack")
     )
   ),
-  model = bpnmf_model_opts(
+  model = countsynth_model_opts(
     outcome_distribution = "NB",
-    types = list(total = bpnmf_type(groups = "total", ranks_to_test = 3))
+    types = list(total = countsynth_type(groups = "total", ranks_to_test = 3))
   ),
-  mcmc = bpnmf_mcmc_opts(iter_warmup = 1000, iter_sampling = 2500, thin = 10),
-  output = bpnmf_output_opts(figures = TRUE, target_unit = "Texas"),
+  mcmc = countsynth_mcmc_opts(iter_warmup = 1000, iter_sampling = 2500, thin = 10),
+  output = countsynth_output_opts(figures = TRUE, target_unit = "Texas"),
   start_date = "2016-01-01", end_date = "2024-01-01",
-  time_aggregation = bpnmf_time_aggregation(enabled = TRUE, period = "bimonthly")
+  time_aggregation = countsynth_time_aggregation(enabled = TRUE, period = "bimonthly")
 )
 ```
 
 Each option group has its own constructor so that ~80 options do not collapse
 into one unreadable signature. You do not have to call them, though: anywhere
-a `bpnmf_*` object is expected you can pass a **plain named list** of the same
+a `countsynth_*` object is expected you can pass a **plain named list** of the same
 arguments, which is then run through that very constructor — same validation,
 same defaults, same result. So the config above can be written as one call
 with the same shape as the YAML:
 
 ```r
-cfg <- bpnmf_config(
+cfg <- countsynth_config(
   input_file = "data/my_panel.csv",
   output_dir = "results/my_panel",
   schema = list(
@@ -320,7 +320,7 @@ cfg <- bpnmf_config(
 Mix the two freely. A misspelled name in a list is an error naming the field
 and listing the valid arguments, so the list form is not a way to smuggle a
 typo past validation. Reach for the constructors when you want argument
-completion and `?bpnmf_model_opts` at your fingertips; reach for lists when
+completion and `?countsynth_model_opts` at your fingertips; reach for lists when
 you want one call that mirrors the YAML.
 
 Note that the R constructors use cmdstanr's MCMC names while the YAML uses
@@ -436,10 +436,10 @@ their own spanners, one row group per unit.
 Build one yourself from a draws frame:
 
 ```r
-draws <- bpnmf_draws(fit)
-bpnmf_gt_table(draws)                  # headline unit, one row per group
-bpnmf_gt_table(draws, by_unit = TRUE)  # every treated unit, grouped
-gt::gtsave(bpnmf_gt_table(draws, by_unit = TRUE), "summary.html")
+draws <- countsynth_draws(fit)
+countsynth_gt_table(draws)                  # headline unit, one row per group
+countsynth_gt_table(draws, by_unit = TRUE)  # every treated unit, grouped
+gt::gtsave(countsynth_gt_table(draws, by_unit = TRUE), "summary.html")
 ```
 
 The terminal prints the by-unit table only. `print_target_table: true` adds
@@ -448,7 +448,7 @@ table, so it is off by default.
 
 ## 5. What lands on disk
 
-`bpnmf_run(cfg)` writes, per model type (and per rank when more than one rank
+`countsynth_run(cfg)` writes, per model type (and per rank when more than one rank
 is requested):
 
 ```
@@ -475,16 +475,16 @@ estimated conditional on each (stage 2). This stops the treated cells from
 informing the baseline surface.
 
 ```r
-cfg  <- bpnmf_example_config(
-  model = bpnmf_model_opts(
-    types = list(total = bpnmf_type("total", 3)),
+cfg  <- countsynth_example_config(
+  model = countsynth_model_opts(
+    types = list(total = countsynth_type("total", 3)),
     inference_mode = "cut"
   ),
-  cut = bpnmf_cut_opts(num_stage1_draws = 25, stage2_draws_per_component = 100)
+  cut = countsynth_cut_opts(num_stage1_draws = 25, stage2_draws_per_component = 100)
 )
-cfit <- bpnmf_cut_fit(bpnmf_data(cfg), config = cfg)
+cfit <- countsynth_cut_fit(countsynth_data(cfg), config = cfg)
 summary(cfit)               # stage-1 gate + per-component table
-draws <- bpnmf_draws(cfit)  # pooled, with cut_component / stage1_* provenance
+draws <- countsynth_draws(cfit)  # pooled, with cut_component / stage1_* provenance
 ```
 
 Cost scales as `num_stage1_draws` × the stage-2 run, so stage 2 is usually
@@ -502,18 +502,18 @@ downstream is unchanged: ADVI still yields draws of `mu_ctrl`, and the same
 seeded, stratified selection promotes some of them to cut components.
 
 ```r
-cfg <- bpnmf_example_config(
-  model = bpnmf_model_opts(
-    types = list(total = bpnmf_type("total", 3)),
+cfg <- countsynth_example_config(
+  model = countsynth_model_opts(
+    types = list(total = countsynth_type("total", 3)),
     inference_mode = "cut"
   ),
-  cut = bpnmf_cut_opts(
+  cut = countsynth_cut_opts(
     num_stage1_draws = 25,
     stage1_method = "variational",
     stage1_variational = list(algorithm = "meanfield", draws = 1000)
   )
 )
-cfit <- bpnmf_cut_fit(bpnmf_data(cfg), config = cfg)
+cfit <- countsynth_cut_fit(countsynth_data(cfg), config = cfg)
 ```
 
 What you give up is real, and it is uncertainty rather than location.
@@ -531,7 +531,7 @@ records this rather than papering over it:
 - `manifest$stage1$converged` is `NA` (“not gated”), never `TRUE`/`FALSE`
 - `manifest$stage1_gated` is `FALSE`, and `manifest$converged` then reflects
   only the stage-2 fits, which are still full MCMC and still gated
-- `parameter_diagnostics()` and `bpnmf_trace_plot()` error on a variational
+- `parameter_diagnostics()` and `countsynth_trace_plot()` error on a variational
   fit instead of returning a meaningless single-chain R-hat
 
 CmdStan’s own run-specific complaints (“the variational approximation may be
@@ -539,7 +539,7 @@ poor”, “maximum number of iterations is reached”) are surfaced as R warnin
 
 Use ADVI to iterate on rank, priors, and data prep; re-run with
 `stage1_method = "sample"` for anything you intend to report. The same switch
-is available directly on a single fit as `bpnmf_fit(..., method =
+is available directly on a single fit as `countsynth_fit(..., method =
 "variational")`.
 
 ## Treatment-effect covariates
@@ -550,10 +550,10 @@ which says how large the effect is but not what moves it. A
 surface, in lme4-style syntax, shared by joint and cut inference:
 
 ```r
-cfg <- bpnmf_example_config(
-  model = bpnmf_model_opts(
-    types = list(total = bpnmf_type("total", 3)),
-    treatment_effects = bpnmf_te_opts(
+cfg <- countsynth_example_config(
+  model = countsynth_model_opts(
+    types = list(total = countsynth_type("total", 3)),
+    treatment_effects = countsynth_te_opts(
       # Effect trending with time since treatment, plus a mediator, with
       # per-unit intercepts and slopes shrunk toward the surface.
       formula = ~ 1 + event_time + dist_change + (1 + event_time | unit),
@@ -561,12 +561,12 @@ cfg <- bpnmf_example_config(
     )
   )
 )
-fit <- bpnmf_fit(bpnmf_data(cfg), config = cfg)
+fit <- countsynth_fit(countsynth_data(cfg), config = cfg)
 
-bpnmf_te_regression_plot(fit, predictor = "event_time")            # surface
-bpnmf_te_regression_plot(fit, predictor = "event_time", by = "unit")  # by level
-bpnmf_te_coef_plot(fit, terms = "all")                             # forest
-bpnmf_te_coef_table(fit)                                           # summary
+countsynth_te_regression_plot(fit, predictor = "event_time")            # surface
+countsynth_te_regression_plot(fit, predictor = "event_time", by = "unit")  # by level
+countsynth_te_coef_plot(fit, terms = "all")                             # forest
+countsynth_te_coef_table(fit)                                           # summary
 ```
 
 `event_time` (periods since the unit's first treated period), `time_idx`,
@@ -586,7 +586,7 @@ random-number stream.
 - MCMC draws are **not** bitwise-identical across implementations (different
   samplers and RNGs); equivalence is distributional.
 - Configs written for the Python package load unchanged via
-  `read_bpnmf_config()`; unknown keys are rejected the same way.
+  `read_countsynth_config()`; unknown keys are rejected the same way.
 
 ## License
 

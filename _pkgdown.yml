@@ -5,36 +5,36 @@ template:
 reference:
 - title: Configuration
   contents:
-  - bpnmf_config
-  - read_bpnmf_config
-  - bpnmf_schema
-  - bpnmf_outcome
-  - bpnmf_prefixes
-  - bpnmf_model_opts
-  - bpnmf_type
-  - bpnmf_mcmc_opts
-  - bpnmf_convergence
-  - bpnmf_output_opts
-  - bpnmf_cut_opts
-  - bpnmf_te_opts
-  - bpnmf_time_aggregation
-  - bpnmf_aggregate_unit
+  - countsynth_config
+  - read_countsynth_config
+  - countsynth_schema
+  - countsynth_outcome
+  - countsynth_prefixes
+  - countsynth_model_opts
+  - countsynth_type
+  - countsynth_mcmc_opts
+  - countsynth_convergence
+  - countsynth_output_opts
+  - countsynth_cut_opts
+  - countsynth_te_opts
+  - countsynth_time_aggregation
+  - countsynth_aggregate_unit
 - title: Data
   contents:
-  - bpnmf_data
+  - countsynth_data
   - build_model_arrays
-  - bpnmf_example_data
-  - bpnmf_example_config
+  - countsynth_example_data
+  - countsynth_example_config
 - title: Fitting
   contents:
-  - bpnmf_fit
-  - bpnmf_cut_fit
-  - bpnmf_run
-  - bpnmf_stan_model
+  - countsynth_fit
+  - countsynth_cut_fit
+  - countsynth_run
+  - countsynth_stan_model
 - title: Draws and estimands
   contents:
-  - bpnmf_draws
-  - bpnmf_te_draws
+  - countsynth_draws
+  - countsynth_te_draws
   - add_aggregate_units
   - compute_quantiles
   - auto_detect_target
@@ -46,30 +46,30 @@ reference:
   - write_convergence_json
 - title: Tables
   contents:
-  - bpnmf_summary_table
-  - bpnmf_summary_table_by_unit
-  - bpnmf_gt_table
-  - bpnmf_post_treatment_summary
-  - bpnmf_expected_vs_observed
-  - bpnmf_te_coef_table
+  - countsynth_summary_table
+  - countsynth_summary_table_by_unit
+  - countsynth_gt_table
+  - countsynth_post_treatment_summary
+  - countsynth_expected_vs_observed
+  - countsynth_te_coef_table
 - title: Figures
   contents:
-  - theme_bpnmf
-  - bpnmf_unit_fit_plot
-  - bpnmf_unit_gap_plot
-  - bpnmf_raw_rate_plot
-  - bpnmf_group_comparison_plot
-  - bpnmf_interval_plot
-  - bpnmf_te_regression_plot
-  - bpnmf_te_regression_summary
-  - bpnmf_te_coef_plot
-  - bpnmf_ppc_plots
-  - bpnmf_ppc_abs
-  - bpnmf_ppc_acf
-  - bpnmf_ppc_rmse
-  - bpnmf_ppc_unit_corr
-  - bpnmf_trace_plot
+  - theme_countsynth
+  - countsynth_unit_fit_plot
+  - countsynth_unit_gap_plot
+  - countsynth_raw_rate_plot
+  - countsynth_group_comparison_plot
+  - countsynth_interval_plot
+  - countsynth_te_regression_plot
+  - countsynth_te_regression_summary
+  - countsynth_te_coef_plot
+  - countsynth_ppc_plots
+  - countsynth_ppc_abs
+  - countsynth_ppc_acf
+  - countsynth_ppc_rmse
+  - countsynth_ppc_unit_corr
+  - countsynth_trace_plot
 - title: Reports
   contents:
-  - bpnmf_report
-  - plot.bpnmf_fit
+  - countsynth_report
+  - plot.countsynth_fit

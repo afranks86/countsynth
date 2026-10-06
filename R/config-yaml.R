@@ -1,6 +1,6 @@
 # YAML config loader. Accepts the Python package's config schema verbatim
 # (same section names, same key names) and translates to the R-native
-# bpnmf_config object. Replicates pydantic's extra="forbid" (unknown keys at
+# countsynth_config object. Replicates pydantic's extra="forbid" (unknown keys at
 # any nesting level are an error, with the YAML path in the message) and
 # StrictBool (a quoted "false" is rejected rather than treated as truthy).
 
@@ -48,7 +48,7 @@ parse_yaml_schema <- function(x, path = "data.schema") {
         o, c("outcome_col", "label", "denominator_col"),
         glue::glue("{path}.outcomes[{i}]")
       )
-      bpnmf_outcome(o$outcome_col, o$label, o$denominator_col)
+      countsynth_outcome(o$outcome_col, o$label, o$denominator_col)
     })
   }
   prefixes <- NULL
@@ -58,11 +58,11 @@ parse_yaml_schema <- function(x, path = "data.schema") {
       p, c("outcome_prefix", "denominator_prefix", "include"),
       glue::glue("{path}.outcomes_from_prefixes")
     )
-    prefixes <- bpnmf_prefixes(
+    prefixes <- countsynth_prefixes(
       p$outcome_prefix, p$denominator_prefix, yaml_chr(p$include)
     )
   }
-  bpnmf_schema(
+  countsynth_schema(
     unit_col = x$unit_col, time_col = x$time_col,
     treatment_col = x$treatment_col,
     outcomes = outcomes, outcomes_from_prefixes = prefixes
@@ -71,7 +71,7 @@ parse_yaml_schema <- function(x, path = "data.schema") {
 
 parse_yaml_model <- function(x, path = "model") {
   if (is.null(x)) {
-    return(bpnmf_model_opts())
+    return(countsynth_model_opts())
   }
   check_known_keys(
     x,
@@ -93,7 +93,7 @@ parse_yaml_model <- function(x, path = "model") {
     if (is.null(te$formula)) {
       cli::cli_abort("{.field {tpath}} must define a {.field formula}.")
     }
-    treatment_effects <- bpnmf_te_opts(
+    treatment_effects <- countsynth_te_opts(
       formula = te$formula,
       covariates = te$covariates_file,
       standardize = yaml_flag(te$standardize, glue::glue("{tpath}.standardize"), TRUE),
@@ -111,7 +111,7 @@ parse_yaml_model <- function(x, path = "model") {
           "exclude_units"),
         glue::glue("{path}.types.{nm}")
       )
-      bpnmf_type(
+      countsynth_type(
         groups = yaml_chr(tp$groups),
         ranks_to_test = unlist(tp$ranks_to_test, use.names = FALSE),
         total_from = yaml_chr(tp$total_from),
@@ -121,7 +121,7 @@ parse_yaml_model <- function(x, path = "model") {
     })
     names(types) <- names(x$types)
   }
-  bpnmf_model_opts(
+  countsynth_model_opts(
     outcome_distribution = x$outcome_distribution %||% "NB",
     types = types,
     nb_disp = x$nb_disp %||% 1e-4,
@@ -136,7 +136,7 @@ parse_yaml_model <- function(x, path = "model") {
 
 parse_yaml_mcmc <- function(x, path = "mcmc") {
   if (is.null(x)) {
-    return(bpnmf_mcmc_opts())
+    return(countsynth_mcmc_opts())
   }
   check_known_keys(
     x,
@@ -145,7 +145,7 @@ parse_yaml_mcmc <- function(x, path = "mcmc") {
       "progress_bar", "gate_params", "convergence"),
     path
   )
-  convergence <- bpnmf_convergence()
+  convergence <- countsynth_convergence()
   if (!is.null(x$convergence)) {
     cv <- x$convergence
     check_known_keys(
@@ -153,7 +153,7 @@ parse_yaml_mcmc <- function(x, path = "mcmc") {
             "divergence_fail_fraction"),
       glue::glue("{path}.convergence")
     )
-    convergence <- bpnmf_convergence(
+    convergence <- countsynth_convergence(
       rhat_warn = cv$rhat_warn %||% 1.01,
       rhat_fail = cv$rhat_fail %||% 1.05,
       ess_min = cv$ess_min %||% 400,
@@ -179,7 +179,7 @@ parse_yaml_mcmc <- function(x, path = "mcmc") {
       vectorized = chains
     )
   }
-  bpnmf_mcmc_opts(
+  countsynth_mcmc_opts(
     auto_parallelism = yaml_flag(x$auto_parallelism, glue::glue("{path}.auto_parallelism"), TRUE),
     max_chains = x$max_chains %||% 4L,
     chains = chains,
@@ -197,7 +197,7 @@ parse_yaml_mcmc <- function(x, path = "mcmc") {
 
 parse_yaml_output <- function(x, path = "output") {
   if (is.null(x)) {
-    return(bpnmf_output_opts())
+    return(countsynth_output_opts())
   }
   check_known_keys(
     x,
@@ -227,7 +227,7 @@ parse_yaml_output <- function(x, path = "output") {
           "include_units", "exclude_units", "strict", "overwrite"),
         apath
       )
-      bpnmf_aggregate_unit(
+      countsynth_aggregate_unit(
         unit = a$unit,
         include_treated_units =
           yaml_flag(a$include_treated_units, glue::glue("{apath}.include_treated_units"), FALSE),
@@ -240,7 +240,7 @@ parse_yaml_output <- function(x, path = "output") {
       )
     })
   }
-  bpnmf_output_opts(
+  countsynth_output_opts(
     figures = figures,
     clean = yaml_flag(x$clean, glue::glue("{path}.clean"), FALSE),
     save_traces = yaml_flag(x$save_traces, glue::glue("{path}.save_traces"), FALSE),
@@ -294,7 +294,7 @@ parse_yaml_cut <- function(x, path = "cut") {
       )
     }
   }
-  bpnmf_cut_opts(
+  countsynth_cut_opts(
     num_stage1_draws = x$num_stage1_draws %||% 25L,
     stage2_draws_per_component =
       if ("stage2_draws_per_component" %in% names(x)) {
@@ -310,7 +310,7 @@ parse_yaml_cut <- function(x, path = "cut") {
   )
 }
 
-#' Read a bpnmf YAML config
+#' Read a countsynth YAML config
 #'
 #' Accepts the Python `bayesian_panel_nmf` config schema verbatim (Python key
 #' names like `num_warmup` / `target_accept` / `random_seed` are translated to
@@ -322,9 +322,9 @@ parse_yaml_cut <- function(x, path = "cut") {
 #' relative to the current working directory (same as the Python CLI).
 #'
 #' @param path Path to a YAML config file.
-#' @return A validated [bpnmf_config()] object.
+#' @return A validated [countsynth_config()] object.
 #' @export
-read_bpnmf_config <- function(path) {
+read_countsynth_config <- function(path) {
   checkmate::assert_file_exists(path, extension = c("yaml", "yml"))
   raw <- yaml::read_yaml(path)
   check_known_keys(raw, c("data", "model", "mcmc", "output", "cut"), "<top level>")
@@ -357,17 +357,17 @@ read_bpnmf_config <- function(path) {
     )
     d$time_aggregation <- d$aggregation
   }
-  time_aggregation <- bpnmf_time_aggregation()
+  time_aggregation <- countsynth_time_aggregation()
   if (!is.null(d$time_aggregation)) {
     ta <- d$time_aggregation
     check_known_keys(ta, c("enabled", "period", "n_periods"), "data.time_aggregation")
-    time_aggregation <- bpnmf_time_aggregation(
+    time_aggregation <- countsynth_time_aggregation(
       enabled = yaml_flag(ta$enabled, "data.time_aggregation.enabled", FALSE),
       period = ta$period,
       n_periods = ta$n_periods
     )
   }
-  bpnmf_config(
+  countsynth_config(
     input_file = d$input_file,
     output_dir = d$output_dir,
     schema = parse_yaml_schema(d$schema),

@@ -1,4 +1,4 @@
-Package: bpnmf
+Package: countsynth
 Title: Bayesian Panel NMF for Causal Effects on Panel Count Data
 Version: 0.0.0.9000
 Authors@R:
@@ -49,7 +49,7 @@ Additional_repositories: https://stan-dev.r-universe.dev
 SystemRequirements: CmdStan (>= 2.34)
 Config/testthat/edition: 3
 VignetteBuilder: knitr
-URL: https://github.com/afranks86/bpnmf-r
-BugReports: https://github.com/afranks86/bpnmf-r/issues
+URL: https://github.com/afranks86/countsynth
+BugReports: https://github.com/afranks86/countsynth/issues
 Config/roxygen2/version: 8.0.0
 RoxygenNote: 7.3.2

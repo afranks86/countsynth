@@ -7,13 +7,13 @@
 convergence_gate(fit, gate_params = NULL, thresholds = NULL)
 }
 \arguments{
-\item{fit}{A \code{bpnmf_fit} / \code{bpnmf_cut_fit}, or a raw \code{CmdStanMCMC}.}
+\item{fit}{A \code{countsynth_fit} / \code{countsynth_cut_fit}, or a raw \code{CmdStanMCMC}.}
 
 \item{gate_params}{Optional character vector of variable-name prefixes the
 R-hat/ESS gate is restricted to (defaults to the config's
-\code{mcmc$gate_params} when \code{fit} is a \code{bpnmf_fit}).}
+\code{mcmc$gate_params} when \code{fit} is a \code{countsynth_fit}).}
 
-\item{thresholds}{A \code{\link[=bpnmf_convergence]{bpnmf_convergence()}} object.}
+\item{thresholds}{A \code{\link[=countsynth_convergence]{countsynth_convergence()}} object.}
 }
 \value{
 A list: \code{rhat_max}, \code{ess_bulk_min}, \code{ess_tail_min}, \code{divergences},

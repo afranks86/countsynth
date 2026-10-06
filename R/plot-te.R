@@ -1,7 +1,7 @@
 # Figures for the treatment-effect regression: the posterior of the fitted
 # regression function over a covariate (curve + nested ribbons), and a forest
 # plot of the coefficients. Both consume the tidy coefficient frame from
-# bpnmf_te_draws() plus the design's parsed formula, so joint and cut fits
+# countsynth_te_draws() plus the design's parsed formula, so joint and cut fits
 # plot identically.
 
 # Wide (n_draws x n_coefficient) matrix keyed by "term\rpredictor\rlevel".
@@ -90,7 +90,7 @@ te_default_predictor <- function(design) {
   if (length(num) == 0) {
     cli::cli_abort(
       "No continuous predictor in the treatment-effect formula; pass
-       {.field predictor} explicitly or use {.fn bpnmf_te_coef_plot}."
+       {.field predictor} explicitly or use {.fn countsynth_te_coef_plot}."
     )
   }
   num[[1]]
@@ -116,7 +116,7 @@ te_design_of <- function(x) {
 #' The x axis is on the covariate's original scale even when the sampler ran
 #' on standardized covariates.
 #'
-#' @param x A `bpnmf_fit` or `bpnmf_cut_fit` fit with a `treatment_effects`
+#' @param x A `countsynth_fit` or `countsynth_cut_fit` fit with a `treatment_effects`
 #'   formula.
 #' @param predictor Covariate on the x axis (defaults to the first continuous
 #'   variable in the formula).
@@ -132,21 +132,21 @@ te_design_of <- function(x) {
 #'   only, which reads better with many levels).
 #' @return A ggplot object.
 #' @export
-bpnmf_te_regression_plot <- function(x, predictor = NULL, by = NULL,
+countsynth_te_regression_plot <- function(x, predictor = NULL, by = NULL,
                                      levels_keep = NULL, at = NULL,
                                      n_grid = 60,
                                      scale = c("log", "percent"),
                                      bands = TRUE) {
   scale <- match.arg(scale)
   design <- te_design_of(x)
-  te <- bpnmf_te_draws(x)
+  te <- countsynth_te_draws(x)
   predictor <- predictor %||% te_default_predictor(design)
   if (!predictor %in% names(design$raw_frame)) {
     cli::cli_abort("{.val {predictor}} is not a variable in the design.")
   }
   if (!is.numeric(design$raw_frame[[predictor]])) {
     cli::cli_abort(
-      "{.val {predictor}} is categorical; use {.fn bpnmf_te_coef_plot} for
+      "{.val {predictor}} is categorical; use {.fn countsynth_te_coef_plot} for
        categorical effects."
     )
   }
@@ -195,7 +195,7 @@ bpnmf_te_regression_plot <- function(x, predictor = NULL, by = NULL,
       },
       x = predictor, y = ylab, color = by, fill = by
     ) +
-    theme_bpnmf()
+    theme_countsynth()
   # Many levels overplot badly; facet instead of relying on the legend.
   if (!is.null(facet_by) && bands && n_lev > 3) {
     p <- p +
@@ -212,20 +212,20 @@ bpnmf_te_regression_plot <- function(x, predictor = NULL, by = NULL,
 
 #' Posterior summary of the treatment-effect regression function
 #'
-#' The data behind [bpnmf_te_regression_plot()]: one row per grid point (and
+#' The data behind [countsynth_te_regression_plot()]: one row per grid point (and
 #' level), with the posterior median and the 67% / 95% credible bounds.
 #'
-#' @inheritParams bpnmf_te_regression_plot
+#' @inheritParams countsynth_te_regression_plot
 #' @return A tibble with `x`, `level`, `median`, `lower_67`, `upper_67`,
 #'   `lower_95`, `upper_95`.
 #' @export
-bpnmf_te_regression_summary <- function(x, predictor = NULL, by = NULL,
+countsynth_te_regression_summary <- function(x, predictor = NULL, by = NULL,
                                         levels_keep = NULL, at = NULL,
                                         n_grid = 60,
                                         scale = c("log", "percent")) {
   scale <- match.arg(scale)
   design <- te_design_of(x)
-  te <- bpnmf_te_draws(x)
+  te <- countsynth_te_draws(x)
   predictor <- predictor %||% te_default_predictor(design)
   te_curve_frame(design, te, predictor, by, levels_keep, at, n_grid, scale)
 }
@@ -311,7 +311,7 @@ te_report_figures <- function(x) {
   out <- list()
   for (v in continuous) {
     out[[sprintf("te_regression_%s", v)]] <-
-      bpnmf_te_regression_plot(x, predictor = v)
+      countsynth_te_regression_plot(x, predictor = v)
     for (j in seq_along(design$terms)) {
       t_j <- design$terms[[j]]
       varies_with_v <- v %in% all.vars(design$bars[[j]][[2]])
@@ -323,10 +323,10 @@ te_report_figures <- function(x) {
       }
       slug <- gsub("[^a-z0-9]+", "_", tolower(t_j$label))
       out[[sprintf("te_regression_%s_by_%s", v, slug)]] <-
-        bpnmf_te_regression_plot(x, predictor = v, by = t_j$label)
+        countsynth_te_regression_plot(x, predictor = v, by = t_j$label)
     }
   }
-  out[["te_coefficients"]] <- bpnmf_te_coef_plot(
+  out[["te_coefficients"]] <- countsynth_te_coef_plot(
     x,
     terms = if (length(term_labels) > 0) "all" else NULL
   )
@@ -340,7 +340,7 @@ te_report_figures <- function(x) {
 #' terms. Level rows show the total coefficient (fixed surface + deviation)
 #' by default, or the deviation alone with `deviation = TRUE`.
 #'
-#' @param x A `bpnmf_fit` or `bpnmf_cut_fit` fit with a `treatment_effects`
+#' @param x A `countsynth_fit` or `countsynth_cut_fit` fit with a `treatment_effects`
 #'   formula.
 #' @param terms Grouping labels to include beyond the fixed effects (`NULL`
 #'   = fixed effects only, `"all"` = every term).
@@ -349,10 +349,10 @@ te_report_figures <- function(x) {
 #'   the total per-level coefficient.
 #' @return A ggplot object.
 #' @export
-bpnmf_te_coef_plot <- function(x, terms = NULL, predictors = NULL,
+countsynth_te_coef_plot <- function(x, terms = NULL, predictors = NULL,
                                deviation = FALSE) {
   design <- te_design_of(x)
-  te <- bpnmf_te_draws(x)
+  te <- countsynth_te_draws(x)
   term_labels <- vapply(design$terms, `[[`, character(1), "label")
   if (identical(terms, "all")) {
     terms <- term_labels
@@ -444,5 +444,5 @@ bpnmf_te_coef_plot <- function(x, terms = NULL, predictors = NULL,
       ),
       x = "Coefficient (log rate)", y = NULL
     ) +
-    theme_bpnmf()
+    theme_countsynth()
 }

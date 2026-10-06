@@ -18,7 +18,7 @@ fixture_data <- function() {
         df = NULL,
         type = "test"
       ),
-      class = c("bpnmf_data", "list")
+      class = c("countsynth_data", "list")
     )
   )
 }

@@ -1,5 +1,5 @@
 test_that("convergence status bands match the Python gate", {
-  th <- bpnmf_convergence() # 1.01 / 1.05 / 400 / 0.25
+  th <- countsynth_convergence() # 1.01 / 1.05 / 400 / 0.25
   expect_equal(convergence_status(1.0, 1000, th), "PASS")
   expect_equal(convergence_status(1.009, 400, th), "PASS")
   expect_equal(convergence_status(1.01, 1000, th), "WARN")
@@ -10,7 +10,7 @@ test_that("convergence status bands match the Python gate", {
 })
 
 test_that("custom thresholds are honored", {
-  th <- bpnmf_convergence(
+  th <- countsynth_convergence(
     rhat_warn = 1.1, rhat_fail = 1.2, ess_min = 100, ess_fail_fraction = 0.5
   )
   expect_equal(convergence_status(1.15, 1000, th), "WARN")
@@ -38,12 +38,12 @@ test_that("divergences are summarized as a rate over retained transitions", {
 })
 
 test_that("divergence_fail_fraction sets the gate's tolerance", {
-  expect_equal(bpnmf_convergence()$divergence_fail_fraction, 0.01)
+  expect_equal(countsynth_convergence()$divergence_fail_fraction, 0.01)
   # 0 restores the old rule: any divergence at all fails.
-  strict <- bpnmf_convergence(divergence_fail_fraction = 0)
+  strict <- countsynth_convergence(divergence_fail_fraction = 0)
   expect_true(0 <= strict$divergence_fail_fraction)
   expect_false(1e-9 <= strict$divergence_fail_fraction)
-  expect_error(bpnmf_convergence(divergence_fail_fraction = 1.5))
+  expect_error(countsynth_convergence(divergence_fail_fraction = 1.5))
 })
 
 test_that("gate_params prefix matching errors on zero matches", {
@@ -74,12 +74,12 @@ test_that("the gate defaults to mu_ctrl and te, with an 'all' opt-out", {
 })
 
 test_that("every config path lands on the default gate_params", {
-  expect_identical(bpnmf_mcmc_opts()$gate_params, c("mu_ctrl", "te"))
+  expect_identical(countsynth_mcmc_opts()$gate_params, c("mu_ctrl", "te"))
   # The YAML loader passes NULL explicitly when the key is absent, which would
   # otherwise skip the signature default.
-  expect_identical(bpnmf_mcmc_opts(gate_params = NULL)$gate_params, c("mu_ctrl", "te"))
-  expect_identical(bpnmf_mcmc_opts(gate_params = "all")$gate_params, "all")
-  expect_identical(bpnmf_mcmc_opts(gate_params = "te")$gate_params, "te")
+  expect_identical(countsynth_mcmc_opts(gate_params = NULL)$gate_params, c("mu_ctrl", "te"))
+  expect_identical(countsynth_mcmc_opts(gate_params = "all")$gate_params, "all")
+  expect_identical(countsynth_mcmc_opts(gate_params = "te")$gate_params, "te")
   expect_identical(parse_yaml_mcmc(NULL)$gate_params, c("mu_ctrl", "te"))
   expect_identical(parse_yaml_mcmc(list())$gate_params, c("mu_ctrl", "te"))
   expect_identical(
@@ -113,27 +113,27 @@ test_that("NA gate fields round-trip through the convergence JSON as null", {
   expect_identical(back$method, "variational")
 })
 
-test_that("is_variational_fit sees through the bpnmf_fit wrapper", {
+test_that("is_variational_fit sees through the countsynth_fit wrapper", {
   vb <- structure(list(), class = c("CmdStanVB", "CmdStanFit", "R6"))
   mcmc <- structure(list(), class = c("CmdStanMCMC", "CmdStanFit", "R6"))
   expect_true(is_variational_fit(vb))
   expect_false(is_variational_fit(mcmc))
-  expect_true(is_variational_fit(structure(list(fit = vb), class = "bpnmf_fit")))
-  expect_false(is_variational_fit(structure(list(fit = mcmc), class = "bpnmf_fit")))
+  expect_true(is_variational_fit(structure(list(fit = vb), class = "countsynth_fit")))
+  expect_false(is_variational_fit(structure(list(fit = mcmc), class = "countsynth_fit")))
 })
 
 test_that("chain-based diagnostics refuse a variational fit", {
   vb <- structure(
-    list(config = bpnmf_config(
+    list(config = countsynth_config(
       input_file = "x.csv", output_dir = tempdir(),
-      schema = bpnmf_schema("u", "t", "tr", outcomes = list(bpnmf_outcome("o", "g"))),
-      model = bpnmf_model_opts(types = list(g = bpnmf_type("g", 2)))
+      schema = countsynth_schema("u", "t", "tr", outcomes = list(countsynth_outcome("o", "g"))),
+      model = countsynth_model_opts(types = list(g = countsynth_type("g", 2)))
     )),
-    class = "bpnmf_fit"
+    class = "countsynth_fit"
   )
   vb$fit <- structure(list(), class = c("CmdStanVB", "CmdStanFit", "R6"))
   expect_error(parameter_diagnostics(vb), "need multiple MCMC chains")
-  expect_error(bpnmf_trace_plot(vb), "need MCMC chains")
+  expect_error(countsynth_trace_plot(vb), "need MCMC chains")
   expect_true(is.na(convergence_gate(vb)$converged))
 })
 
@@ -164,7 +164,7 @@ test_that("only run-specific ADVI complaints warn, not CmdStan's standard banner
 })
 
 test_that("gate failure bullets name the criterion and the level it reached", {
-  th <- bpnmf_convergence(
+  th <- countsynth_convergence(
     rhat_warn = 1.1, rhat_fail = 1.5, ess_min = 100,
     ess_fail_fraction = 0.25, divergence_fail_fraction = 0.01
   )

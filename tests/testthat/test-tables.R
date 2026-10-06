@@ -15,7 +15,7 @@ test_that("compute_quantiles gives exact quantiles of ypred", {
 })
 
 test_that("post-treatment summary matches hand-computed estimands", {
-  pt <- bpnmf_post_treatment_summary(make_draws_frame())
+  pt <- countsynth_post_treatment_summary(make_draws_frame())
   expect_equal(nrow(pt), 1)
   expect_equal(pt$unit, "B")
   expect_equal(pt$n_periods, 2)
@@ -29,7 +29,7 @@ test_that("post-treatment summary matches hand-computed estimands", {
 })
 
 test_that("summary table computes person-year-weighted rates", {
-  st <- bpnmf_summary_table(make_draws_frame(), "B", rate_normalizer = 1000)
+  st <- countsynth_summary_table(make_draws_frame(), "B", rate_normalizer = 1000)
   expect_equal(nrow(st), 1)
   # 2 post periods x denominator 1000 (years = 1 without period bounds)
   expect_equal(st$`Person-Years`, 2000L)
@@ -41,7 +41,7 @@ test_that("summary table computes person-year-weighted rates", {
 })
 
 test_that("expected_vs_observed detail computes gaps", {
-  detail <- bpnmf_expected_vs_observed(make_draws_frame(), "B")
+  detail <- countsynth_expected_vs_observed(make_draws_frame(), "B")
   expect_equal(nrow(detail), 6)
   row <- detail[detail$unit == "A" & detail$time == as.Date("2021-01-01"), ]
   expect_equal(row$gap, 100 - mean(101:104))
@@ -52,7 +52,7 @@ test_that("aggregate units pool with sums and logsumexp", {
   draws <- make_draws_frame()
   agg <- add_aggregate_units(
     draws,
-    list(bpnmf_aggregate_unit("Both", include_all_units = TRUE))
+    list(countsynth_aggregate_unit("Both", include_all_units = TRUE))
   )
   both <- agg[agg$unit == "Both", ]
   expect_equal(nrow(both), 12) # 4 draws x 3 times x 1 group
@@ -68,13 +68,13 @@ test_that("aggregate unit collision requires overwrite", {
   draws <- make_draws_frame()
   expect_error(
     add_aggregate_units(
-      draws, list(bpnmf_aggregate_unit("A", include_all_units = TRUE))
+      draws, list(countsynth_aggregate_unit("A", include_all_units = TRUE))
     ),
     "collides"
   )
   agg <- add_aggregate_units(
     draws,
-    list(bpnmf_aggregate_unit("A", include_all_units = TRUE, overwrite = TRUE))
+    list(countsynth_aggregate_unit("A", include_all_units = TRUE, overwrite = TRUE))
   )
   # A replaced by the aggregate: 12 rows for A (4 draws x 3 times)
   expect_equal(sum(agg$unit == "A"), 12)
@@ -89,7 +89,7 @@ test_that("strict aggregate spec errors on missing units", {
   expect_error(
     add_aggregate_units(
       draws,
-      list(bpnmf_aggregate_unit(
+      list(countsynth_aggregate_unit(
         "X",
         include_units = c("A", "ZZ"), strict = TRUE
       ))
@@ -100,7 +100,7 @@ test_that("strict aggregate spec errors on missing units", {
 
 test_that("PPC statistics are computed on control cells", {
   draws <- make_draws_frame()
-  r <- bpnmf_ppc_rmse(draws)
+  r <- countsynth_ppc_rmse(draws)
   # Unit B is treated -> PPC restricted to treated_units per Python logic;
   # B's control period rows only.
   expect_true(all(r$pvals$pval >= 0 & r$pvals$pval <= 1))
@@ -117,7 +117,7 @@ test_that("interval plot effects are exact for the synthetic frame", {
     agg_cols = c(".draw", "unit")
   )
   expect_equal(unique(round(eff$causal_effect, 10)), 20)
-  p <- bpnmf_interval_plot(draws, estimand = "ratio", method = "mu")
+  p <- countsynth_interval_plot(draws, estimand = "ratio", method = "mu")
   expect_s3_class(p, "ggplot")
 })
 
@@ -129,10 +129,10 @@ test_that("dodged interval segments stay horizontal and track their points", {
   g2$group <- "other"
   g2$mu_treated <- g2$mu + ifelse(g2$treatment == 1, log(1.5), 0)
   draws <- dplyr::bind_rows(draws, g2)
-  class(draws) <- c("bpnmf_draws", class(draws))
+  class(draws) <- c("countsynth_draws", class(draws))
 
   layers <- ggplot2::ggplot_build(
-    bpnmf_interval_plot(draws, estimand = "ratio", method = "mu")
+    countsynth_interval_plot(draws, estimand = "ratio", method = "mu")
   )$data
   ci_95 <- layers[[2]]
   ci_67 <- layers[[3]]

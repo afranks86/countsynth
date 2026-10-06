@@ -23,13 +23,13 @@ make_ppc_draws <- function(suppress = TRUE) {
     g$ypred <- stats::rpois(nrow(g), 100)
     g
   })))
-  class(draws) <- c("bpnmf_draws", class(draws))
+  class(draws) <- c("countsynth_draws", class(draws))
   draws
 }
 
 test_that("a cell with no observed control data is dropped, not scored p = 1", {
   draws <- make_ppc_draws()
-  expect_warning(res <- bpnmf_ppc_abs(draws), "no observed control-period data")
+  expect_warning(res <- countsynth_ppc_abs(draws), "no observed control-period data")
   # The old path let max(all-NA, na.rm = TRUE) return -Inf, which beat every
   # predicted statistic and reported a perfect p = 1 for an empty cell.
   expect_false(any(
@@ -43,7 +43,7 @@ test_that("the warning names the dropped cells once, not once per draw", {
   draws <- make_ppc_draws()
   warns <- character()
   withCallingHandlers(
-    bpnmf_ppc_abs(draws),
+    countsynth_ppc_abs(draws),
     warning = function(w) {
       warns <<- c(warns, conditionMessage(w))
       invokeRestart("muffleWarning")
@@ -56,11 +56,11 @@ test_that("the warning names the dropped cells once, not once per draw", {
 
 test_that("rmse and acf checks drop the same cell", {
   draws <- make_ppc_draws()
-  rmse <- suppressWarnings(bpnmf_ppc_rmse(draws))
+  rmse <- suppressWarnings(countsynth_ppc_rmse(draws))
   expect_equal(nrow(rmse$pvals), 3)
   expect_true(all(is.finite(rmse$plot$data$diff_in_diff)))
 
-  acf <- suppressWarnings(bpnmf_ppc_acf(draws, lag = 2))
+  acf <- suppressWarnings(countsynth_ppc_acf(draws, lag = 2))
   expect_false(any(
     acf$pvals$unit == "Kentucky" & acf$pvals$group == "otherraceeth"
   ))
@@ -68,6 +68,6 @@ test_that("rmse and acf checks drop the same cell", {
 
 test_that("fully observed panels are untouched and warn about nothing", {
   draws <- make_ppc_draws(suppress = FALSE)
-  expect_no_warning(res <- bpnmf_ppc_abs(draws))
+  expect_no_warning(res <- countsynth_ppc_abs(draws))
   expect_equal(nrow(res$pvals), 4)
 })

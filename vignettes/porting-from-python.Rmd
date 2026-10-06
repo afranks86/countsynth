@@ -11,13 +11,13 @@ vignette: >
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE, purl = FALSE)
 ```
 
-`bpnmf` is a full port of the Python package `bayesian_panel_nmf`
+`countsynth` is a full port of the Python package `bayesian_panel_nmf`
 (NumPyro/JAX): same model, same priors, same estimands, same artifact
 layout. This vignette maps the two.
 
 ## Config mapping
 
-`read_bpnmf_config()` accepts Python YAML configs verbatim. Renamed keys
+`read_countsynth_config()` accepts Python YAML configs verbatim. Renamed keys
 (everything else keeps its name and default):
 
 | Python YAML | R / cmdstanr |
@@ -37,11 +37,11 @@ iterations and retain `num_samples / thinning`.
 
 | Python CLI | R |
 |---|---|
-| `bpnmf run --config cfg.yaml` | `bpnmf_run("cfg.yaml")` |
-| `bpnmf run --type total --rank 5` | `bpnmf_run(cfg, types = "total", ranks = 5)` |
-| `bpnmf viz --results ...` | `bpnmf_report(draws, output_dir)` |
-| `bpnmf viz --tables-only` | `bpnmf_report(draws, dir, figures = character())` |
-| `bpnmf traces file.nc` | `parameter_diagnostics(fit)` / `bpnmf_trace_plot(fit)` |
+| `countsynth run --config cfg.yaml` | `countsynth_run("cfg.yaml")` |
+| `countsynth run --type total --rank 5` | `countsynth_run(cfg, types = "total", ranks = 5)` |
+| `countsynth viz --results ...` | `countsynth_report(draws, output_dir)` |
+| `countsynth viz --tables-only` | `countsynth_report(draws, dir, figures = character())` |
+| `countsynth traces file.nc` | `parameter_diagnostics(fit)` / `countsynth_trace_plot(fit)` |
 
 ## Draws artifact
 
@@ -73,6 +73,6 @@ is the counterfactual (untreated) posterior predictive. Cut runs add
 - The counterfactual `ypred` RNG clamps the log-mean at ~20.79
   (`exp(x) < 2^30`) because Stan's count RNGs overflow above that; NumPyro
   returns huge float draws instead. Irrelevant at realistic count scales.
-- `bpnmf` reports rely on the identical estimand formulas
+- `countsynth` reports rely on the identical estimand formulas
   (`sum(exp(mu))`-based excess, person-year-weighted rates, two-sided
   posterior p-values), reproduced from `tables.py` / `plots.py`.

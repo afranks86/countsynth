@@ -46,26 +46,26 @@ reproduces exactly.
 
 ## Syntax
 
-`bpnmf_te_opts()` takes an lme4-style one-sided formula. Fixed-effect terms
+`countsynth_te_opts()` takes an lme4-style one-sided formula. Fixed-effect terms
 build the regression surface; each `(expr | g)` term lets `expr`'s
 coefficients vary by the levels of `g`, shrinking toward that surface.
 
 ```{r}
-library(bpnmf)
+library(countsynth)
 
 # Effect that trends with time since treatment, varying by group.
-bpnmf_te_opts(formula = ~ 1 + event_time + (1 + event_time | group))
+countsynth_te_opts(formula = ~ 1 + event_time + (1 + event_time | group))
 
 # Effect mediated by the change in distance to the nearest clinic, with a
 # group-specific intercept and slope.
-bpnmf_te_opts(
+countsynth_te_opts(
   formula = ~ 1 + dist_change + (1 + dist_change | group),
   covariates = "clinic_distance.csv"
 )
 
 # Subgroup surfaces that share nothing but the prior: a separate intercept
 # and time slope per group, with no pooled fixed part.
-bpnmf_te_opts(formula = ~ 0 + (1 + event_time | group))
+countsynth_te_opts(formula = ~ 0 + (1 + event_time | group))
 ```
 
 These variables are always available:
@@ -104,17 +104,17 @@ dist <- data.frame(
   )
 )
 
-cfg <- bpnmf_example_config(
-  model = bpnmf_model_opts(
-    types = list(total = bpnmf_type("total", 3)),
+cfg <- countsynth_example_config(
+  model = countsynth_model_opts(
+    types = list(total = countsynth_type("total", 3)),
     inference_mode = "cut",
-    treatment_effects = bpnmf_te_opts(
+    treatment_effects = countsynth_te_opts(
       formula = ~ 1 + event_time + dist_change + (1 + event_time | unit),
       covariates = dist
     )
   )
 )
-cfit <- bpnmf_cut_fit(bpnmf_data(cfg), config = cfg)
+cfit <- countsynth_cut_fit(countsynth_data(cfg), config = cfg)
 ```
 
 Three things are worth knowing before you build a design. Only exposed
@@ -135,41 +135,41 @@ raw scale.
 ## Reading the results
 
 Every existing table and figure is unchanged — the treatment effect still
-flows through `mu_treated`, so `bpnmf_summary_table()`,
-`bpnmf_interval_plot()`, and the rest report exactly as before. The
+flows through `mu_treated`, so `countsynth_summary_table()`,
+`countsynth_interval_plot()`, and the rest report exactly as before. The
 regression adds its own layer on top.
 
 ```{r}
 # Posterior of the regression function over a covariate, with 67% / 95%
 # bands, on the covariate's original scale.
-bpnmf_te_regression_plot(cfit, predictor = "event_time")
+countsynth_te_regression_plot(cfit, predictor = "event_time")
 
 # One surface per subgroup: the fixed surface plus each level's deviation.
-bpnmf_te_regression_plot(cfit, predictor = "event_time", by = "unit")
+countsynth_te_regression_plot(cfit, predictor = "event_time", by = "unit")
 
 # As a percent change in the rate rather than an additive log-rate effect.
-bpnmf_te_regression_plot(cfit, predictor = "dist_change", scale = "percent")
+countsynth_te_regression_plot(cfit, predictor = "dist_change", scale = "percent")
 
 # Coefficients as a forest plot, and as a table.
-bpnmf_te_coef_plot(cfit, terms = "all")
-bpnmf_te_coef_table(cfit)
+countsynth_te_coef_plot(cfit, terms = "all")
+countsynth_te_coef_table(cfit)
 
 # The numbers behind the curve, and the raw coefficient draws.
-bpnmf_te_regression_summary(cfit, predictor = "event_time", by = "unit")
-bpnmf_te_draws(cfit)
+countsynth_te_regression_summary(cfit, predictor = "event_time", by = "unit")
+countsynth_te_draws(cfit)
 ```
 
-In `bpnmf_te_draws()` and `bpnmf_te_coef_table()`, a `(fixed)` row is the
+In `countsynth_te_draws()` and `countsynth_te_coef_table()`, a `(fixed)` row is the
 population coefficient and a random-effect row is that level's *deviation*
-from the fixed surface. `bpnmf_te_coef_plot()` shows the total per-level
+from the fixed surface. `countsynth_te_coef_plot()` shows the total per-level
 coefficient by default; pass `deviation = TRUE` for the deviations alone.
 
 Adding `"te_regression"` to `output$figures` writes the whole set under
-`figs/te/` on a `bpnmf_run()`, alongside `te_coefficients.csv`.
+`figs/te/` on a `countsynth_run()`, alongside `te_coefficients.csv`.
 
 ```{r}
-cfg$output <- bpnmf_output_opts(figures = c("interval", "te_regression"))
-bpnmf_run(cfg)
+cfg$output <- countsynth_output_opts(figures = c("interval", "te_regression"))
+countsynth_run(cfg)
 ```
 
 ## YAML

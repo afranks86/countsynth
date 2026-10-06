@@ -1,5 +1,5 @@
 # Full pipeline: config -> data -> fit (joint or cut) -> draws artifact ->
-# convergence JSON -> reports. Mirrors the Python `bpnmf run` command's
+# convergence JSON -> reports. Mirrors the Python `countsynth run` command's
 # artifact layout:
 #   <output_dir>/<type>/{dist}_{outcome}_{type}_{rank}[_cut].csv|.parquet
 #   <output_dir>/<type>/{stem}_convergence.json
@@ -37,24 +37,24 @@ write_draws_file <- function(draws, stem, dir, format) {
   path
 }
 
-#' Run the full bpnmf pipeline from a config
+#' Run the full countsynth pipeline from a config
 #'
 #' Fits every requested (type, rank), writes the tidy draws artifact, the
 #' convergence gate JSON, and (when `output$figures` selects any) the full
 #' figure/table report -- with the same directory layout and filenames as the
-#' Python `bpnmf run` command.
+#' Python `countsynth run` command.
 #'
-#' @param config A [bpnmf_config()] object (or path to a YAML config).
+#' @param config A [countsynth_config()] object (or path to a YAML config).
 #' @param types Subset of `config$model$types` names to run (`NULL` = all).
 #' @param ranks Rank override (`NULL` = each type's `ranks_to_test`).
 #' @return Invisible named list of per-(type, rank) results, each holding the
 #'   fit object, draws path, and gate.
 #' @export
-bpnmf_run <- function(config, types = NULL, ranks = NULL) {
+countsynth_run <- function(config, types = NULL, ranks = NULL) {
   if (is.character(config)) {
-    config <- read_bpnmf_config(config)
+    config <- read_countsynth_config(config)
   }
-  checkmate::assert_class(config, "bpnmf_config")
+  checkmate::assert_class(config, "countsynth_config")
   if (length(config$model$types) == 0) {
     cli::cli_abort("Config must define at least one entry in {.field model.types}.")
   }
@@ -72,7 +72,7 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
     }
     dir.create(type_dir, recursive = TRUE, showWarnings = FALSE)
 
-    data <- bpnmf_data(config, type = type)
+    data <- countsynth_data(config, type = type)
     utils::write.csv(
       data$df, file.path(type_dir, sprintf("df_%s.csv", type)),
       row.names = FALSE
@@ -90,7 +90,7 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
       stem <- draws_stem(config, type, rank, cut = is_cut)
 
       if (is_cut) {
-        fit <- bpnmf_cut_fit(data, rank = rank, config = config)
+        fit <- countsynth_cut_fit(data, rank = rank, config = config)
         draws <- fit$draws
         gate <- fit$manifest
         ppc_draws <- fit$stage1_ppc
@@ -99,8 +99,8 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
         )
         cut_component_table(fit)
       } else {
-        fit <- bpnmf_fit(data, rank = rank, config = config)
-        draws <- bpnmf_draws(fit)
+        fit <- countsynth_fit(data, rank = rank, config = config)
+        draws <- countsynth_draws(fit)
         gate <- convergence_gate(fit)
         ppc_draws <- NULL
       }
@@ -129,7 +129,7 @@ bpnmf_run <- function(config, types = NULL, ranks = NULL) {
       }
 
       if (length(out$figures) > 0) {
-        bpnmf_report(
+        countsynth_report(
           draws,
           output_dir = run_dir,
           target_unit = out$target_unit,

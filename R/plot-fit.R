@@ -5,10 +5,10 @@ PALETTE_TREATED <- "#E41A1C"
 PALETTE_CONTROL <- "#999999"
 PALETTE_SEPARATE <- "#FF7F00"
 
-#' bpnmf ggplot theme (matches the Python matplotlib whitegrid look)
+#' countsynth ggplot theme (matches the Python matplotlib whitegrid look)
 #' @param base_size Base font size.
 #' @export
-theme_bpnmf <- function(base_size = 11) {
+theme_countsynth <- function(base_size = 11) {
   ggplot2::theme_bw(base_size = base_size) +
     ggplot2::theme(
       panel.grid.minor = ggplot2::element_blank(),
@@ -36,12 +36,12 @@ first_treated_time <- function(df, unit) {
 #' filled in by [add_aggregate_units()] (e.g. a synthetic "all treated"
 #' unit) are ringed in orange.
 #'
-#' @param x A `bpnmf_draws` frame or [compute_quantiles()] output.
+#' @param x A `countsynth_draws` frame or [compute_quantiles()] output.
 #' @param unit Unit to plot.
 #' @param group Group to plot (default `"total"` if present, else the first).
 #' @return A ggplot object.
 #' @export
-bpnmf_unit_fit_plot <- function(x, unit, group = NULL) {
+countsynth_unit_fit_plot <- function(x, unit, group = NULL) {
   q <- as_quantiles(x)
   group <- group %||% if ("total" %in% q$group) "total" else q$group[[1]]
   sub <- q[q$unit == unit & q$group == group, ]
@@ -77,7 +77,7 @@ bpnmf_unit_fit_plot <- function(x, unit, group = NULL) {
         "Points: observed. Line/ribbon: posterior predictive mean and 95% CI."
       }
     ) +
-    theme_bpnmf()
+    theme_countsynth()
   if (!is.null(vline)) {
     p <- p + ggplot2::geom_vline(
       xintercept = vline, linetype = "dashed", color = "black"
@@ -93,9 +93,9 @@ bpnmf_unit_fit_plot <- function(x, unit, group = NULL) {
 #' neither the line nor the ribbon bridges the treatment date. Rows with
 #' non-positive predictions are dropped (the ratio is undefined there).
 #'
-#' @inheritParams bpnmf_unit_fit_plot
+#' @inheritParams countsynth_unit_fit_plot
 #' @export
-bpnmf_unit_gap_plot <- function(x, unit, group = NULL) {
+countsynth_unit_gap_plot <- function(x, unit, group = NULL) {
   q <- as_quantiles(x)
   group <- group %||% if ("total" %in% q$group) "total" else q$group[[1]]
   sub <- q[q$unit == unit & q$group == group, ]
@@ -149,7 +149,7 @@ bpnmf_unit_gap_plot <- function(x, unit, group = NULL) {
         NULL
       }
     ) +
-    theme_bpnmf()
+    theme_countsynth()
 }
 
 # Deduplicate a draws frame to one row per (unit, time, group) of observed
@@ -160,7 +160,7 @@ observed_rows <- function(df) {
 
 #' Raw outcome rate (or count) for treated vs control units
 #'
-#' @param df A `bpnmf_draws` frame or standardized long data frame with
+#' @param df A `countsynth_draws` frame or standardized long data frame with
 #'   `unit`, `time`, `group`, `outcome`, `denominator`, `treatment`.
 #' @param group Restrict to one group (`NULL` pools all groups).
 #' @param rate_multiplier Rates are per this many (default 1000).
@@ -170,7 +170,7 @@ observed_rows <- function(df) {
 #' @param smooth_window Centered rolling-mean window (`NULL` = raw values).
 #' @param plot_type `"rate"` or `"count"`.
 #' @export
-bpnmf_raw_rate_plot <- function(df, group = NULL, rate_multiplier = 1000,
+countsynth_raw_rate_plot <- function(df, group = NULL, rate_multiplier = 1000,
                                 treatment_dates = NULL, separate_unit = NULL,
                                 smooth_window = NULL, plot_type = "rate") {
   checkmate::assert_choice(plot_type, c("rate", "count"))
@@ -273,15 +273,15 @@ bpnmf_raw_rate_plot <- function(df, group = NULL, rate_multiplier = 1000,
       ),
       x = "Time", y = paste0(ylabel, group_label)
     ) +
-    theme_bpnmf()
+    theme_countsynth()
 }
 
 #' Treated vs control rate comparison, faceted by group
 #'
-#' @inheritParams bpnmf_raw_rate_plot
+#' @inheritParams countsynth_raw_rate_plot
 #' @param groups Groups to facet over (`NULL` = all).
 #' @export
-bpnmf_group_comparison_plot <- function(df, groups = NULL,
+countsynth_group_comparison_plot <- function(df, groups = NULL,
                                         rate_multiplier = 1000,
                                         treatment_dates = NULL,
                                         plot_type = "rate") {
@@ -340,5 +340,5 @@ bpnmf_group_comparison_plot <- function(df, groups = NULL,
       ),
       x = "Time", y = ylabel
     ) +
-    theme_bpnmf()
+    theme_countsynth()
 }

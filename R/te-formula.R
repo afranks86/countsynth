@@ -44,9 +44,9 @@ TE_BUILTIN_VARS <- c("group", "unit", "time_idx", "event_time")
 #' @param re_prior_scale Half-normal prior sd for each random-effect term's
 #'   per-predictor scale (recycled across term predictors). Matches the
 #'   legacy HalfNormal(1) scales at the default.
-#' @return A `bpnmf_te_opts` object.
+#' @return A `countsynth_te_opts` object.
 #' @export
-bpnmf_te_opts <- function(formula = NULL, covariates = NULL,
+countsynth_te_opts <- function(formula = NULL, covariates = NULL,
                           standardize = TRUE, coef_prior_scale = 1,
                           re_prior_scale = 1) {
   if (!is.null(formula)) {
@@ -78,12 +78,12 @@ bpnmf_te_opts <- function(formula = NULL, covariates = NULL,
       "treatment_effects covariates were given without a {.field formula}."
     )
   }
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       formula = formula, covariates = covariates, standardize = standardize,
       coef_prior_scale = coef_prior_scale, re_prior_scale = re_prior_scale
     ),
-    "bpnmf_te_opts"
+    "countsynth_te_opts"
   )
 }
 
@@ -244,12 +244,12 @@ check_te_var_types <- function(frame, vars) {
 #' random-effect designs, and the standardization metadata used to report
 #' regression functions on the original covariate scale.
 #'
-#' @param opts A [bpnmf_te_opts()] object with a non-`NULL` formula.
-#' @param data A `bpnmf_data` object.
-#' @return A `bpnmf_te_design` object.
+#' @param opts A [countsynth_te_opts()] object with a non-`NULL` formula.
+#' @param data A `countsynth_data` object.
+#' @return A `countsynth_te_design` object.
 #' @keywords internal
 build_te_design <- function(opts, data) {
-  checkmate::assert_class(opts, "bpnmf_te_opts")
+  checkmate::assert_class(opts, "countsynth_te_opts")
   if (is.null(opts$formula)) {
     return(NULL)
   }
@@ -367,7 +367,7 @@ build_te_design <- function(opts, data) {
     )
   })
 
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       formula = opts$formula,
       # Parsed pieces are kept so the plotting layer can rebuild the same
@@ -389,13 +389,13 @@ build_te_design <- function(opts, data) {
       ),
       n_exposed = n
     ),
-    "bpnmf_te_design"
+    "countsynth_te_design"
   )
 }
 
 #' @export
-print.bpnmf_te_design <- function(x, ...) {
-  cli::cli_h1("bpnmf treatment-effect design")
+print.countsynth_te_design <- function(x, ...) {
+  cli::cli_h1("countsynth treatment-effect design")
   cli::cli_li("formula: {.code {deparse1_(x$formula)}}")
   cli::cli_li("{x$n_exposed} exposed cell{?s}")
   cli::cli_li("fixed effects ({length(x$x_names)}): {.val {x$x_names}}")

@@ -99,16 +99,16 @@ ppc_histogram <- function(stats_df, pvals_df, x_col, title, xlabel,
       ncol = if (length(facet_vars) == 1) 2 else 3, scales = "free"
     ) +
     ggplot2::labs(title = title, x = xlabel, y = "Count") +
-    theme_bpnmf()
+    theme_countsynth()
 }
 
 #' PPC: max absolute residual per (unit, group, draw)
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param categories,ppc_units,ppc_exclude_units Filters (see
-#'   [bpnmf_output_opts()]).
+#'   [countsynth_output_opts()]).
 #' @return List with `plot` (ggplot) and `pvals` (unit x group tibble).
 #' @export
-bpnmf_ppc_abs <- function(draws, categories = NULL, ppc_units = NULL,
+countsynth_ppc_abs <- function(draws, categories = NULL, ppc_units = NULL,
                           ppc_exclude_units = NULL) {
   prep <- prepare_ppc_residuals(draws, categories, ppc_units, ppc_exclude_units)
   stats_df <- prep$df |>
@@ -133,10 +133,10 @@ bpnmf_ppc_abs <- function(draws, categories = NULL, ppc_units = NULL,
 }
 
 #' PPC: residual autocorrelation at one lag
-#' @inheritParams bpnmf_ppc_abs
+#' @inheritParams countsynth_ppc_abs
 #' @param lag Autocorrelation lag (default 6).
 #' @export
-bpnmf_ppc_acf <- function(draws, lag = 6, categories = NULL, ppc_units = NULL,
+countsynth_ppc_acf <- function(draws, lag = 6, categories = NULL, ppc_units = NULL,
                           ppc_exclude_units = NULL) {
   prep <- prepare_ppc_residuals(
     draws, categories, ppc_units, ppc_exclude_units,
@@ -165,9 +165,9 @@ bpnmf_ppc_acf <- function(draws, lag = 6, categories = NULL, ppc_units = NULL,
 }
 
 #' PPC: residual RMSE per (unit, group, draw)
-#' @inheritParams bpnmf_ppc_abs
+#' @inheritParams countsynth_ppc_abs
 #' @export
-bpnmf_ppc_rmse <- function(draws, categories = NULL, ppc_units = NULL,
+countsynth_ppc_rmse <- function(draws, categories = NULL, ppc_units = NULL,
                            ppc_exclude_units = NULL) {
   prep <- prepare_ppc_residuals(draws, categories, ppc_units, ppc_exclude_units)
   stats_df <- prep$df |>
@@ -211,12 +211,12 @@ spectral_norm <- function(m) {
 #' check needs >= 2 units), capped at `ndraws` draws for speed; units with
 #' more than 25% missing outcomes are dropped.
 #'
-#' @inheritParams bpnmf_ppc_abs
+#' @inheritParams countsynth_ppc_abs
 #' @param max_treat_date Optional `YYYY-MM-DD` cutoff replacing the
 #'   control-period filter.
 #' @param ndraws Cap on the number of draws used.
 #' @export
-bpnmf_ppc_unit_corr <- function(draws, max_treat_date = NULL,
+countsynth_ppc_unit_corr <- function(draws, max_treat_date = NULL,
                                 categories = NULL, ndraws = 1000,
                                 ppc_units = NULL, ppc_exclude_units = NULL) {
   df <- draws
@@ -300,14 +300,14 @@ bpnmf_ppc_unit_corr <- function(draws, max_treat_date = NULL,
 
 #' Run the full PPC suite
 #'
-#' @inheritParams bpnmf_ppc_abs
+#' @inheritParams countsynth_ppc_abs
 #' @param checks Subset of `c("abs", "acf", "rmse", "unit_corr")`.
 #' @param acf_lags Integer lags for the ACF check (one figure per lag).
 #' @param max_treat_date Cutoff date for the unit-correlation check.
 #' @return List with `plots` (named list of ggplots) and `pvals` (combined
 #'   tibble with a `check_type` column).
 #' @export
-bpnmf_ppc_plots <- function(draws, checks = c("abs", "acf", "rmse", "unit_corr"),
+countsynth_ppc_plots <- function(draws, checks = c("abs", "acf", "rmse", "unit_corr"),
                             acf_lags = 6, categories = NULL,
                             max_treat_date = NULL, ppc_units = NULL,
                             ppc_exclude_units = NULL) {
@@ -315,27 +315,27 @@ bpnmf_ppc_plots <- function(draws, checks = c("abs", "acf", "rmse", "unit_corr")
   plots <- list()
   pvals <- list()
   if ("abs" %in% checks) {
-    r <- bpnmf_ppc_abs(draws, categories, ppc_units, ppc_exclude_units)
+    r <- countsynth_ppc_abs(draws, categories, ppc_units, ppc_exclude_units)
     plots$ppc_abs_residual <- r$plot
     pvals$abs <- dplyr::mutate(r$pvals, check_type = "abs")
   }
   if ("acf" %in% checks) {
     for (lag in acf_lags) {
-      r <- bpnmf_ppc_acf(draws, lag, categories, ppc_units, ppc_exclude_units)
+      r <- countsynth_ppc_acf(draws, lag, categories, ppc_units, ppc_exclude_units)
       plots[[sprintf("ppc_acf_lag%d", lag)]] <- r$plot
       pvals[[sprintf("acf_lag%d", lag)]] <-
         dplyr::mutate(r$pvals, check_type = sprintf("acf_lag%d", lag))
     }
   }
   if ("rmse" %in% checks) {
-    r <- bpnmf_ppc_rmse(draws, categories, ppc_units, ppc_exclude_units)
+    r <- countsynth_ppc_rmse(draws, categories, ppc_units, ppc_exclude_units)
     plots$ppc_rmse <- r$plot
     pvals$rmse <- dplyr::mutate(r$pvals, check_type = "rmse")
   }
   if ("unit_corr" %in% checks) {
     # Deliberately NOT filtered by ppc_units: the spectral norm needs >= 2
     # units (mirrors make_all_ppc_plots).
-    r <- bpnmf_ppc_unit_corr(
+    r <- countsynth_ppc_unit_corr(
       draws,
       max_treat_date = max_treat_date, categories = categories,
       ppc_exclude_units = ppc_exclude_units
