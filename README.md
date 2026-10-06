@@ -4,8 +4,7 @@ Estimate causal treatment effects on panel count data (births, low birth
 weight, preterm outcomes, …) with a Bayesian hierarchical model built on a
 low-rank nonnegative factorization of the log-rate surface. MCMC runs in
 **Stan** via [cmdstanr](https://mc-stan.org/cmdstanr/); figures are
-**ggplot2**. This is a full R port of the Python package
-`bayesian_panel_nmf`, aimed at demographers, social scientists, and political
+**ggplot2**. This package is aimed at demographers, social scientists, and political
 scientists who work in R.
 
 ## What it does
