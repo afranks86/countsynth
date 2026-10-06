@@ -12,7 +12,7 @@
 #' [add_aggregate_units()] for cells where a source unit's suppressed count
 #' was filled in), is carried through so plots can mark those points.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @return A tibble keyed by unit, time, group, outcome, treatment, with an
 #'   `outcome_imputed` column (`FALSE` when `draws` doesn't have one).
 #' @export
@@ -42,7 +42,7 @@ compute_quantiles <- function(draws) {
 #' to have the longest exposure. Otherwise the unit with the most
 #' post-treatment periods wins, ties broken by unit order.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @export
 auto_detect_target <- function(draws) {
   treated <- draws[!is.na(draws$treatment) & draws$treatment == 1, ]
@@ -83,14 +83,14 @@ fmt_ci <- function(mean, lower, upper, digits = 2, suffix = "") {
 #' dagger marks a group whose post-treatment window includes any cell
 #' imputed by [add_aggregate_units()] (see the `Imputed` column).
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param target_unit Unit to summarize.
 #' @param rate_normalizer Rates are per this many person-years (default 1000).
 #' @return A tibble with pre-formatted CI columns (parity with the Python
 #'   CSV) plus a logical `Imputed` column, or an empty tibble when the unit
 #'   has no post-treatment rows.
 #' @export
-bpnmf_summary_table <- function(draws, target_unit = NULL,
+countsynth_summary_table <- function(draws, target_unit = NULL,
                                 rate_normalizer = 1000) {
   target_unit <- target_unit %||% auto_detect_target(draws)
   if (is.null(target_unit)) {
@@ -165,20 +165,20 @@ bpnmf_summary_table <- function(draws, target_unit = NULL,
 
 #' Headline summary table stacked over several units
 #'
-#' [bpnmf_summary_table()] run per unit and row-bound, with a `Unit` column in
+#' [countsynth_summary_table()] run per unit and row-bound, with a `Unit` column in
 #' front. Units with no post-treatment rows drop out.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param units Units to include (`NULL` = every treated unit, aggregates
 #'   included when the frame has them).
 #' @param rate_normalizer Rates are per this many person-years.
 #' @return A tibble, or an empty tibble when no unit has post-treatment rows.
 #' @export
-bpnmf_summary_table_by_unit <- function(draws, units = NULL,
+countsynth_summary_table_by_unit <- function(draws, units = NULL,
                                         rate_normalizer = 1000) {
   units <- units %||% identify_treated_units(draws)
   dplyr::bind_rows(lapply(units, function(u) {
-    tbl <- bpnmf_summary_table(draws, u, rate_normalizer = rate_normalizer)
+    tbl <- countsynth_summary_table(draws, u, rate_normalizer = rate_normalizer)
     if (nrow(tbl) == 0) {
       return(tbl)
     }
@@ -196,9 +196,9 @@ bpnmf_summary_table_by_unit <- function(draws, units = NULL,
 #' for transparency only. `observed_imputed` flags a unit-group whose
 #' post-treatment window includes a cell imputed by [add_aggregate_units()].
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @export
-bpnmf_post_treatment_summary <- function(draws) {
+countsynth_post_treatment_summary <- function(draws) {
   post <- draws[!is.na(draws$treatment) & draws$treatment == 1, ]
   cols <- c(
     "unit", "group", "n_periods", "observed", "observed_imputed",
@@ -265,11 +265,11 @@ bpnmf_post_treatment_summary <- function(draws) {
 #' expected_mean` and `gap_pct`. `observed_imputed` flags a cell where a
 #' source unit's suppressed count was filled in by [add_aggregate_units()].
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param target_unit Unit flagged in the `treated_unit` column
 #'   (auto-detected when `NULL`).
 #' @export
-bpnmf_expected_vs_observed <- function(draws, target_unit = NULL) {
+countsynth_expected_vs_observed <- function(draws, target_unit = NULL) {
   target_unit <- target_unit %||% auto_detect_target(draws)
   detail <- compute_quantiles(draws) |>
     dplyr::rename(

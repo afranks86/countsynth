@@ -72,15 +72,15 @@ test_that("eff_rank is summarized per group", {
 
 test_that("a fit without rank shrinkage is reported, not plotted", {
   no_shrink <- structure(
-    list(stan_data = list(rank_shrink = 0L)), class = c("bpnmf_fit", "list")
+    list(stan_data = list(rank_shrink = 0L)), class = c("countsynth_fit", "list")
   )
   expect_null(rank_shrinkage_source(no_shrink))
   expect_error(
-    bpnmf_component_weight_summary(no_shrink), "not run with rank shrinkage"
+    countsynth_component_weight_summary(no_shrink), "not run with rank shrinkage"
   )
   # A cut fit is unwrapped to stage 1, which is where the factor block lives.
   cut_fit <- structure(
-    list(stage1 = no_shrink), class = c("bpnmf_cut_fit", "list")
+    list(stage1 = no_shrink), class = c("countsynth_cut_fit", "list")
   )
   expect_null(rank_shrinkage_source(cut_fit))
 })

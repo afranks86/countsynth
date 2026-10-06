@@ -1,4 +1,4 @@
 library(testthat)
-library(bpnmf)
+library(countsynth)
 
-test_check("bpnmf")
+test_check("countsynth")

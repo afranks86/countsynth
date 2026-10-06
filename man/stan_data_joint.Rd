@@ -20,7 +20,7 @@ stan_data_joint(
 )
 }
 \arguments{
-\item{data}{A \code{bpnmf_data} object.}
+\item{data}{A \code{countsynth_data} object.}
 
 \item{rank}{Factorization rank.}
 
@@ -38,11 +38,11 @@ gives the baseline (cut stage-1) model.}
 \item{gen_ypred}{Emit the counterfactual posterior predictive in
 \verb{generated quantities}.}
 
-\item{te_design}{Optional \code{bpnmf_te_design} (see \code{\link[=build_te_design]{build_te_design()}})
+\item{te_design}{Optional \code{countsynth_te_design} (see \code{\link[=build_te_design]{build_te_design()}})
 replacing the legacy treatment-effect hierarchy with a covariate
 regression; requires \code{model_treated = TRUE}.}
 
-\item{rank_shrinkage}{Optional \code{\link[=bpnmf_rank_shrinkage_opts]{bpnmf_rank_shrinkage_opts()}}; \code{NULL}
+\item{rank_shrinkage}{Optional \code{\link[=countsynth_rank_shrinkage_opts]{countsynth_rank_shrinkage_opts()}}; \code{NULL}
 leaves the component weights iid uniform on the simplex.}
 }
 \value{

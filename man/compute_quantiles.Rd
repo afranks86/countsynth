@@ -7,7 +7,7 @@
 compute_quantiles(draws)
 }
 \arguments{
-\item{draws}{A \code{bpnmf_draws} frame.}
+\item{draws}{A \code{countsynth_draws} frame.}
 }
 \value{
 A tibble keyed by unit, time, group, outcome, treatment, with an

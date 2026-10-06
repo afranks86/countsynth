@@ -26,17 +26,17 @@ test_that("selection errors when m exceeds retained draws", {
 })
 
 test_that("cut settings derive seeds and merge stage2 overlay", {
-  cfg <- bpnmf_config(
+  cfg <- countsynth_config(
     input_file = "x.csv", output_dir = tempdir(),
-    schema = bpnmf_schema(
+    schema = countsynth_schema(
       "u", "t", "tr",
-      outcomes = list(bpnmf_outcome("o", "g"))
+      outcomes = list(countsynth_outcome("o", "g"))
     ),
-    model = bpnmf_model_opts(
-      types = list(g = bpnmf_type("g", 2)), inference_mode = "cut"
+    model = countsynth_model_opts(
+      types = list(g = countsynth_type("g", 2)), inference_mode = "cut"
     ),
-    mcmc = bpnmf_mcmc_opts(seed = 100, iter_warmup = 1000, iter_sampling = 2500),
-    cut = bpnmf_cut_opts(
+    mcmc = countsynth_mcmc_opts(seed = 100, iter_warmup = 1000, iter_sampling = 2500),
+    cut = countsynth_cut_opts(
       num_stage1_draws = 5,
       stage2_mcmc = list(num_warmup = 200, num_samples = 400, thinning = 2)
     )
@@ -53,17 +53,17 @@ test_that("cut settings derive seeds and merge stage2 overlay", {
 })
 
 test_that("seed collisions warn", {
-  cfg <- bpnmf_config(
+  cfg <- countsynth_config(
     input_file = "x.csv", output_dir = tempdir(),
-    schema = bpnmf_schema(
+    schema = countsynth_schema(
       "u", "t", "tr",
-      outcomes = list(bpnmf_outcome("o", "g"))
+      outcomes = list(countsynth_outcome("o", "g"))
     ),
-    model = bpnmf_model_opts(
-      types = list(g = bpnmf_type("g", 2)), inference_mode = "cut"
+    model = countsynth_model_opts(
+      types = list(g = countsynth_type("g", 2)), inference_mode = "cut"
     ),
-    mcmc = bpnmf_mcmc_opts(seed = 100),
-    cut = bpnmf_cut_opts(selection_seed = 100)
+    mcmc = countsynth_mcmc_opts(seed = 100),
+    cut = countsynth_cut_opts(selection_seed = 100)
   )
   expect_warning(resolve_cut_settings(cfg), "collides")
 })

@@ -2,9 +2,9 @@
 
 Run from the Python repo so its venv resolves:
     cd ~/hierarchical-bayesian-NMF-refactor
-    uv run python ~/bpnmf-r/tools/export_fixtures.py
+    uv run python ~/countsynth/tools/export_fixtures.py
 
-Writes JSON fixtures into bpnmf-r/tests/testthat/fixtures/:
+Writes JSON fixtures into countsynth/tests/testthat/fixtures/:
   - flatten_parity.json      numpy reshape(-1) ordering of arrays/masks
   - logdensity_parity.json   constrained parameter draws + numpyro log
                              densities for several model configurations

@@ -72,14 +72,14 @@ test_that("Stan joint model log-density matches numpyro up to a constant", {
       times = seq(as.Date("2020-01-01"), by = "month", length.out = N),
       df = NULL, type = "test"
     ),
-    class = c("bpnmf_data", "list")
+    class = c("countsynth_data", "list")
   )
 
   # Compile into a per-session dir: a pre-existing cached executable cannot
   # be reused with model methods (log_prob / unconstrain_variables).
   model <- cmdstanr::cmdstan_model(
     stan_file_path("joint"),
-    include_paths = system.file("stan", "include", package = "bpnmf"),
+    include_paths = system.file("stan", "include", package = "countsynth"),
     dir = withr::local_tempdir(),
     compile_model_methods = TRUE, quiet = TRUE
   )
@@ -167,7 +167,7 @@ test_that("Stan stage-2 model log-density matches numpyro up to a constant", {
       times = seq(as.Date("2020-01-01"), by = "month", length.out = N),
       df = NULL, type = "test"
     ),
-    class = c("bpnmf_data", "list")
+    class = c("countsynth_data", "list")
   )
   mu_flat <- flatten_kdn(as_arr(d$mu_ctrl_fixed, c(K, D, N)))
   sd2 <- stan_data_stage2(
@@ -177,7 +177,7 @@ test_that("Stan stage-2 model log-density matches numpyro up to a constant", {
   )
   model <- cmdstanr::cmdstan_model(
     stan_file_path("cut_stage2"),
-    include_paths = system.file("stan", "include", package = "bpnmf"),
+    include_paths = system.file("stan", "include", package = "countsynth"),
     dir = withr::local_tempdir(),
     compile_model_methods = TRUE, quiet = TRUE
   )

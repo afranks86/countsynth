@@ -1,5 +1,5 @@
-library(bpnmf)
+library(countsynth)
 library(tidyverse)
 
-cfg <- read_bpnmf_config("configs/fertility_variational.yml")
-res <- bpnmf_run(cfg)
+cfg <- read_countsynth_config("configs/fertility_variational.yml")
+res <- countsynth_run(cfg)

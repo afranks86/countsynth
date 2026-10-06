@@ -6,7 +6,7 @@
 
 #' Build the Stan data list for the joint / baseline model
 #'
-#' @param data A `bpnmf_data` object.
+#' @param data A `countsynth_data` object.
 #' @param rank Factorization rank.
 #' @param model_treated Include the treatment block (joint model); `FALSE`
 #'   gives the baseline (cut stage-1) model.
@@ -16,9 +16,9 @@
 #' @param adjust_for_missingness Integrate over censored small counts.
 #' @param gen_ypred Emit the counterfactual posterior predictive in
 #'   `generated quantities`.
-#' @param rank_shrinkage Optional [bpnmf_rank_shrinkage_opts()]; `NULL`
+#' @param rank_shrinkage Optional [countsynth_rank_shrinkage_opts()]; `NULL`
 #'   leaves the component weights iid uniform on the simplex.
-#' @param te_design Optional `bpnmf_te_design` (see [build_te_design()])
+#' @param te_design Optional `countsynth_te_design` (see [build_te_design()])
 #'   replacing the legacy treatment-effect hierarchy with a covariate
 #'   regression; requires `model_treated = TRUE`.
 #' @return A named list for `cmdstanr`'s `data` argument, plus attributes
@@ -117,7 +117,7 @@ rank_shrinkage_stan_fields <- function(rank_shrinkage, rank) {
   if (is.null(rank_shrinkage)) {
     return(off)
   }
-  checkmate::assert_class(rank_shrinkage, "bpnmf_rank_shrinkage_opts")
+  checkmate::assert_class(rank_shrinkage, "countsynth_rank_shrinkage_opts")
   if (rank < 2) {
     cli::cli_warn(c(
       "{.field rank_shrinkage} is ignored at rank 1.",
@@ -136,7 +136,7 @@ rank_shrinkage_stan_fields <- function(rank_shrinkage, rank) {
 
 #' Build the Stan data list for the cut stage-2 model
 #'
-#' @param data A `bpnmf_data` object.
+#' @param data A `countsynth_data` object.
 #' @param mu_ctrl_flat One stage-1 draw of the baseline log-rate surface, as a
 #'   flat vector in canonical row-major order (length `K*D*N`).
 #' @param phi_unit Matched per-unit NB concentration for the same stage-1 draw

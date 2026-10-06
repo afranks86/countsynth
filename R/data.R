@@ -334,17 +334,17 @@ add_months <- function(dates, months) {
 #' `treatment`), applies date filtering / unit exclusion / temporal
 #' aggregation, and builds the dense `(K, D, N)` model arrays.
 #'
-#' @param config A [bpnmf_config()] object.
+#' @param config A [countsynth_config()] object.
 #' @param type Name of the model type in `config$model$types` to prepare data
 #'   for. Defaults to the first type.
 #' @param df Optional data frame to use instead of reading
 #'   `config$input_file`.
-#' @return A `bpnmf_data` object: list with `Y`, `denominators`,
+#' @return A `countsynth_data` object: list with `Y`, `denominators`,
 #'   `control_idx_array`, `missing_idx_array` (all `(K, D, N)` arrays),
 #'   `groups`, `units`, `times`, `type`, and the standardized long frame `df`.
 #' @export
-bpnmf_data <- function(config, type = NULL, df = NULL) {
-  checkmate::assert_class(config, "bpnmf_config")
+countsynth_data <- function(config, type = NULL, df = NULL) {
+  checkmate::assert_class(config, "countsynth_config")
   if (length(config$model$types) == 0) {
     cli::cli_abort("Config must define at least one entry in {.field model.types}.")
   }
@@ -408,7 +408,7 @@ bpnmf_data <- function(config, type = NULL, df = NULL) {
   )
   arrays$df <- df_long
   arrays$type <- type
-  new_bpnmf_class(arrays, "bpnmf_data")
+  new_countsynth_class(arrays, "countsynth_data")
 }
 
 #' Convert a standardized long frame into dense (K, D, N) model arrays
@@ -483,12 +483,12 @@ build_model_arrays <- function(df, groups, denominator_scale = 1e4,
 }
 
 #' @export
-print.bpnmf_data <- function(x, ...) {
+print.countsynth_data <- function(x, ...) {
   K <- length(x$groups)
   D <- length(x$units)
   N <- length(x$times)
   n_exposed <- sum(!x$control_idx_array)
-  cli::cli_h1("bpnmf data ({x$type})")
+  cli::cli_h1("countsynth data ({x$type})")
   cli::cli_li("{K} group{?s}: {.val {x$groups}}")
   cli::cli_li("{D} unit{?s}, {N} time period{?s}")
   cli::cli_li("{n_exposed} exposed cell{?s}, {sum(x$missing_idx_array)} missing cell{?s}")

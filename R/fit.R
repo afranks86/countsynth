@@ -2,16 +2,16 @@
 # "variational"` runs Stan's ADVI, which cut mode can use for stage 1 to trade
 # an exact posterior for a fast approximate one.
 
-#' Fit the joint (or baseline) bpnmf model
+#' Fit the joint (or baseline) countsynth model
 #'
 #' Runs NUTS (or, with `method = "variational"`, Stan's ADVI) on the joint
 #' model via cmdstanr. With `config$model$model_treated = FALSE` this fits the
 #' untreated baseline model (the same model cut mode uses for stage 1).
 #'
-#' @param data A `bpnmf_data` object from [bpnmf_data()].
+#' @param data A `countsynth_data` object from [countsynth_data()].
 #' @param rank Factorization rank. Defaults to the first entry of the type's
 #'   `ranks_to_test`.
-#' @param config The [bpnmf_config()] object (MCMC and model options are read
+#' @param config The [countsynth_config()] object (MCMC and model options are read
 #'   from it).
 #' @param model_treated Override `config$model$model_treated`.
 #' @param gen_ypred Emit the counterfactual posterior predictive (default
@@ -38,15 +38,15 @@
 #'   Ignored when `method = "sample"`.
 #' @param ... Additional arguments passed to `CmdStanModel$sample()` (or
 #'   `$variational()`).
-#' @return A `bpnmf_fit` object; `fit_method` records which algorithm ran.
+#' @return A `countsynth_fit` object; `fit_method` records which algorithm ran.
 #' @export
-bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
+countsynth_fit <- function(data, rank = NULL, config, model_treated = NULL,
                       gen_ypred = TRUE, init = NULL,
                       show_exceptions = FALSE,
                       method = c("sample", "variational"),
                       variational = NULL, ...) {
-  checkmate::assert_class(data, "bpnmf_data")
-  checkmate::assert_class(config, "bpnmf_config")
+  checkmate::assert_class(data, "countsynth_data")
+  checkmate::assert_class(config, "countsynth_config")
   method <- match.arg(method)
   type_spec <- config$model$types[[data$type]]
   rank <- rank %||% type_spec$ranks_to_test[[1]]
@@ -86,7 +86,7 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
   }
 
   mcmc <- config$mcmc
-  model <- bpnmf_stan_model("joint")
+  model <- countsynth_stan_model("joint")
 
   if (method == "variational") {
     # ADVI has no chains, warmup, thinning or adapt_delta; the only MCMC
@@ -128,7 +128,7 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
   fit <- do.call(run, args)
   if (method == "variational") warn_advi_quality(fit)
 
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       fit = fit,
       data = data,
@@ -141,7 +141,7 @@ bpnmf_fit <- function(data, rank = NULL, config, model_treated = NULL,
       inference_mode = "joint",
       fit_method = method
     ),
-    "bpnmf_fit"
+    "countsynth_fit"
   )
 }
 

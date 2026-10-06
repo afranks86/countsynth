@@ -51,7 +51,7 @@ draws_frame_core <- function(mu_mat, te_mat, ypred_mat, chain, iteration,
   attr(out, "groups") <- data$groups
   attr(out, "units") <- data$units
   attr(out, "times") <- data$times
-  class(out) <- c("bpnmf_draws", class(out))
+  class(out) <- c("countsynth_draws", class(out))
   out
 }
 
@@ -83,16 +83,16 @@ chain_iteration_vectors <- function(fit) {
 
 #' Build the tidy posterior draws frame
 #'
-#' @param x A `bpnmf_fit` (joint fit) or `bpnmf_cut_fit` object.
+#' @param x A `countsynth_fit` (joint fit) or `countsynth_cut_fit` object.
 #' @param ... Unused.
-#' @return A `bpnmf_draws` tibble; see the file header for the schema.
+#' @return A `countsynth_draws` tibble; see the file header for the schema.
 #' @export
-bpnmf_draws <- function(x, ...) {
-  UseMethod("bpnmf_draws")
+countsynth_draws <- function(x, ...) {
+  UseMethod("countsynth_draws")
 }
 
 #' @export
-bpnmf_draws.bpnmf_fit <- function(x, ...) {
+countsynth_draws.countsynth_fit <- function(x, ...) {
   ci <- chain_iteration_vectors(x$fit)
   mu_mat <- extract_var_matrix(x$fit, "mu_ctrl")
   ypred_mat <- extract_var_matrix(x$fit, "ypred")
@@ -108,7 +108,7 @@ bpnmf_draws.bpnmf_fit <- function(x, ...) {
 }
 
 #' @export
-bpnmf_draws.bpnmf_cut_fit <- function(x, ...) {
+countsynth_draws.countsynth_cut_fit <- function(x, ...) {
   x$draws
 }
 
@@ -134,9 +134,9 @@ sample_untreated_predictions <- function(mu_mat, phi_row = NULL) {
 }
 
 #' @export
-print.bpnmf_draws <- function(x, ...) {
+print.countsynth_draws <- function(x, ...) {
   n_draws <- length(unique(x$.draw))
-  cli::cli_h1("bpnmf draws")
+  cli::cli_h1("countsynth draws")
   cli::cli_li("{n_draws} draw{?s} x {length(attr(x, 'groups'))} group{?s} x
                {length(attr(x, 'units'))} unit{?s} x {length(attr(x, 'times'))} time{?s}")
   if ("cut_component" %in% names(x)) {

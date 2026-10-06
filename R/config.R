@@ -8,8 +8,8 @@
 # Canonical figure names output$figures may select. Must stay in sync with the
 # figure functions wired up in reports.R (the Python side derives this from
 # PLOT_REGISTRY for the same no-drift reason). "te_regression" is the one
-# exception: it needs the fit object (not just draws), so bpnmf_run() renders
-# it and bpnmf_report() ignores it.
+# exception: it needs the fit object (not just draws), so countsynth_run() renders
+# it and countsynth_report() ignores it.
 FIGURE_NAMES <- c(
   "unit_fit", "unit_gap", "raw_rate", "interval", "group_comparison", "ppc",
   "te_regression", "rank_shrinkage"
@@ -67,13 +67,13 @@ VARIATIONAL_KEYS <- c(
 # collapsing into one unreadable signature -- but it also meant an R script had
 # to build objects the YAML loader lets you write as plain nested maps. These
 # coercions close that gap: a named list is passed through the very same
-# constructor, so nothing skips validation, and `bpnmf_type(...)` and
+# constructor, so nothing skips validation, and `countsynth_type(...)` and
 # `list(...)` are interchangeable wherever one is expected.
-coerce_bpnmf <- function(x, ctor_name, class, field) {
+coerce_countsynth <- function(x, ctor_name, class, field) {
   if (is.null(x) || inherits(x, class)) {
     return(x)
   }
-  ctor <- get(ctor_name, envir = asNamespace("bpnmf"))
+  ctor <- get(ctor_name, envir = asNamespace("countsynth"))
   if (!is.list(x) || (length(x) > 0 && is.null(names(x)))) {
     cli::cli_abort(
       "{.field {field}} must be a {.fn {ctor_name}} object or a named list of
@@ -92,7 +92,7 @@ coerce_bpnmf <- function(x, ctor_name, class, field) {
 }
 
 # The same, for a list of them (model types, outcomes, aggregate units).
-coerce_bpnmf_list <- function(x, ctor_name, class, field) {
+coerce_countsynth_list <- function(x, ctor_name, class, field) {
   if (is.null(x)) {
     return(x)
   }
@@ -106,13 +106,13 @@ coerce_bpnmf_list <- function(x, ctor_name, class, field) {
     } else {
       sprintf("%s[[%d]]", field, i)
     }
-    coerce_bpnmf(x[[i]], ctor_name, class, label)
+    coerce_countsynth(x[[i]], ctor_name, class, label)
   })
   names(out) <- names(x)
   out
 }
 
-new_bpnmf_class <- function(x, class) {
+new_countsynth_class <- function(x, class) {
   structure(x, class = c(class, "list"))
 }
 
@@ -121,18 +121,18 @@ new_bpnmf_class <- function(x, class) {
 #' @param outcome_col Name of the count column in the input CSV.
 #' @param label Group label the outcome is reported under.
 #' @param denominator_col Optional exposure/denominator column.
-#' @return A `bpnmf_outcome` spec.
+#' @return A `countsynth_outcome` spec.
 #' @export
-bpnmf_outcome <- function(outcome_col, label, denominator_col = NULL) {
+countsynth_outcome <- function(outcome_col, label, denominator_col = NULL) {
   checkmate::assert_string(outcome_col, min.chars = 1)
   checkmate::assert_string(label, min.chars = 1)
   checkmate::assert_string(denominator_col, min.chars = 1, null.ok = TRUE)
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       outcome_col = outcome_col, label = label,
       denominator_col = denominator_col
     ),
-    "bpnmf_outcome"
+    "countsynth_outcome"
   )
 }
 
@@ -142,9 +142,9 @@ bpnmf_outcome <- function(outcome_col, label, denominator_col = NULL) {
 #'   labels are the column names with the prefix stripped.
 #' @param denominator_prefix Optional prefix of matching denominator columns.
 #' @param include Optional character vector restricting which labels are kept.
-#' @return A `bpnmf_prefixes` spec.
+#' @return A `countsynth_prefixes` spec.
 #' @export
-bpnmf_prefixes <- function(outcome_prefix, denominator_prefix = NULL,
+countsynth_prefixes <- function(outcome_prefix, denominator_prefix = NULL,
                            include = NULL) {
   checkmate::assert_string(outcome_prefix, min.chars = 1)
   checkmate::assert_string(denominator_prefix, min.chars = 1, null.ok = TRUE)
@@ -152,13 +152,13 @@ bpnmf_prefixes <- function(outcome_prefix, denominator_prefix = NULL,
     include,
     min.len = 1, any.missing = FALSE, null.ok = TRUE
   )
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       outcome_prefix = outcome_prefix,
       denominator_prefix = denominator_prefix,
       include = include
     ),
-    "bpnmf_prefixes"
+    "countsynth_prefixes"
   )
 }
 
@@ -168,11 +168,11 @@ bpnmf_prefixes <- function(outcome_prefix, denominator_prefix = NULL,
 #'
 #' @param unit_col,time_col,treatment_col Column names for the panel unit,
 #'   time period, and 0/1 treatment indicator.
-#' @param outcomes A list of [bpnmf_outcome()] specs.
-#' @param outcomes_from_prefixes A [bpnmf_prefixes()] spec.
-#' @return A `bpnmf_schema` object.
+#' @param outcomes A list of [countsynth_outcome()] specs.
+#' @param outcomes_from_prefixes A [countsynth_prefixes()] spec.
+#' @return A `countsynth_schema` object.
 #' @export
-bpnmf_schema <- function(unit_col, time_col, treatment_col,
+countsynth_schema <- function(unit_col, time_col, treatment_col,
                          outcomes = NULL, outcomes_from_prefixes = NULL) {
   checkmate::assert_string(unit_col, min.chars = 1)
   checkmate::assert_string(time_col, min.chars = 1)
@@ -183,22 +183,22 @@ bpnmf_schema <- function(unit_col, time_col, treatment_col,
     )
   }
   if (!is.null(outcomes)) {
-    outcomes <- coerce_bpnmf_list(outcomes, "bpnmf_outcome", "bpnmf_outcome", "outcomes")
-    checkmate::assert_list(outcomes, min.len = 1, types = "bpnmf_outcome")
+    outcomes <- coerce_countsynth_list(outcomes, "countsynth_outcome", "countsynth_outcome", "outcomes")
+    checkmate::assert_list(outcomes, min.len = 1, types = "countsynth_outcome")
   }
   if (!is.null(outcomes_from_prefixes)) {
-    outcomes_from_prefixes <- coerce_bpnmf(
-      outcomes_from_prefixes, "bpnmf_prefixes", "bpnmf_prefixes",
+    outcomes_from_prefixes <- coerce_countsynth(
+      outcomes_from_prefixes, "countsynth_prefixes", "countsynth_prefixes",
       "outcomes_from_prefixes"
     )
-    checkmate::assert_class(outcomes_from_prefixes, "bpnmf_prefixes")
+    checkmate::assert_class(outcomes_from_prefixes, "countsynth_prefixes")
   }
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       unit_col = unit_col, time_col = time_col, treatment_col = treatment_col,
       outcomes = outcomes, outcomes_from_prefixes = outcomes_from_prefixes
     ),
-    "bpnmf_schema"
+    "countsynth_schema"
   )
 }
 
@@ -226,7 +226,7 @@ bpnmf_schema <- function(unit_col, time_col, treatment_col,
 #'   `n_periods` points is kept (and warned about); its shorter exposure is
 #'   carried in `start_date`/`end_date`, so person-year rates stay correct.
 #' @export
-bpnmf_time_aggregation <- function(enabled = FALSE, period = NULL,
+countsynth_time_aggregation <- function(enabled = FALSE, period = NULL,
                                    n_periods = NULL) {
   checkmate::assert_flag(enabled)
   checkmate::assert_choice(period, AGGREGATION_PERIODS, null.ok = TRUE)
@@ -242,9 +242,9 @@ bpnmf_time_aggregation <- function(enabled = FALSE, period = NULL,
   if (enabled && is.null(period) && is.null(n_periods)) {
     period <- "bimonthly"
   }
-  new_bpnmf_class(
+  new_countsynth_class(
     list(enabled = enabled, period = period, n_periods = n_periods),
-    "bpnmf_time_aggregation"
+    "countsynth_time_aggregation"
   )
 }
 
@@ -257,7 +257,7 @@ bpnmf_time_aggregation <- function(enabled = FALSE, period = NULL,
 #' @param total_all If `TRUE`, `"total"` sums every resolved outcome label.
 #' @param exclude_units Units dropped before fitting this type.
 #' @export
-bpnmf_type <- function(groups, ranks_to_test, total_from = NULL,
+countsynth_type <- function(groups, ranks_to_test, total_from = NULL,
                        total_all = FALSE, exclude_units = NULL) {
   checkmate::assert_character(groups, min.len = 1, any.missing = FALSE)
   checkmate::assert_integerish(
@@ -270,13 +270,13 @@ bpnmf_type <- function(groups, ranks_to_test, total_from = NULL,
   )
   checkmate::assert_flag(total_all)
   checkmate::assert_character(exclude_units, any.missing = FALSE, null.ok = TRUE)
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       groups = groups, ranks_to_test = as.integer(ranks_to_test),
       total_from = total_from, total_all = total_all,
       exclude_units = exclude_units
     ),
-    "bpnmf_type"
+    "countsynth_type"
   )
 }
 
@@ -297,16 +297,16 @@ bpnmf_type <- function(groups, ranks_to_test, total_from = NULL,
 #' And the prior amplitude of the low-rank term stops depending on `R`: under
 #' the default `Dirichlet(1, ..., 1)`,
 #' `E[sum_r unit_weight^2] = 2 / (R + 1)`, so the variance of the low-rank
-#' term falls off like `1 / R` and [bpnmf_model_opts()]'s
+#' term falls off like `1 / R` and [countsynth_model_opts()]'s
 #' `factor_variation_pct` only means what it says at a fixed rank.
 #'
 #' The fit reports `eff_rank[k] = 1 / sum_r group_weight[k, r]^2` -- the
 #' effective number of components group `k` occupies. If its posterior sits
 #' well below `R` the truncation was generous enough; if it presses against
-#' `R`, raise the rank and refit. See [bpnmf_component_weight_plot()] and
-#' [bpnmf_rank_hyper_plot()].
+#' `R`, raise the rank and refit. See [countsynth_component_weight_plot()] and
+#' [countsynth_rank_hyper_plot()].
 #'
-#' `NULL` in [bpnmf_model_opts()] leaves the weights iid uniform on the
+#' `NULL` in [countsynth_model_opts()] leaves the weights iid uniform on the
 #' simplex; the Stan parameters this adds are then zero-size, so a fit is
 #' unchanged draw for draw.
 #'
@@ -334,9 +334,9 @@ bpnmf_type <- function(groups, ranks_to_test, total_from = NULL,
 #'   and no floor is both large enough to do that and small enough to keep
 #'   the rank-invariance. A concentration `c` corresponds to `unit_sd_prior`
 #'   near `sqrt(2 / c)`.
-#' @return A `bpnmf_rank_shrinkage_opts` object.
+#' @return A `countsynth_rank_shrinkage_opts` object.
 #' @export
-bpnmf_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
+countsynth_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
                                       unit_sd_prior = 1) {
   checkmate::assert_numeric(
     group_mass_prior,
@@ -346,19 +346,19 @@ bpnmf_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
   checkmate::assert_number(
     unit_sd_prior, lower = .Machine$double.xmin, finite = TRUE
   )
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       group_mass_prior = as.numeric(group_mass_prior),
       unit_sd_prior = as.numeric(unit_sd_prior)
     ),
-    "bpnmf_rank_shrinkage_opts"
+    "countsynth_rank_shrinkage_opts"
   )
 }
 
 #' Model options: likelihood family, model types, dispersion, treatment
 #'
 #' @param outcome_distribution `"NB"` or `"Poisson"`.
-#' @param types Named list of [bpnmf_type()] specs; names are the model-type
+#' @param types Named list of [countsynth_type()] specs; names are the model-type
 #'   labels (e.g. `"total"`, `"age"`).
 #' @param nb_disp Fixed NB dispersion (concentration is `1/nb_disp`).
 #' @param sample_disp Sample per-unit dispersion instead of fixing it.
@@ -366,7 +366,7 @@ bpnmf_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 #'   counts (values 1-9 suppressed in the source data).
 #' @param model_treated Include the treatment-effect block.
 #' @param inference_mode `NULL` (default joint), `"joint"`, or `"cut"`.
-#' @param treatment_effects Optional [bpnmf_te_opts()] object replacing the
+#' @param treatment_effects Optional [countsynth_te_opts()] object replacing the
 #'   default treatment-effect hierarchy with a covariate regression surface
 #'   (applies to both joint inference and cut stage 2). `NULL` keeps the
 #'   legacy `(1 | group) + (1 | unit) + (1 | group:unit)` model.
@@ -376,7 +376,7 @@ bpnmf_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 #'   keeps the historical shape of 20, which corresponds to about 25 percent.
 #'   Raise it for panels whose within-unit seasonality or volatility is larger
 #'   than that; lower it for smooth series.
-#' @param rank_shrinkage Optional [bpnmf_rank_shrinkage_opts()] object
+#' @param rank_shrinkage Optional [countsynth_rank_shrinkage_opts()] object
 #'   shrinking unused factor components, so that an over-specified rank stops
 #'   changing the fit. `NULL` (default) keeps the flat
 #'   `Dirichlet(1, ..., 1)` weights, in which case results do depend on the
@@ -390,7 +390,7 @@ bpnmf_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 #'   two, so tightening it improves identification as well as encoding a
 #'   belief.
 #' @export
-bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
+countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
                              nb_disp = 1e-4, sample_disp = FALSE,
                              adjust_for_missingness = TRUE,
                              model_treated = TRUE, inference_mode = NULL,
@@ -399,8 +399,8 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
                              time_level_variation_pct = NULL,
                              rank_shrinkage = NULL) {
   checkmate::assert_choice(outcome_distribution, c("NB", "Poisson"))
-  types <- coerce_bpnmf_list(types, "bpnmf_type", "bpnmf_type", "types")
-  checkmate::assert_list(types, types = "bpnmf_type")
+  types <- coerce_countsynth_list(types, "countsynth_type", "countsynth_type", "types")
+  checkmate::assert_list(types, types = "countsynth_type")
   if (length(types) > 0) {
     checkmate::assert_names(names(types), type = "unique")
   }
@@ -432,20 +432,20 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
   # "off", and the YAML loader accepts the same, so honour them here too.
   if (is.logical(rank_shrinkage) && length(rank_shrinkage) == 1 &&
     !is.na(rank_shrinkage)) {
-    rank_shrinkage <- if (rank_shrinkage) bpnmf_rank_shrinkage_opts() else NULL
+    rank_shrinkage <- if (rank_shrinkage) countsynth_rank_shrinkage_opts() else NULL
   }
-  rank_shrinkage <- coerce_bpnmf(
-    rank_shrinkage, "bpnmf_rank_shrinkage_opts", "bpnmf_rank_shrinkage_opts",
+  rank_shrinkage <- coerce_countsynth(
+    rank_shrinkage, "countsynth_rank_shrinkage_opts", "countsynth_rank_shrinkage_opts",
     "rank_shrinkage"
   )
-  checkmate::assert_class(treatment_effects, "bpnmf_te_opts", null.ok = TRUE)
+  checkmate::assert_class(treatment_effects, "countsynth_te_opts", null.ok = TRUE)
   if (!is.null(treatment_effects) && !is.null(treatment_effects$formula) &&
     !model_treated) {
     cli::cli_abort(
       "{.field model.treatment_effects} requires {.field model_treated}=TRUE."
     )
   }
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       outcome_distribution = outcome_distribution, types = types,
       nb_disp = nb_disp, sample_disp = sample_disp,
@@ -456,7 +456,7 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
       time_level_variation_pct = time_level_variation_pct,
       rank_shrinkage = rank_shrinkage
     ),
-    "bpnmf_model_opts"
+    "countsynth_model_opts"
   )
 }
 
@@ -474,7 +474,7 @@ bpnmf_model_opts <- function(outcome_distribution = "NB", types = list(),
 #' @param divergence_fail_fraction Largest share of retained transitions that
 #'   may be divergent while still counting as converged.
 #' @export
-bpnmf_convergence <- function(rhat_warn = 1.01, rhat_fail = 1.05,
+countsynth_convergence <- function(rhat_warn = 1.01, rhat_fail = 1.05,
                               ess_min = 400, ess_fail_fraction = 0.25,
                               divergence_fail_fraction = 0.01) {
   checkmate::assert_number(rhat_warn, lower = 1)
@@ -482,13 +482,13 @@ bpnmf_convergence <- function(rhat_warn = 1.01, rhat_fail = 1.05,
   checkmate::assert_number(ess_min, lower = 0)
   checkmate::assert_number(ess_fail_fraction, lower = 0, upper = 1)
   checkmate::assert_number(divergence_fail_fraction, lower = 0, upper = 1)
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       rhat_warn = rhat_warn, rhat_fail = rhat_fail,
       ess_min = ess_min, ess_fail_fraction = ess_fail_fraction,
       divergence_fail_fraction = divergence_fail_fraction
     ),
-    "bpnmf_convergence"
+    "countsynth_convergence"
   )
 }
 
@@ -516,15 +516,15 @@ bpnmf_convergence <- function(rhat_warn = 1.01, rhat_fail = 1.05,
 #'   vector to gate on more, or `"all"` to gate on every diagnosable variable
 #'   (the behaviour before this became a default). [parameter_diagnostics()]
 #'   always reports every variable regardless.
-#' @param convergence A [bpnmf_convergence()] object.
+#' @param convergence A [countsynth_convergence()] object.
 #' @export
-bpnmf_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
+countsynth_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
                             chains = NULL, parallel_chains = NULL,
                             iter_warmup = 1000, iter_sampling = 2500,
                             thin = 10, adapt_delta = 0.8, seed = 8675309,
                             progress = TRUE,
                             gate_params = DEFAULT_GATE_PARAMS,
-                            convergence = bpnmf_convergence()) {
+                            convergence = countsynth_convergence()) {
   checkmate::assert_flag(auto_parallelism)
   checkmate::assert_int(max_chains, lower = 1)
   checkmate::assert_int(chains, lower = 1, null.ok = TRUE)
@@ -543,11 +543,11 @@ bpnmf_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
   # explicit NULL skips an R default.
   gate_params <- gate_params %||% DEFAULT_GATE_PARAMS
   checkmate::assert_character(gate_params, min.len = 1, any.missing = FALSE)
-  convergence <- coerce_bpnmf(
-    convergence, "bpnmf_convergence", "bpnmf_convergence", "convergence"
+  convergence <- coerce_countsynth(
+    convergence, "countsynth_convergence", "countsynth_convergence", "convergence"
   )
-  checkmate::assert_class(convergence, "bpnmf_convergence")
-  new_bpnmf_class(
+  checkmate::assert_class(convergence, "countsynth_convergence")
+  new_countsynth_class(
     list(
       auto_parallelism = auto_parallelism, max_chains = as.integer(max_chains),
       chains = if (is.null(chains)) NULL else as.integer(chains),
@@ -557,7 +557,7 @@ bpnmf_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
       adapt_delta = adapt_delta, seed = as.integer(seed), progress = progress,
       gate_params = gate_params, convergence = convergence
     ),
-    "bpnmf_mcmc_opts"
+    "countsynth_mcmc_opts"
   )
 }
 
@@ -573,7 +573,7 @@ bpnmf_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
 #' @param strict Error (instead of warn) when a listed unit is absent.
 #' @param overwrite Replace an existing unit of the same name.
 #' @export
-bpnmf_aggregate_unit <- function(unit, include_treated_units = FALSE,
+countsynth_aggregate_unit <- function(unit, include_treated_units = FALSE,
                                  include_all_units = FALSE,
                                  include_units = NULL, exclude_units = NULL,
                                  strict = FALSE, overwrite = FALSE) {
@@ -598,13 +598,13 @@ bpnmf_aggregate_unit <- function(unit, include_treated_units = FALSE,
        got {.val {names(active)[active]}}."
     )
   }
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       unit = unit, include_treated_units = include_treated_units,
       include_all_units = include_all_units, include_units = include_units,
       exclude_units = exclude_units, strict = strict, overwrite = overwrite
     ),
-    "bpnmf_aggregate_unit"
+    "countsynth_aggregate_unit"
   )
 }
 
@@ -646,13 +646,13 @@ normalize_figures <- function(v) {
 #'   `print_target_table` adds the target unit's own table above the by-unit
 #'   one; its rows are already in the by-unit table, so it defaults to off.
 #' @param html_tables Also write the `gt` HTML summary tables.
-#' @param aggregate_units List of [bpnmf_aggregate_unit()] specs.
+#' @param aggregate_units List of [countsynth_aggregate_unit()] specs.
 #' @param ppc_units,ppc_exclude_units Unit filters for the PPC suite.
 #' @param ppc_acf_lags Integer lags for the ACF check (default 6).
 #' @param ppc_unit_corr_max_time Cutoff date for the unit-correlation check.
 #' @param draws_format `"csv"` or `"parquet"` for the draws artifact.
 #' @export
-bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
+countsynth_output_opts <- function(figures = FALSE, clean = FALSE,
                               save_traces = FALSE, target_unit = NULL,
                               report_groups = NULL, fit_gap_per_unit = FALSE,
                               interval_aggregates = TRUE,
@@ -675,13 +675,13 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
   checkmate::assert_flag(print_tables)
   checkmate::assert_flag(print_target_table)
   checkmate::assert_flag(html_tables)
-  aggregate_units <- coerce_bpnmf_list(
-    aggregate_units, "bpnmf_aggregate_unit", "bpnmf_aggregate_unit",
+  aggregate_units <- coerce_countsynth_list(
+    aggregate_units, "countsynth_aggregate_unit", "countsynth_aggregate_unit",
     "aggregate_units"
   )
   checkmate::assert_list(
     aggregate_units,
-    types = "bpnmf_aggregate_unit", null.ok = TRUE
+    types = "countsynth_aggregate_unit", null.ok = TRUE
   )
   checkmate::assert_character(ppc_units, any.missing = FALSE, null.ok = TRUE)
   checkmate::assert_character(
@@ -694,7 +694,7 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
   )
   checkmate::assert_string(ppc_unit_corr_max_time, null.ok = TRUE)
   checkmate::assert_choice(draws_format, c("csv", "parquet"))
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       figures = figures, clean = clean, save_traces = save_traces,
       target_unit = target_unit, report_groups = report_groups,
@@ -707,7 +707,7 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
       ppc_unit_corr_max_time = ppc_unit_corr_max_time,
       draws_format = draws_format
     ),
-    "bpnmf_output_opts"
+    "countsynth_output_opts"
   )
 }
 
@@ -739,7 +739,7 @@ bpnmf_output_opts <- function(figures = FALSE, clean = FALSE,
 #'   runs at `mcmc$seed`, as it does under `"sample"`). Ignored when
 #'   `stage1_method = "sample"`.
 #' @export
-bpnmf_cut_opts <- function(num_stage1_draws = 25,
+countsynth_cut_opts <- function(num_stage1_draws = 25,
                            stage2_draws_per_component = 100,
                            selection_seed = NULL, stage2_seed = NULL,
                            stage2_mcmc = NULL, stage1_method = "sample",
@@ -774,7 +774,7 @@ bpnmf_cut_opts <- function(num_stage1_draws = 25,
       )
     }
   }
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       num_stage1_draws = as.integer(num_stage1_draws),
       stage2_draws_per_component =
@@ -789,15 +789,15 @@ bpnmf_cut_opts <- function(num_stage1_draws = 25,
       stage1_method = stage1_method,
       stage1_variational = stage1_variational
     ),
-    "bpnmf_cut_opts"
+    "countsynth_cut_opts"
   )
 }
 
-#' Top-level bpnmf configuration
+#' Top-level countsynth configuration
 #'
-#' Anywhere a `bpnmf_*` options object is expected -- here and in
-#' [bpnmf_schema()], [bpnmf_model_opts()], [bpnmf_mcmc_opts()] and
-#' [bpnmf_output_opts()] -- a plain **named list** of that constructor's
+#' Anywhere a `countsynth_*` options object is expected -- here and in
+#' [countsynth_schema()], [countsynth_model_opts()], [countsynth_mcmc_opts()] and
+#' [countsynth_output_opts()] -- a plain **named list** of that constructor's
 #' arguments is accepted and passed through the constructor itself. Validation
 #' and defaults are identical either way, and an unrecognized name is an error
 #' rather than a silently ignored option, so the list form is a shorthand
@@ -806,54 +806,54 @@ bpnmf_cut_opts <- function(num_stage1_draws = 25,
 #'
 #' @param input_file Path to the input CSV.
 #' @param output_dir Directory run artifacts are written to.
-#' @param schema A [bpnmf_schema()] object, or a named list of its arguments.
-#' @param model A [bpnmf_model_opts()] object, or a named list of its arguments.
-#' @param mcmc A [bpnmf_mcmc_opts()] object, or a named list of its arguments.
-#' @param output A [bpnmf_output_opts()] object, or a named list of its arguments.
-#' @param cut A [bpnmf_cut_opts()] object, a named list, or `NULL`.
+#' @param schema A [countsynth_schema()] object, or a named list of its arguments.
+#' @param model A [countsynth_model_opts()] object, or a named list of its arguments.
+#' @param mcmc A [countsynth_mcmc_opts()] object, or a named list of its arguments.
+#' @param output A [countsynth_output_opts()] object, or a named list of its arguments.
+#' @param cut A [countsynth_cut_opts()] object, a named list, or `NULL`.
 #' @param date_format `"auto"` or a `strptime` format for the time column.
 #' @param start_date,end_date Optional date filter; `start_date` inclusive,
 #'   `end_date` **exclusive**.
-#' @param time_aggregation A [bpnmf_time_aggregation()] object, or a named
+#' @param time_aggregation A [countsynth_time_aggregation()] object, or a named
 #'   list of its arguments.
 #' @param allow_unbalanced_panel Treat structurally absent (unit, time) cells
 #'   as missing instead of erroring.
 #' @param outcome Optional label used in draws filenames (falls back to the
 #'   outcome prefix, then `"outcome"`).
-#' @return A validated `bpnmf_config` object.
+#' @return A validated `countsynth_config` object.
 #' @export
-bpnmf_config <- function(input_file, output_dir, schema,
-                         model = bpnmf_model_opts(),
-                         mcmc = bpnmf_mcmc_opts(),
-                         output = bpnmf_output_opts(),
+countsynth_config <- function(input_file, output_dir, schema,
+                         model = countsynth_model_opts(),
+                         mcmc = countsynth_mcmc_opts(),
+                         output = countsynth_output_opts(),
                          cut = NULL,
                          date_format = "auto", start_date = NULL,
                          end_date = NULL,
-                         time_aggregation = bpnmf_time_aggregation(),
+                         time_aggregation = countsynth_time_aggregation(),
                          allow_unbalanced_panel = FALSE, outcome = NULL) {
   checkmate::assert_string(input_file, min.chars = 1)
   checkmate::assert_string(output_dir, min.chars = 1)
-  schema <- coerce_bpnmf(schema, "bpnmf_schema", "bpnmf_schema", "schema")
-  model <- coerce_bpnmf(model, "bpnmf_model_opts", "bpnmf_model_opts", "model")
-  mcmc <- coerce_bpnmf(mcmc, "bpnmf_mcmc_opts", "bpnmf_mcmc_opts", "mcmc")
-  output <- coerce_bpnmf(output, "bpnmf_output_opts", "bpnmf_output_opts", "output")
-  cut <- coerce_bpnmf(cut, "bpnmf_cut_opts", "bpnmf_cut_opts", "cut")
-  checkmate::assert_class(schema, "bpnmf_schema")
-  checkmate::assert_class(model, "bpnmf_model_opts")
-  checkmate::assert_class(mcmc, "bpnmf_mcmc_opts")
-  checkmate::assert_class(output, "bpnmf_output_opts")
-  checkmate::assert_class(cut, "bpnmf_cut_opts", null.ok = TRUE)
+  schema <- coerce_countsynth(schema, "countsynth_schema", "countsynth_schema", "schema")
+  model <- coerce_countsynth(model, "countsynth_model_opts", "countsynth_model_opts", "model")
+  mcmc <- coerce_countsynth(mcmc, "countsynth_mcmc_opts", "countsynth_mcmc_opts", "mcmc")
+  output <- coerce_countsynth(output, "countsynth_output_opts", "countsynth_output_opts", "output")
+  cut <- coerce_countsynth(cut, "countsynth_cut_opts", "countsynth_cut_opts", "cut")
+  checkmate::assert_class(schema, "countsynth_schema")
+  checkmate::assert_class(model, "countsynth_model_opts")
+  checkmate::assert_class(mcmc, "countsynth_mcmc_opts")
+  checkmate::assert_class(output, "countsynth_output_opts")
+  checkmate::assert_class(cut, "countsynth_cut_opts", null.ok = TRUE)
   checkmate::assert_string(date_format, min.chars = 1)
   checkmate::assert_string(start_date, null.ok = TRUE)
   checkmate::assert_string(end_date, null.ok = TRUE)
-  time_aggregation <- coerce_bpnmf(
-    time_aggregation, "bpnmf_time_aggregation", "bpnmf_time_aggregation",
+  time_aggregation <- coerce_countsynth(
+    time_aggregation, "countsynth_time_aggregation", "countsynth_time_aggregation",
     "time_aggregation"
   )
-  checkmate::assert_class(time_aggregation, "bpnmf_time_aggregation")
+  checkmate::assert_class(time_aggregation, "countsynth_time_aggregation")
   checkmate::assert_flag(allow_unbalanced_panel)
   checkmate::assert_string(outcome, min.chars = 1, null.ok = TRUE)
-  new_bpnmf_class(
+  new_countsynth_class(
     list(
       input_file = input_file, output_dir = output_dir, schema = schema,
       model = model, mcmc = mcmc, output = output, cut = cut,
@@ -861,13 +861,13 @@ bpnmf_config <- function(input_file, output_dir, schema,
       time_aggregation = time_aggregation,
       allow_unbalanced_panel = allow_unbalanced_panel, outcome = outcome
     ),
-    "bpnmf_config"
+    "countsynth_config"
   )
 }
 
 #' @export
-print.bpnmf_config <- function(x, ...) {
-  cli::cli_h1("bpnmf config")
+print.countsynth_config <- function(x, ...) {
+  cli::cli_h1("countsynth config")
   cli::cli_li("input: {.file {x$input_file}}")
   cli::cli_li("output dir: {.file {x$output_dir}}")
   cli::cli_li("distribution: {x$model$outcome_distribution}")

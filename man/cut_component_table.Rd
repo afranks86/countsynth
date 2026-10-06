@@ -7,7 +7,7 @@
 cut_component_table(x)
 }
 \arguments{
-\item{x}{A \code{bpnmf_cut_fit} object.}
+\item{x}{A \code{countsynth_cut_fit} object.}
 }
 \description{
 Terminal table of per-component cut diagnostics

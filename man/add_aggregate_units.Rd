@@ -7,9 +7,9 @@
 add_aggregate_units(draws, specs)
 }
 \arguments{
-\item{draws}{A \code{bpnmf_draws} frame.}
+\item{draws}{A \code{countsynth_draws} frame.}
 
-\item{specs}{A list of \code{\link[=bpnmf_aggregate_unit]{bpnmf_aggregate_unit()}} specs.}
+\item{specs}{A list of \code{\link[=countsynth_aggregate_unit]{countsynth_aggregate_unit()}} specs.}
 }
 \value{
 The draws frame with aggregate-unit rows appended.

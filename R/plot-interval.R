@@ -53,7 +53,7 @@ compute_draw_effects <- function(df, estimand, method, rate_normalizer,
 #' segment, a thick 67% segment, and a point at the posterior median; units
 #' are ordered by median effect.
 #'
-#' @param draws A `bpnmf_draws` frame.
+#' @param draws A `countsynth_draws` frame.
 #' @param units Units to include (`NULL` = every treated unit).
 #' @param categories Groups to include (`NULL` = all).
 #' @param estimand `"diff"` (rate difference) or `"ratio"` (percent change
@@ -70,7 +70,7 @@ compute_draw_effects <- function(df, estimand, method, rate_normalizer,
 #'   `draws` are ignored. Each band is still sorted by median effect.
 #' @return A ggplot object.
 #' @export
-bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
+countsynth_interval_plot <- function(draws, units = NULL, categories = NULL,
                                 estimand = c("ratio", "diff"),
                                 method = c("mu", "pred"),
                                 rate_normalizer = 1000,
@@ -169,7 +169,7 @@ bpnmf_interval_plot <- function(draws, units = NULL, categories = NULL,
       subtitle = "Thick segment: 67% CI. Thin segment: 95% CI. Point: posterior median.",
       x = xlab, y = NULL
     ) +
-    theme_bpnmf()
+    theme_countsynth()
   if (faceted) {
     p <- p +
       ggplot2::facet_grid(

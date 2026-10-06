@@ -14,10 +14,10 @@
 # The fit holding the shrinkage parameters, or NULL when the fit did not use
 # them.
 rank_shrinkage_source <- function(x) {
-  if (inherits(x, "bpnmf_cut_fit")) {
+  if (inherits(x, "countsynth_cut_fit")) {
     x <- x$stage1
   }
-  if (inherits(x, "bpnmf_fit")) {
+  if (inherits(x, "countsynth_fit")) {
     if (!isTRUE(x$stan_data$rank_shrink == 1L)) {
       return(NULL)
     }
@@ -40,7 +40,7 @@ rank_source_or_abort <- function(x) {
   rank_shrinkage_source(x) %||% cli::cli_abort(c(
     "This fit was not run with rank shrinkage.",
     i = "Set {.field model.rank_shrinkage} (see
-         {.fn bpnmf_rank_shrinkage_opts}) and refit."
+         {.fn countsynth_rank_shrinkage_opts}) and refit."
   ))
 }
 
@@ -110,15 +110,15 @@ eff_rank_frame <- function(eff_rank, groups = NULL) {
 #' Posterior of the shared component-popularity profile
 #'
 #' The order statistics of `group_weight[k]` -- the shared profile of the
-#' finite-HDP weight prior ([bpnmf_rank_shrinkage_opts()]) -- sorted within
+#' finite-HDP weight prior ([countsynth_rank_shrinkage_opts()]) -- sorted within
 #' each posterior draw. One row per (group, position), with the position's
 #' posterior median and 67% / 95% credible bounds.
 #'
-#' @param x A `bpnmf_fit` / `bpnmf_cut_fit` fit with `rank_shrinkage` set.
+#' @param x A `countsynth_fit` / `countsynth_cut_fit` fit with `rank_shrinkage` set.
 #' @return A tibble with `group`, `component`, `median`, `lower_67`,
 #'   `upper_67`, `lower_95`, `upper_95`.
 #' @export
-bpnmf_component_weight_summary <- function(x) {
+countsynth_component_weight_summary <- function(x) {
   src <- rank_source_or_abort(x)
   component_weight_frame(rank_draws(src)$profile, src$groups)
 }
@@ -131,11 +131,11 @@ bpnmf_component_weight_summary <- function(x) {
 #' fitted rank says the truncation was generous enough; one pressing against
 #' it says to raise the rank and refit.
 #'
-#' @inheritParams bpnmf_component_weight_summary
+#' @inheritParams countsynth_component_weight_summary
 #' @return A tibble with `group`, `median`, `lower_67`, `upper_67`,
 #'   `lower_95`, `upper_95`.
 #' @export
-bpnmf_eff_rank_summary <- function(x) {
+countsynth_eff_rank_summary <- function(x) {
   src <- rank_source_or_abort(x)
   eff_rank_frame(rank_draws(src)$eff_rank, src$groups)
 }
@@ -151,10 +151,10 @@ bpnmf_eff_rank_summary <- function(x) {
 #' The dotted line is `1 / R`, the weight every position would carry under a
 #' flat profile that uses all `R` components.
 #'
-#' @inheritParams bpnmf_component_weight_summary
+#' @inheritParams countsynth_component_weight_summary
 #' @return A ggplot object.
 #' @export
-bpnmf_component_weight_plot <- function(x) {
+countsynth_component_weight_plot <- function(x) {
   src <- rank_source_or_abort(x)
   dr <- rank_draws(src)
   prof <- component_weight_frame(dr$profile, src$groups)
@@ -208,7 +208,7 @@ bpnmf_component_weight_plot <- function(x) {
       ),
       x = "Position in the sorted profile", y = "Profile weight"
     ) +
-    theme_bpnmf()
+    theme_countsynth()
 }
 
 # Facet labels for the two hyperparameters: the parameter name plus what
@@ -250,11 +250,11 @@ rank_hyper_priors <- function(stan_data) {
 #' structure the units share -- and that the shrinkage is being driven by the
 #' hyperprior rather than the data.
 #'
-#' @inheritParams bpnmf_component_weight_summary
+#' @inheritParams countsynth_component_weight_summary
 #' @param prior Overlay the prior densities (default `TRUE`).
 #' @return A ggplot object.
 #' @export
-bpnmf_rank_hyper_plot <- function(x, prior = TRUE) {
+countsynth_rank_hyper_plot <- function(x, prior = TRUE) {
   src <- rank_source_or_abort(x)
   rv <- posterior::as_draws_rvars(
     src$fit$draws(variables = c("unit_weight_sd", "group_weight_mass"))
@@ -306,7 +306,7 @@ bpnmf_rank_hyper_plot <- function(x, prior = TRUE) {
       },
       x = "Value", y = "Density"
     ) +
-    theme_bpnmf()
+    theme_countsynth()
 }
 
 # Standard figure set for the report. Names become the PNG filenames; they
@@ -314,7 +314,7 @@ bpnmf_rank_hyper_plot <- function(x, prior = TRUE) {
 # PPC-driven rank sweep was answering.
 rank_report_figures <- function(x) {
   list(
-    rank_component_weight = bpnmf_component_weight_plot(x),
-    rank_hyperparameters = bpnmf_rank_hyper_plot(x)
+    rank_component_weight = countsynth_component_weight_plot(x),
+    rank_hyperparameters = countsynth_rank_hyper_plot(x)
   )
 }

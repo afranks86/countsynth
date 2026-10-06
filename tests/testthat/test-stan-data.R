@@ -18,7 +18,7 @@ fixture_data <- function() {
         df = NULL,
         type = "test"
       ),
-      class = c("bpnmf_data", "list")
+      class = c("countsynth_data", "list")
     )
   )
 }
@@ -104,11 +104,11 @@ test_that("time_fac_shape reaches the Stan data with the historical default", {
     stan_data_joint(data, rank = 2, time_fe_shape = 10)$time_fe_shape, 10
   )
   expect_equal(
-    gamma_shape_from_pct(bpnmf_model_opts()$factor_variation_pct), 20
+    gamma_shape_from_pct(countsynth_model_opts()$factor_variation_pct), 20
   )
   expect_equal(
     gamma_shape_from_pct(
-      bpnmf_model_opts()$time_level_variation_pct, DEFAULT_TIME_FE_SHAPE
+      countsynth_model_opts()$time_level_variation_pct, DEFAULT_TIME_FE_SHAPE
     ),
     1
   )
@@ -128,7 +128,7 @@ test_that("rank_shrinkage reaches the Stan data and is off by default", {
 
   on <- stan_data_joint(
     data, rank = 4,
-    rank_shrinkage = bpnmf_rank_shrinkage_opts(
+    rank_shrinkage = countsynth_rank_shrinkage_opts(
       group_mass_prior = c(3, 1.5), unit_sd_prior = 0.5
     )
   )
@@ -149,7 +149,7 @@ test_that("rank_shrinkage is disabled at rank 1 rather than aborting", {
   # straight from their priors.
   expect_warning(
     sd <- stan_data_joint(
-      data, rank = 1, rank_shrinkage = bpnmf_rank_shrinkage_opts()
+      data, rank = 1, rank_shrinkage = countsynth_rank_shrinkage_opts()
     ),
     "ignored at rank 1"
   )
