@@ -11,7 +11,7 @@ countsynth_mcmc_opts(
   parallel_chains = NULL,
   iter_warmup = 1000,
   iter_sampling = 2500,
-  thin = 10,
+  thin = 1,
   adapt_delta = 0.8,
   seed = 8675309,
   progress = TRUE,

@@ -16,7 +16,8 @@ R-hat/ESS gate is restricted to (defaults to the config's
 \item{thresholds}{A \code{\link[=countsynth_convergence]{countsynth_convergence()}} object.}
 }
 \value{
-A list: \code{rhat_max}, \code{ess_bulk_min}, \code{ess_tail_min}, \code{divergences},
+A list: \code{rhat_max}, \code{ess_bulk_min}, \code{ess_tail_min}, \code{draws} (the
+retained draw count, which bounds ESS), \code{thin}, \code{divergences},
 \code{divergence_fraction}, \code{converged} (+ \code{gate_params} when set). For a
 variational (ADVI) fit none of those quantities exist, so they are \code{NA}
 and \code{converged} is \code{NA} -- "not gated", not "failed".
