@@ -176,7 +176,8 @@ treedepth_summary <- function(fit) {
 #'   R-hat/ESS gate is restricted to (defaults to the config's
 #'   `mcmc$gate_params` when `fit` is a `countsynth_fit`).
 #' @param thresholds A [countsynth_convergence()] object.
-#' @return A list: `rhat_max`, `ess_bulk_min`, `ess_tail_min`, `divergences`,
+#' @return A list: `rhat_max`, `ess_bulk_min`, `ess_tail_min`, `draws` (the
+#'   retained draw count, which bounds ESS), `thin`, `divergences`,
 #'   `divergence_fraction`, `treedepth_hits`, `treedepth_fraction`,
 #'   `max_treedepth`, `converged` (+ `gate_params` when set). Treedepth is
 #'   informational only -- it is never part of `converged` (see
