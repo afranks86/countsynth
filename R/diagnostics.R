@@ -72,6 +72,8 @@ variational_gate <- function() {
     rhat_max = NA_real_,
     ess_bulk_min = NA_real_,
     ess_tail_min = NA_real_,
+    draws = NA_integer_,
+    thin = NA_integer_,
     divergences = NA_integer_,
     divergence_fraction = NA_real_,
     treedepth_hits = NA_integer_,
@@ -213,6 +215,10 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
     rhat_max = rhat_max,
     ess_bulk_min = ess_bulk_min,
     ess_tail_min = ess_tail_min,
+    # ESS is bounded above by the retained draw count, so ess_min is only
+    # interpretable next to it: thinning can fail the gate on arithmetic.
+    draws = div$transitions,
+    thin = fit$metadata()$thin %||% 1L,
     divergences = div$count,
     divergence_fraction = div$fraction,
     treedepth_hits = td$hits,
@@ -361,15 +367,41 @@ gate_failure_bullets <- function(gate, thresholds = NULL, fit = NULL,
 
   ess <- suppressWarnings(min(gate$ess_bulk_min, gate$ess_tail_min, na.rm = TRUE))
   ess_floor <- thresholds$ess_min * thresholds$ess_fail_fraction
+  # ESS cannot exceed the number of retained draws, so quoting it bare invites
+  # the reader to blame the sampler for what may be arithmetic.
+  of_draws <- if (isTRUE(gate$draws > 0)) {
+    sprintf(" of %d retained draws", gate$draws)
+  } else {
+    ""
+  }
   if (isTRUE(ess < ess_floor)) {
     warn_only <- FALSE
     bullets <- c(bullets, sprintf(
-      "min ESS %.3g, below the fail floor %.3g (ess_min %.3g x ess_fail_fraction %.3g)",
-      ess, ess_floor, thresholds$ess_min, thresholds$ess_fail_fraction
+      "min ESS %.3g%s, below the fail floor %.3g (ess_min %.3g x ess_fail_fraction %.3g)",
+      ess, of_draws, ess_floor, thresholds$ess_min, thresholds$ess_fail_fraction
     ))
   } else if (isTRUE(ess < thresholds$ess_min)) {
     bullets <- c(bullets, sprintf(
-      "min ESS %.3g, below ess_min %.3g", ess, thresholds$ess_min
+      "min ESS %.3g%s, below ess_min %.3g", ess, of_draws, thresholds$ess_min
+    ))
+  }
+  # Thinning is the one cause the numbers above cannot show on their own: a
+  # well-mixed run can miss ess_min purely because most draws were discarded,
+  # and when ess_min is at or above the retained count no fit can ever pass.
+  if (isTRUE(ess < thresholds$ess_min) && isTRUE(gate$thin > 1)) {
+    bullets <- c(bullets, sprintf(
+      "{.field mcmc.thinning} is %d, so only %d of %d draws were kept -- ESS
+       cannot exceed that count%s",
+      gate$thin, gate$draws, gate$draws * gate$thin,
+      if (isTRUE(thresholds$ess_min >= gate$draws)) {
+        sprintf(
+          ", and ess_min (%.3g) is at or above it, so this criterion cannot
+           pass however well the sampler mixed",
+          thresholds$ess_min
+        )
+      } else {
+        ""
+      }
     ))
   }
 
@@ -443,13 +475,29 @@ gate_failure_advice <- function(gate, thresholds = NULL) {
   advice <- character()
 
   ess <- suppressWarnings(min(gate$ess_bulk_min, gate$ess_tail_min, na.rm = TRUE))
+  # Un-thinning comes before more iterations: it is free. Thinning only ever
+  # discards draws, so keeping them raises ESS by close to the thinning factor
+  # at the same sampling cost, where more iterations buy ESS linearly in time.
+  thinned <- isTRUE(ess < thresholds$ess_min) && isTRUE(gate$thin > 1)
+  if (thinned) {
+    advice <- c(advice, paste(
+      "Thinning: set {.field mcmc.thinning} to 1 and refit before anything",
+      "else -- thinning only discards draws, so keeping them all costs no",
+      "extra sampling and usually raises ESS by close to the thinning factor."
+    ))
+  }
   if (isTRUE(gate$rhat_max >= thresholds$rhat_warn) ||
     isTRUE(ess < thresholds$ess_min)) {
     advice <- c(advice, paste(
-      "R-hat/ESS: try more warmup/sampling iterations first",
-      "({.field mcmc.num_warmup} / {.field mcmc.num_samples}); if it persists",
-      "at a given rank, a lower rank often mixes faster (an overly high rank",
-      "can leave components weakly identified), and",
+      if (thinned) {
+        "R-hat/ESS: if it still falls short unthinned, raising the"
+      } else {
+        "R-hat/ESS: try more"
+      },
+      "warmup/sampling iterations",
+      "({.field mcmc.num_warmup} / {.field mcmc.num_samples}) is the next",
+      "step; if it persists at a given rank, a lower rank often mixes faster",
+      "(an overly high rank can leave components weakly identified), and",
       "{.code parameter_diagnostics(fit)} shows which parameter is the",
       "bottleneck."
     ))
