@@ -578,7 +578,7 @@ countsynth_convergence <- function(rhat_warn = 1.01, rhat_fail = 1.05,
 countsynth_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
                             chains = NULL, parallel_chains = NULL,
                             iter_warmup = 1000, iter_sampling = 2500,
-                            thin = 10, adapt_delta = 0.8, seed = 8675309,
+                            thin = 1, adapt_delta = 0.8, seed = 8675309,
                             progress = TRUE, max_treedepth = 10,
                             gate_params = DEFAULT_GATE_PARAMS,
                             convergence = countsynth_convergence()) {

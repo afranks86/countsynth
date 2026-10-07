@@ -247,7 +247,7 @@ mcmc:
   # chain_method: parallel       # sequential | parallel
   num_warmup: 1000
   num_samples: 2500
-  thinning: 10                   # retain num_samples / thinning draws
+  thinning: 1                    # retain num_samples / thinning draws
   target_accept: 0.8             # NUTS adapt_delta
   max_treedepth: 10              # NUTS tree-depth cap (cmdstanr's name)
   random_seed: 8675309
@@ -358,7 +358,7 @@ cfg <- countsynth_config(
     outcome_distribution = "NB",
     types = list(total = countsynth_type(groups = "total", ranks_to_test = 3))
   ),
-  mcmc = countsynth_mcmc_opts(iter_warmup = 1000, iter_sampling = 2500, thin = 10),
+  mcmc = countsynth_mcmc_opts(iter_warmup = 1000, iter_sampling = 2500, thin = 1),
   output = countsynth_output_opts(figures = TRUE, target_unit = "Texas"),
   start_date = "2016-01-01", end_date = "2024-01-01",
   time_aggregation = countsynth_time_aggregation(enabled = TRUE, period = "bimonthly")
@@ -387,7 +387,7 @@ cfg <- countsynth_config(
     outcome_distribution = "NB",
     types = list(total = list(groups = "total", ranks_to_test = 3))
   ),
-  mcmc = list(iter_warmup = 1000, iter_sampling = 2500, thin = 10),
+  mcmc = list(iter_warmup = 1000, iter_sampling = 2500, thin = 1),
   output = list(figures = TRUE, target_unit = "Texas"),
   start_date = "2016-01-01", end_date = "2024-01-01",
   time_aggregation = list(enabled = TRUE, period = "bimonthly")
@@ -547,8 +547,10 @@ person-year rates stay correct.
 The older key name `aggregation` still loads, with a deprecation warning.
 
 **Sampling and the convergence gate.** The defaults (1000 warmup, 2500
-sampling, thin 10) are a real run, not a smoke test; expect a substantial
-wait on a full panel. Raise `target_accept` toward 0.95 if you see
+sampling, no thinning) are a real run, not a smoke test; expect a substantial
+wait on a full panel. Thinning is off because it only discards draws: ESS can
+never exceed the number retained, so a thinned run can miss `ess_min` on
+arithmetic alone, however well it mixed. Raise `target_accept` toward 0.95 if you see
 divergences. If instead a large share of transitions hit the maximum
 treedepth, raise `max_treedepth` (to 12, say), not `target_accept`: a higher
 target shrinks the step size and makes the cap bind more often. Treedepth
