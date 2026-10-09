@@ -71,6 +71,56 @@ summary(fit)              # convergence gate: R-hat, ESS, divergences
 parameter_diagnostics(fit)
 ```
 
+## Choosing the rank without a rank sweep
+
+The rank `R` is the number of latent factors in the untreated surface, and
+choosing it up front is awkward: it is a capacity knob with no natural value,
+and the honest answer is usually "whatever the panel supports", which is
+exactly what you do not know before fitting.
+
+`rank_shrinkage` turns that into something you read off the fit. Each group
+gets a stick-breaking profile over the `R` candidate components saying how
+popular each one is, and each unit's weights are that profile nudged and
+renormalized. Components the panel cannot use are pushed to near-zero weight
+in every unit, so setting `R` too high costs a little wall time instead of
+distorting the fit. You set no numbers: the DP mass behind the profile and
+the unit-level spread both carry hyperpriors and are sampled.
+
+```{r}
+cfg_shrunk <- countsynth_example_config(
+  model = countsynth_model_opts(
+    outcome_distribution = "NB",
+    types = list(total = countsynth_type(groups = "total",
+                                         ranks_to_test = 8)),
+    rank_shrinkage = TRUE          # defaults: Gamma(2, 1) mass, HalfNormal(1)
+  )
+)
+fit_shrunk <- countsynth_fit(countsynth_data(cfg_shrunk), config = cfg_shrunk)
+
+countsynth_eff_rank_summary(fit_shrunk)   # components actually occupied
+countsynth_component_weight_plot(fit_shrunk)  # Bayesian scree plot
+countsynth_rank_hyper_plot(fit_shrunk)        # hyperparameters vs their priors
+```
+
+`eff_rank[k] = 1 / Σ_r group_weight[k, r]²` is an inverse Simpson index: it
+reads *m* when `m` components split the weight evenly. On the bundled panel
+it lands near 4 out of 8 — comfortably below the truncation, which is the
+signal that `R = 8` was generous enough.
+
+Two things to check rather than assume:
+
+- **Confirm the truncation.** Refit at a larger `R`. If `eff_rank` settles in
+  the same place, the rank was generous; if it keeps climbing, the truncation
+  is still binding and you have not yet gone high enough.
+- **Compare the hyperparameters across groups.** Each group draws its own
+  `group_weight_mass` and `unit_weight_sd`, so both panels of
+  `countsynth_rank_hyper_plot()` show one density per group. A group sitting
+  well away from the others is unlike them — typically one whose counts are
+  mostly censored, leaving its units scattered and saying little about how
+  many components it needs. Both are per group precisely so that such a group
+  does not drag the others with it; seeing it stand apart on the figure is
+  the signal to treat its effects with more care than the rest.
+
 ## Reporting
 
 ```{r}

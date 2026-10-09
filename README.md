@@ -235,10 +235,29 @@ model:
                                  # unset = sd(log) 1.28, which is very diffuse
   # time_level: centered         # centered (default) | uncentered (pre-2026-10
                                  # parameterization, reproduces older fits)
+  rank_shrinkage: true           # shrink unused factor components, so one
+                                 # generous rank replaces a rank sweep. `true`
+                                 # takes the defaults below; omit it (or set
+                                 # `false`) for the flat weight prior, in
+                                 # which case every component you ask for is
+                                 # fitted at full weight.
+    # group_mass_prior: [2, 1]   # Gamma(shape, rate) on each group's DP mass
+                                 # (one per group). Smaller mass = sparser
+                                 # profile; implied eff rank is about 1+mass,
+                                 # so the default centres near 3 components.
+    # unit_sd_prior: 1           # HalfNormal scale for each group's
+                                 # unit_weight_sd: how far that group's units
+                                 # depart from its profile, as a log-scale sd.
   types:
     total:                       # name of the model type -> output subdirectory
       groups: [total]            # which outcome labels this type models
-      ranks_to_test: [3]         # one fit per rank
+      max_rank: 8                # ONE fit at a generous truncation, pruned
+                                 # below by rank_shrinkage (which max_rank
+                                 # requires). Read eff_rank to see how much
+                                 # was used. Mutually exclusive with
+                                 # ranks_to_test.
+      # ranks_to_test: [2, 3, 4] # ...or sweep: one fit per rank, each into
+                                 # <type>/rank_<r>/, compared by hand.
       # total_from: [nhblack, nhwhite, hisp]   # build a synthetic "total"
       # total_all: false                       # ... or sum every label
       # exclude_units: [Alaska]
@@ -280,11 +299,13 @@ output:
   html_tables: true              # write gt HTML tables (needs the gt package)
   draws_format: csv              # csv | parquet
   rate_normalizer: 1000          # rates are reported per this much exposure
-  denominator_label: denominator # SINGULAR noun for one unit of your
-                                 # denominator: person, birth, vehicle-mile.
-                                 # Composed with the time unit below into
-                                 # "person-years", which names the exposure
-                                 # column and labels the rate axes.
+  denominator_label: denominator # Noun for one unit of your denominator:
+                                 # person, birth, vehicle-mile. Composed with
+                                 # the time unit below into "person-years",
+                                 # which names the exposure column and labels
+                                 # the rate axes. Singular reads best; an
+                                 # already-plural noun is taken as given
+                                 # rather than pluralized twice.
   denominator_time_unit: year    # year | month | week | day | none.
                                  # Part of the quantity, not decoration:
                                  # rates are per denominator * time. Use
@@ -292,6 +313,15 @@ output:
                                  # per-period flow (births DURING each
                                  # quarter) rather than a level standing
                                  # through it (population).
+  # rate_label: "deaths per 10,000 births"
+                                 # Optional. Replaces the composed "Rate per
+                                 # 10,000 births" wherever the rate is
+                                 # labelled, so you can name what the
+                                 # NUMERATOR counts -- which the package
+                                 # cannot infer. Display only and unchecked:
+                                 # rate_normalizer and denominator_time_unit
+                                 # still set the numbers, so a label naming a
+                                 # different scale just contradicts them.
   # denominator_may_be_affected: false # default true; set false only once
                                         # you've confirmed the denominator is
                                         # exogenous to treatment (see
@@ -403,8 +433,8 @@ typo past validation. Reach for the constructors when you want argument
 completion and `?countsynth_model_opts` at your fingertips; reach for lists when
 you want one call that mirrors the YAML.
 
-Note that the R constructors use cmdstanr's MCMC names while the YAML uses
-the Python package's: `num_warmup` → `iter_warmup`, `num_samples` →
+Note that the R constructors use cmdstanr's MCMC names while the YAML keeps
+the Stan-flavoured ones: `num_warmup` → `iter_warmup`, `num_samples` →
 `iter_sampling`, `thinning` → `thin`, `target_accept` → `adapt_delta`,
 `random_seed` → `seed`, `progress_bar` → `progress`, `num_chains` →
 `chains`. Everything else keeps its name in both forms.
@@ -422,11 +452,70 @@ column must be constructed — give the type either `total_from: [a, b, c]` or
 **Rank.** `ranks_to_test` is the number of latent factors in the
 factorization of the untreated surface. It is the main capacity knob: too low
 and the pre-treatment fit is visibly biased, too high and the model can start
-absorbing the treatment effect itself. Give it several values
-(`ranks_to_test: [2, 3, 4, 5]`) — each is fit separately into
-`<type>/rank_<r>/` — and compare pre-period fit and the PPC suite across
-them. Rank 3 is a reasonable starting point for panels the size of the
-bundled example (≈50 units × ≈50 periods).
+absorbing the treatment effect itself.
+
+There are two ways to settle it.
+
+*Preferred — let the model shrink unused components.* Set
+`model.rank_shrinkage: true`, pick one generous rank, and read off how many
+components were actually used. Instead of an independent uniform prior on
+each unit's component weights, each group gets a stick-breaking profile
+(`stick ~ Beta(1, group_weight_mass)`) saying how popular each component is
+in that group, and each unit's weights are that profile perturbed and
+renormalized. Components the panel has no use for get near-zero weight in
+every unit, so an over-generous rank costs wall time (about 7%, flat in R)
+rather than fit.
+
+Nothing numeric is yours to choose: `group_weight_mass` has a `Gamma(2, 1)`
+hyperprior and `unit_weight_sd` a half-normal, and both are sampled. The fit
+reports `eff_rank[k] = 1 / Σ_r group_weight[k, r]²`, the effective number of
+components group `k` occupies — an inverse Simpson index, so it reads *m*
+when `m` components split the weight evenly. Check it with
+`countsynth_component_weight_plot()` (a Bayesian scree plot) and
+`countsynth_rank_hyper_plot()` (hyperparameters against their priors), both
+written to `figs/ppc/rank_*.png`.
+
+The rule is that `eff_rank` should sit comfortably below `R`; if it presses
+against `R`, raise the rank and refit. Confirm rather than assume this —
+refit at a larger `R` and check `eff_rank` lands in the same place. On some
+panels it keeps climbing instead of settling, which means the truncation is
+still binding and the "generous" rank was not generous yet.
+
+Shrinkage also fixes a scaling defect in the flat prior. Under
+`Dirichlet(1, …, 1)`, `E[Σ_r w²] = 2/(R + 1)`, so the low-rank term's prior
+variance falls like `1/R` and `factor_variation_pct` only means what it says
+at one fixed rank. Stick-breaking gives `1/(1 + mass)`, with no `R` in it.
+
+**Both hyperparameters are per group.** Each group draws its own
+`group_weight_mass` and its own `unit_weight_sd`, independently, from the
+same priors. Without `shared_curves`, component 3 in one group and component
+3 in another are unrelated curves, so the profiles are not commensurable and
+a shared mass would assert only that all groups are equally concentrated.
+Share these iff you share the curves.
+
+Pooling `unit_weight_sd` is the one that looks safest and is not: "how far a
+unit sits from its own group's profile" sounds like the same quantity
+everywhere, but a group whose counts are mostly censored has units scattered
+far from any profile, and under a pooled scalar every other group inherits
+that spread. Measured on a 51-state infant-mortality panel, adding a fourth
+group with 47% censored cells moved the pooled scalar from 0.270 to 1.203,
+collapsed the other three groups' `eff_rank` from about 2 to about 1, and
+raised divergences from 2 to 112. Per group, those three keep their own
+values (0.33, 0.32, 0.24 — the same they take when fit without the fourth
+group), the awkward group takes its own 1.98, and `eff_rank` and divergences
+both return to where they were.
+
+Read both panels of `countsynth_rank_hyper_plot()` across groups: a density
+sitting well away from the others marks a group whose profile, or whose
+units' spread about it, is unlike the rest. That is worth knowing before you
+read its effects.
+
+*Fallback — a rank sweep.* Give `ranks_to_test` several values
+(`ranks_to_test: [2, 3, 4, 5]`), each fit separately into `<type>/rank_<r>/`,
+and compare pre-period fit and the PPC suite across them. Rank 3 is a
+reasonable starting point for panels the size of the bundled example (≈50
+units × ≈50 periods). This costs one fit per value, where shrinkage costs
+one fit total.
 
 **Likelihood.** `NB` is the default and the safe choice for count data with
 any overdispersion; `Poisson` is a good deal faster if the mean-variance
@@ -605,7 +694,8 @@ is requested):
 ```
 <output_dir>/<type>/
   df_<type>.csv                              # the standardized long panel
-  {NB|Poisson}_{outcome}_{type}_{rank}.csv   # tidy draws (or .parquet)
+  {NB|Poisson}_{outcome}_{type}_{rank}_{rate|count}.csv
+                                             # tidy draws (or .parquet)
   ..._convergence.json                       # gate: R-hat, ESS, divergences
   [rank_<rank>/]figs/
     summary_table_by_unit.csv                # display-formatted, per unit
@@ -614,6 +704,13 @@ is requested):
     expected_vs_observed.csv                 # per (unit, time, group) detail
     *.png                                    # figures, if output.figures
 ```
+
+The `rate`/`count` suffix records whether the run had a denominator, because
+that changes what the estimates mean (see "Pct Change" above), not just which
+columns appear. Note that it only separates the draws and the convergence
+JSON: everything under `figs/` uses fixed filenames, so a rate run and a count
+run writing to the same `<output_dir>/<type>` still overwrite each other's
+figures and summary tables. Give them different `output_dir`s to keep both.
 
 A failed gate is a warning, not a stop — artifacts are still written so you
 can diagnose the run.
@@ -725,19 +822,6 @@ countsynth_te_coef_table(fit)                                           # summar
 exposed cells. All existing tables and figures are unchanged. Leaving
 `treatment_effects` unset reproduces earlier results exactly, down to the
 random-number stream.
-
-## Parity with the Python implementation
-
-- The Stan models are checked against the NumPyro models by **exact
-  log-density comparison** at shared parameter values (fixtures exported from
-  Python; `tests/testthat/test-logdensity-parity.R`).
-- Cell ordering, chain-stratified cut selection, output thinning, and
-  convergence-gate bands are fixture-tested against the Python
-  implementation.
-- MCMC draws are **not** bitwise-identical across implementations (different
-  samplers and RNGs); equivalence is distributional.
-- Configs written for the Python package load unchanged via
-  `read_countsynth_config()`; unknown keys are rejected the same way.
 
 ## License
 
