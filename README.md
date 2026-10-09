@@ -455,7 +455,7 @@ factorization of the untreated surface. It is the main capacity knob: too low
 and the pre-treatment fit is visibly biased, too high and the model can start
 absorbing the treatment effect itself.
 
-There are two ways to settle it.
+There are two ways to address this issue.
 
 *Preferred — let the model shrink unused components.* Set
 `model.rank_shrinkage: true`, pick one generous rank, and read off how many
@@ -464,28 +464,19 @@ each unit's component weights, each group gets a stick-breaking profile
 (`stick ~ Beta(1, group_weight_mass)`) saying how popular each component is
 in that group, and each unit's weights are that profile perturbed and
 renormalized. Components the panel has no use for get near-zero weight in
-every unit, so an over-generous rank costs wall time (about 7%, flat in R)
-rather than fit.
+every unit, so an over-generous rank only increases the model runtime.
 
-Nothing numeric is yours to choose: `group_weight_mass` has a `Gamma(2, 1)`
+By default, `group_weight_mass` has a `Gamma(2, 1)`
 hyperprior and `unit_weight_sd` a half-normal, and both are sampled. The fit
 reports `eff_rank[k] = 1 / Σ_r group_weight[k, r]²`, the effective number of
 components group `k` occupies — an inverse Simpson index, so it reads *m*
 when `m` components split the weight evenly. Check it with
 `countsynth_component_weight_plot()` (a Bayesian scree plot) and
 `countsynth_rank_hyper_plot()` (hyperparameters against their priors), both
-written to `figs/ppc/rank_*.png`.
-
-The rule is that `eff_rank` should sit comfortably below `R`; if it presses
-against `R`, raise the rank and refit. Confirm rather than assume this —
-refit at a larger `R` and check `eff_rank` lands in the same place. On some
-panels it keeps climbing instead of settling, which means the truncation is
-still binding and the "generous" rank was not generous yet.
-
-Shrinkage also fixes a scaling defect in the flat prior. Under
-`Dirichlet(1, …, 1)`, `E[Σ_r w²] = 2/(R + 1)`, so the low-rank term's prior
-variance falls like `1/R` and `factor_variation_pct` only means what it says
-at one fixed rank. Stick-breaking gives `1/(1 + mass)`, with no `R` in it.
+written to `figs/ppc/rank_*.png`.  The rule is that `eff_rank` should sit comfortably below `R`; if it presses
+against `R`, raise the rank and refit. On some
+panels it keeps climbing instead of settling, which means the value of `R` is
+still binding and the "generous" rank was not generous enough. Stick-breaking gives `1/(1 + mass)`
 
 **Both hyperparameters are per group.** Each group draws its own
 `group_weight_mass` and its own `unit_weight_sd`, independently, from the
