@@ -418,15 +418,6 @@ gate_failure_bullets <- function(gate, thresholds = NULL, fit = NULL,
       100 * gate$divergence_fraction,
       100 * thresholds$divergence_fail_fraction
     ))
-  } else if (isTRUE(gate$divergences > 0)) {
-    bullets <- c(bullets, sprintf(
-      "%d divergence%s = %.2f%%, within the %.2f%% allowance -- a small,
-       isolated count like this is common and usually not a validity
-       concern on its own",
-      gate$divergences, if (isTRUE(gate$divergences == 1)) "" else "s",
-      100 * gate$divergence_fraction,
-      100 * thresholds$divergence_fail_fraction
-    ))
   }
 
   # A cut manifest has no top-level R-hat/ESS, so nothing above fires.
@@ -514,27 +505,17 @@ gate_failure_advice <- function(gate, thresholds = NULL) {
 }
 
 # Non-gating diagnostic context, meant to be shown alongside a PASSING gate.
-# gate_failure_bullets() already explains any divergences on a FAILING one,
-# so the divergence note here only fires when the gate passed -- otherwise a
-# harmless divergence count would be narrated twice. Treedepth is never part
-# of gate_failure_bullets() at all (it is never gated -- see
-# convergence_gate()), so it is reported here unconditionally: this is meant
-# to replace cmdstanr's own unglossed "N transitions hit the maximum
-# treedepth" warning as the thing a user actually reads, on a pass or a fail.
+# Divergences are deliberately not reported here: a count within
+# divergence_fail_fraction is routine, and saying so on every run trained
+# readers to skim the one message that matters. They are narrated only when
+# they exceed the gate, by gate_failure_bullets(). Treedepth is never part of
+# gate_failure_bullets() at all (it is never gated -- see convergence_gate()),
+# so it is reported here unconditionally: this is meant to replace cmdstanr's
+# own unglossed "N transitions hit the maximum treedepth" warning as the thing
+# a user actually reads, on a pass or a fail.
 diagnostic_context_notes <- function(gate, thresholds = NULL) {
   thresholds <- thresholds %||% countsynth_convergence()
   notes <- character()
-
-  if (isTRUE(gate$converged) && isTRUE(gate$divergences > 0)) {
-    notes <- c(notes, sprintf(
-      "%d divergent transition%s (%.2f%% of retained draws): a small,
-       isolated count like this is common and does not usually affect
-       validity -- it's only worth a closer look if the count keeps growing
-       with more draws, or the fraction reaches several percent or more.",
-      gate$divergences, if (isTRUE(gate$divergences == 1)) "" else "s",
-      100 * gate$divergence_fraction
-    ))
-  }
 
   if (isTRUE(gate$treedepth_hits > 0)) {
     # Not target_accept: raising it shrinks the step size, so trajectories

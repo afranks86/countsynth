@@ -120,7 +120,12 @@ countsynth_fit <- function(data, rank = NULL, config, model_treated = NULL,
       seed = mcmc$seed,
       refresh = if (mcmc$progress) NULL else 0,
       show_messages = mcmc$progress,
-      show_exceptions = show_exceptions
+      show_exceptions = show_exceptions,
+      # Divergences and treedepth are narrated against the gate's thresholds
+      # by diagnostic_context_notes() / gate_failure_bullets(); leaving
+      # cmdstanr's own unglossed warnings on reports each one twice. E-BFMI
+      # has no countsynth equivalent, so it stays.
+      diagnostics = "ebfmi"
     )
     run <- model$sample
   }

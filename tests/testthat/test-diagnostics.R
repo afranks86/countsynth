@@ -216,8 +216,10 @@ test_that("gate failure bullets name the criterion and the level it reached", {
   soft <- gate_failure_bullets(gate(1.0531, 71.05, 506.8, 2L, 0.0005), th)
   expect_false(any(grepl("R-hat", soft))) # 1.05 is under the warn threshold
   expect_match(soft[1], "min ESS 71, below ess_min 100")
-  expect_match(soft[2], "2 divergences = 0.05%, within the 1.00% allowance")
-  expect_match(soft[3], "requires a clean PASS")
+  # Divergences within the allowance are not narrated at all, here or in
+  # diagnostic_context_notes(): only a count past the gate is worth a message.
+  expect_false(any(grepl("divergence", soft)))
+  expect_match(soft[2], "requires a clean PASS")
 
   # infant_mortality/race: R-hat exactly at the warn threshold.
   warn <- gate_failure_bullets(gate(1.1029, 27.21, 118.5, 0L, 0), th)
@@ -272,18 +274,17 @@ test_that("gate failure advice matches the criterion that actually tripped", {
   expect_equal(gate_failure_advice(list(converged = FALSE), th), character())
 })
 
-test_that("diagnostic context notes explain treedepth and reassure on divergences", {
+test_that("diagnostic context notes explain treedepth and stay silent on allowed divergences", {
   th <- countsynth_convergence(divergence_fail_fraction = 0.01)
 
-  # Divergences only narrated when the gate passed -- gate_failure_bullets()
-  # already covers them on a failing one.
+  # Divergences within the allowance are never narrated here: routine counts
+  # reported on every run train the reader to skim. Only a count past the gate
+  # earns a message, and gate_failure_bullets() is what writes it.
   passed <- list(
     converged = TRUE, divergences = 2L, divergence_fraction = 0.0005,
     treedepth_hits = 0L, treedepth_fraction = 0
   )
-  notes <- diagnostic_context_notes(passed, th)
-  expect_match(notes, "2 divergent transitions", all = FALSE)
-  expect_match(notes, "isolated count", all = FALSE)
+  expect_equal(diagnostic_context_notes(passed, th), character())
 
   failed <- passed
   failed$converged <- FALSE

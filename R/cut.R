@@ -157,7 +157,8 @@ run_stage2_component <- function(model, sd2, stage2_mcmc, seed_i, quiet = TRUE) 
     seed = seed_i,
     refresh = 0,
     show_messages = FALSE,
-    show_exceptions = FALSE
+    show_exceptions = FALSE,
+    diagnostics = "ebfmi"
   )
   fit
 }
