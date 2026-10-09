@@ -215,9 +215,9 @@ countsynth_component_weight_plot <- function(x) {
 # moving it does, so the figure is readable without the help page.
 RANK_HYPER_LABELS <- c(
   unit_weight_sd =
-    "unit_weight_sd \u2014 how far units depart from the group profile",
+    "unit_weight_sd \u2014 how far a group's units depart from its profile",
   group_weight_mass =
-    "group_weight_mass \u2014 DP mass behind the profile (sparser when small)"
+    "group_weight_mass \u2014 DP mass per group (sparser when small)"
 )
 
 # Prior density functions as passed to Stan, or NULL for a fit whose data
@@ -242,13 +242,19 @@ rank_hyper_priors <- function(stan_data) {
 #' Densities for `unit_weight_sd` (how far each unit's component loadings
 #' depart from its group's profile, multiplicatively) and
 #' `group_weight_mass` (the DP mass behind the stick-breaking profile, which
-#' sets how sparse it is), with their priors overlaid.
+#' sets how sparse it is -- one per group, drawn separately), with their
+#' priors overlaid.
 #'
-#' The prior overlay is the point of the figure: these two scalars are what
-#' the shrinkage estimates rather than assumes, so a posterior that has not
-#' moved off its prior says the panel had little to say about how much
-#' structure the units share -- and that the shrinkage is being driven by the
-#' hyperprior rather than the data.
+#' The prior overlay is the point of the figure: these are what the shrinkage
+#' estimates rather than assumes, so a posterior that has not moved off its
+#' prior says the panel had little to say about how much structure the units
+#' share -- and that the shrinkage is being driven by the hyperprior rather
+#' than the data.
+#'
+#' Read the mass panel across groups as well as against the prior. Each group
+#' gets its own density, and one sitting well away from the rest marks a group
+#' whose profile is unlike the others' -- often one whose cells are mostly
+#' censored, carrying little information about how many components it needs.
 #'
 #' @inheritParams countsynth_component_weight_summary
 #' @param prior Overlay the prior densities (default `TRUE`).
@@ -259,9 +265,25 @@ countsynth_rank_hyper_plot <- function(x, prior = TRUE) {
   rv <- posterior::as_draws_rvars(
     src$fit$draws(variables = c("unit_weight_sd", "group_weight_mass"))
   )
+  # Both hyperparameters are one value per group, so their draws carry a group
+  # dimension. Keeping the groups apart is the point: one group's density
+  # sitting away from the others is what says its profile, or how far its
+  # units sit from it, is unlike the rest -- and pooling the draws into a
+  # single density would hide exactly that.
   df <- dplyr::bind_rows(lapply(names(RANK_HYPER_LABELS), function(nm) {
+    d <- posterior::draws_of(rv[[nm]])
+    n_col <- if (length(dim(d)) > 1L) dim(d)[[2]] else 1L
+    labels <- if (n_col == length(src$groups)) {
+      src$groups
+    } else if (n_col > 1L) {
+      as.character(seq_len(n_col))
+    } else {
+      NA_character_
+    }
     tibble::tibble(
-      parameter = nm, value = as.vector(posterior::draws_of(rv[[nm]]))
+      parameter = nm,
+      group = rep(labels, each = dim(d)[[1]]),
+      value = as.vector(d)
     )
   }))
   df$facet <- factor(
@@ -287,7 +309,12 @@ countsynth_rank_hyper_plot <- function(x, prior = TRUE) {
   }
 
   p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$value)) +
-    ggplot2::geom_density(fill = "#4C72B0", alpha = 0.35, color = "#4C72B0")
+    ggplot2::geom_density(
+      ggplot2::aes(fill = .data$group, color = .data$group),
+      alpha = 0.35
+    ) +
+    ggplot2::scale_fill_discrete(na.value = "#4C72B0", name = NULL) +
+    ggplot2::scale_color_discrete(na.value = "#4C72B0", name = NULL)
   if (!is.null(prior_df)) {
     p <- p +
       ggplot2::geom_line(

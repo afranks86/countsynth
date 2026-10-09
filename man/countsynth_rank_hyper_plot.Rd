@@ -18,12 +18,18 @@ A ggplot object.
 Densities for \code{unit_weight_sd} (how far each unit's component loadings
 depart from its group's profile, multiplicatively) and
 \code{group_weight_mass} (the DP mass behind the stick-breaking profile, which
-sets how sparse it is), with their priors overlaid.
+sets how sparse it is -- one per group, drawn separately), with their
+priors overlaid.
 }
 \details{
-The prior overlay is the point of the figure: these two scalars are what
-the shrinkage estimates rather than assumes, so a posterior that has not
-moved off its prior says the panel had little to say about how much
-structure the units share -- and that the shrinkage is being driven by the
-hyperprior rather than the data.
+The prior overlay is the point of the figure: these are what the shrinkage
+estimates rather than assumes, so a posterior that has not moved off its
+prior says the panel had little to say about how much structure the units
+share -- and that the shrinkage is being driven by the hyperprior rather
+than the data.
+
+Read the mass panel across groups as well as against the prior. Each group
+gets its own density, and one sitting well away from the rest marks a group
+whose profile is unlike the others' -- often one whose cells are mostly
+censored, carrying little information about how many components it needs.
 }

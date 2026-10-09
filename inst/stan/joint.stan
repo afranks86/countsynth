@@ -166,7 +166,20 @@ parameters {
   // same near-zero weight is a *product* of moderate stick fractions -- an
   // unused eighth component needs no extreme coordinate anywhere.
   array[rank_shrink == 1 ? K : 0] vector<lower=0, upper=1>[R - 1] stick;
-  array[rank_shrink] real<lower=0> group_weight_mass; // DP mass, Beta(1, mass)
+  // One DP mass per group, not one shared across them: with per-group
+  // time_fac, component r is a different curve in every group, so the
+  // profiles are not commensurable and a shared mass only asserts that all
+  // groups are equally concentrated. Share the mass iff the curves are
+  // shared.
+  //
+  // This is not enough to isolate groups, and was not measured to be. On a
+  // 51-state infant-mortality panel a fourth group with 47% censored cells
+  // collapsed the other three groups' eff_rank from ~2 to ~1 under a shared
+  // mass, and still did so per-group (62 divergences against 112, but the
+  // same collapse); with rank_shrink == 0 the same four groups fit cleanly.
+  // So the remaining channel is unit_weight_sd below, the one scalar still
+  // pooled across groups.
+  array[rank_shrink == 1 ? K : 0] real<lower=0> group_weight_mass;
   // Per-unit deviation from the group profile: logistic-normal rather than
   // Dirichlet, and non-centered. unit_weight_sd is the multiplicative spread
   // of a unit's loadings about its group's profile (an sd on the log scale),
@@ -191,7 +204,7 @@ parameters {
   // grows with R (breaking the invariance this exists to buy) and a floor
   // spread as total/R shrinks back toward the boundary. No Dirichlet, no
   // floor, no tension.
-  array[rank_shrink] real<lower=0> unit_weight_sd;
+  array[rank_shrink == 1 ? K : 0] real<lower=0> unit_weight_sd;
   // Columns are (k, d) pairs at (k - 1) * D + d, the same group-major order
   // the flat cell index uses; R rows so each unit's deviation is one
   // contiguous column.
@@ -262,7 +275,7 @@ transformed parameters {
       // flat direction per unit; std_normal keeps it proper and perfectly
       // conditioned, and constraining it away would buy nothing.
       for (d in 1 : D) {
-        W[, d] = hdp_unit_weight(log_group_weight[k], unit_weight_sd[1],
+        W[, d] = hdp_unit_weight(log_group_weight[k], unit_weight_sd[k],
                                  col(unit_weight_z, (k - 1) * D + d));
       }
     } else {
@@ -359,15 +372,31 @@ model {
   // what one does not know in advance -- and their posteriors say more about
   // that than a rank sweep does.
   //
-  // Both are shared across groups: two scalars estimated from all K * D
-  // weight vectors, where per-group versions would be 2K scalars each
-  // informed by D. The profile itself stays per-group.
+  // Both are per group. Pooling unit_weight_sd looks defensible -- "how far
+  // a unit sits from its own group's profile" sounds like the same quantity
+  // everywhere -- but it is not when one group's cells are mostly censored,
+  // and it was the channel that carried that group's pathology into the rest.
+  // Measured on a 51-state infant-mortality panel, adding a fourth group with
+  // 47% censored cells moved the pooled scalar from 0.270 [0.058, 0.518] to
+  // 1.203 [0.702, 2.013]. A value that large lets every group's units drift
+  // freely from their profile, which makes the profile redundant and collapses
+  // the stick-breaking onto one component: the other three groups' eff_rank
+  // fell from ~2 to ~1, and their masses followed (1.74 -> 0.97, 1.73 -> 0.54,
+  // 1.57 -> 0.44). Per-group masses alone did not stop it, because the masses
+  // were downstream of this.
+  //
+  // The cost is K - 1 extra scalars, but each is informed by that group's D
+  // units -- far better identified than a mass informed by R - 1 sticks.
   if (rank_shrink == 1) {
-    group_weight_mass[1] ~ gamma(group_mass_shape, group_mass_rate);
-    unit_weight_sd[1] ~ normal(0, unit_sd_scale); // half-normal via <lower=0>
     to_vector(unit_weight_z) ~ std_normal();
     for (k in 1 : K) {
-      stick[k] ~ beta(1, group_weight_mass[1]);
+      unit_weight_sd[k] ~ normal(0, unit_sd_scale); // half-normal via <lower=0>
+      // Same prior on each: with only R - 1 sticks informing a group's mass,
+      // the Gamma does most of the regularizing anyway. Independence is what
+      // buys the isolation; pooling them hierarchically would need a
+      // between-group scale that K groups cannot identify.
+      group_weight_mass[k] ~ gamma(group_mass_shape, group_mass_rate);
+      stick[k] ~ beta(1, group_weight_mass[k]);
     }
   }
 
@@ -480,7 +509,7 @@ generated quantities {
     eff_rank[k] = inv(dot_self(group_weight[k]));
     for (d in 1 : D) {
       unit_weight_fitted[k, d] = hdp_unit_weight(
-        log_group_weight[k], unit_weight_sd[1],
+        log_group_weight[k], unit_weight_sd[k],
         col(unit_weight_z, (k - 1) * D + d)
       );
     }
