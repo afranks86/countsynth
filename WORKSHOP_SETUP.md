@@ -62,22 +62,24 @@ remotes::install_github("afranks86/countsynth", dependencies = TRUE)
 
 ## 5. Run the setup check
 
-Download
-[`check_workshop_setup.R`](scripts/check_workshop_setup.R)
-and run it in RStudio (open it and click "Source"), or from a terminal:
+In RStudio, paste this one line and press enter:
 
+```r
+source("https://raw.githubusercontent.com/afranks86/countsynth/main/scripts/check_setup.R")
 ```
-Rscript check_workshop_setup.R
-```
+
+Nothing needs to be downloaded or installed first — if a step is missing, the
+check names it and prints the command that fixes it, so you can run this at
+any point, including before step 1.
 
 It checks your R version, compiler, Stan installation, and the countsynth
-package, then runs an end-to-end test to confirm everything works together.
-**The last step takes several minutes** (5-10 is normal, and the very first
-run is slower because it has to compile the model) — let it finish. You
+package, then fits a small model end to end to confirm the pieces work
+together. It usually takes a few seconds, but **the very first run also has
+to compile the model, which can take several minutes** — let it finish. You
 should see:
 
 ```
-All checks passed. You're ready for the workshop.
+All checks passed. This machine can fit countsynth models.
 ```
 
 If you see `FAILED` next to any step, the script prints what to do next. If

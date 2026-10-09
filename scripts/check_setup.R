@@ -1,14 +1,17 @@
-# Run this script before the workshop to confirm your machine is ready.
+# Confirm this machine can fit a countsynth model.
 #
-#   Rscript scripts/check_workshop_setup.R
+#   Rscript scripts/check_setup.R
 #
-# or open it in RStudio and click "Source". It does not modify anything;
-# it only checks your R version, compiler toolchain, Stan installation, and
-# the countsynth package, then runs a smoke test of the full pipeline. The
-# smoke test takes several minutes. If any step fails, copy the full output
-# and send it to the workshop organizer.
+# or, without cloning anything (it needs no local copy and no installed
+# package -- the checks below name what is missing and how to get it):
+#
+#   source("https://raw.githubusercontent.com/afranks86/countsynth/main/scripts/check_setup.R")
+#
+# It modifies nothing. It checks the R version, the C++ toolchain, the Stan
+# installation and the countsynth package, then fits a deliberately tiny
+# model end to end. If a step fails, copy the whole output and send it on.
 
-cat("countsynth workshop setup check\n")
+cat("countsynth setup check\n")
 cat(strrep("=", 40), "\n\n")
 
 results <- list()
@@ -88,17 +91,37 @@ check("countsynth package installed", {
 })
 
 # 6. End-to-end smoke test ---------------------------------------------------
-# The bundled example runs only 200 warmup + 200 sampling iterations, so it
-# WILL report convergence warnings and a failing convergence gate. That is
-# expected and irrelevant here: this step only asks whether the pipeline runs
-# end to end on this machine, not whether the answers are trustworthy. The
-# noise is suppressed so it doesn't look like a setup problem.
-check("End-to-end smoke test (compile + sample on bundled example)", {
-  cat("\n    this takes several minutes, please wait ... ")
+# Six units, eight yearly periods, rank 2, 50 + 50 iterations: a few seconds
+# of sampling, which is all it takes to prove that data prep, Stan and the
+# draws frame work on this machine. It is far too little for inference, and
+# so reports convergence warnings and a failing gate -- expected here, and
+# suppressed, because on a setup check that reads as a broken install.
+#
+# The model still has to compile, which is the slow part on a first run and
+# the part most likely to expose a broken toolchain.
+check("End-to-end smoke test (compile + sample)", {
+  cat("\n    compiling and sampling ... ")
   elapsed <- system.time({
     suppressWarnings(suppressMessages(invisible(capture.output({
       library(countsynth)
-      cfg <- countsynth_example_config()
+      states <- unique(utils::read.csv(countsynth_example_data())$state)
+      keep <- c("Texas", "California", "New York", "Florida", "Ohio",
+                "Pennsylvania")
+      cfg <- countsynth_example_config(
+        model = countsynth_model_opts(
+          outcome_distribution = "NB",
+          types = list(total = countsynth_type(
+            groups = "total", ranks_to_test = 2,
+            exclude_units = setdiff(states, keep)
+          ))
+        ),
+        mcmc = countsynth_mcmc_opts(
+          iter_warmup = 50, iter_sampling = 50, seed = 1, progress = FALSE
+        ),
+        time_aggregation = countsynth_time_aggregation(
+          enabled = TRUE, period = "yearly"
+        )
+      )
       dat <- countsynth_data(cfg)
       fit <- countsynth_fit(dat, config = cfg)
       draws <- countsynth_draws(fit)
@@ -115,7 +138,7 @@ check("End-to-end smoke test (compile + sample on bundled example)", {
 cat("\n", strrep("=", 40), "\n", sep = "")
 n_fail <- sum(!unlist(results))
 if (n_fail == 0) {
-  cat("All checks passed. You're ready for the workshop.\n")
+  cat("All checks passed. This machine can fit countsynth models.\n")
 } else {
   cat(sprintf(
     paste0(

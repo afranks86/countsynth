@@ -48,7 +48,8 @@ cmdstanr::cmdstan_path()
 
 Preparing a group of people for a workshop? See
 [`WORKSHOP_SETUP.md`](WORKSHOP_SETUP.md) and
-[`scripts/check_workshop_setup.R`](scripts/check_workshop_setup.R).
+[`scripts/check_setup.R`](scripts/check_setup.R), which runs standalone over
+`source()` from a URL and so needs nothing installed first.
 
 ## Quick start (bundled example)
 
