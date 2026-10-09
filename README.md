@@ -168,7 +168,7 @@ Requirements and gotchas:
 - **Suppressed small counts should be blank/`NA`** in the outcome column, not
   zero. See `adjust_for_missingness` below.
 
-## 2. Where configs live
+## 2. Configuration files
 
 There is no configuration directory inside the package — **the config is
 yours, and lives in your own project**. It comes in two interchangeable
@@ -440,7 +440,7 @@ the Stan-flavoured ones: `num_warmup` → `iter_warmup`, `num_samples` →
 `random_seed` → `seed`, `progress_bar` → `progress`, `num_chains` →
 `chains`. Everything else keeps its name in both forms.
 
-## 4. The decisions that actually matter
+## 4. Some important decisions
 
 **Groups and model types.** A *type* is one named bundle of outcome groups
 fit together, and gets its own output subdirectory. Splitting outcomes across
@@ -687,7 +687,7 @@ The terminal prints the by-unit table only. `print_target_table: true` adds
 the target unit's own table above it — its rows are already in the by-unit
 table, so it is off by default.
 
-## 5. What lands on disk
+## 5. Results
 
 `countsynth_run(cfg)` writes, per model type (and per rank when more than one rank
 is requested):
