@@ -689,11 +689,11 @@ table, so it is off by default.
 
 ## 5. Results
 
-`countsynth_run(cfg)` writes, per model type (and per rank when more than one rank
-is requested):
+`countsynth_run(cfg)` writes, per model type, per scale (and per rank when
+more than one rank is requested):
 
 ```
-<output_dir>/<type>/
+<output_dir>/<type>/<rate|count>/
   df_<type>.csv                              # the standardized long panel
   {NB|Poisson}_{outcome}_{type}_{rank}_{rate|count}.csv
                                              # tidy draws (or .parquet)
@@ -706,12 +706,13 @@ is requested):
     *.png                                    # figures, if output.figures
 ```
 
-The `rate`/`count` suffix records whether the run had a denominator, because
-that changes what the estimates mean (see "Pct Change" above), not just which
-columns appear. Note that it only separates the draws and the convergence
-JSON: everything under `figs/` uses fixed filenames, so a rate run and a count
-run writing to the same `<output_dir>/<type>` still overwrite each other's
-figures and summary tables. Give them different `output_dir`s to keep both.
+`rate` or `count` is chosen by whether the run had a denominator, which
+changes what the estimates mean (see "Pct Change" above), not just which
+columns appear. It is a directory rather than only a filename suffix because
+everything under `figs/` has a fixed name: sharing one directory meant the
+second run replaced the first one's tables and figures while both draws files
+survived, which looks like nothing happened until you read the report. The
+split also scopes `output.clean`, which wipes only the scale being written.
 
 A failed gate is a warning, not a stop — artifacts are still written so you
 can diagnose the run.

@@ -1006,13 +1006,19 @@ print.countsynth_config <- function(x, ...) {
   if (length(x$model$types) > 0) {
     for (nm in names(x$model$types)) {
       tp <- x$model$types[[nm]]
+      # Worded in R rather than with cli's {?s}: the two branches carry
+      # different numbers of interpolated quantities, and a marker that does
+      # not pair with exactly one of them is an error at print time.
+      n_grp <- length(tp$groups)
+      grp_word <- if (n_grp == 1) "group" else "groups"
       rank_text <- if (is.null(tp$max_rank)) {
-        "rank{?s} {.val {tp$ranks_to_test}}"
+        rw <- if (length(tp$ranks_to_test) == 1) "rank" else "ranks"
+        paste(rw, "{.val {tp$ranks_to_test}}")
       } else {
         "max rank {.val {tp$max_rank}}"
       }
       cli::cli_li(
-        paste("type {.strong {nm}}: {length(tp$groups)} group{?s},", rank_text)
+        paste0("type {.strong {nm}}: {n_grp} {grp_word}, ", rank_text)
       )
     }
   }

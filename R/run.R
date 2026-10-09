@@ -72,13 +72,19 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
   results <- list()
   for (type in types) {
     type_spec <- config$model$types[[type]]
-    type_dir <- file.path(config$output_dir, type)
+    # Rate and count runs of the same type are different estimands, and
+    # everything under figs/ has a fixed filename, so sharing a directory
+    # meant the second run silently replaced the first one's tables and
+    # figures -- the part anyone actually reads. The scale gets its own
+    # level, which also keeps `clean` from wiping the other one.
+    data <- countsynth_data(config, type = type)
+    scale <- if ("denominator" %in% names(data$df)) "rate" else "count"
+    type_dir <- file.path(config$output_dir, type, scale)
     if (out$clean && dir.exists(type_dir)) {
       unlink(type_dir, recursive = TRUE)
     }
     dir.create(type_dir, recursive = TRUE, showWarnings = FALSE)
 
-    data <- countsynth_data(config, type = type)
     utils::write.csv(
       data$df, file.path(type_dir, sprintf("df_%s.csv", type)),
       row.names = FALSE
@@ -95,7 +101,7 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
       dir.create(run_dir, recursive = TRUE, showWarnings = FALSE)
       stem <- draws_stem(
         config, type, rank, cut = is_cut,
-        has_denominator = "denominator" %in% names(data$df)
+        has_denominator = identical(scale, "rate")
       )
 
       if (is_cut) {
