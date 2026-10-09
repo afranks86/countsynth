@@ -17,10 +17,16 @@ outcome_name <- function(config) {
   "outcome"
 }
 
-draws_stem <- function(config, type, rank, cut = FALSE) {
+# The denominator decides the estimand, not just which columns are shown:
+# with one, Pct Change is a change in the rate; without, a change in the raw
+# count. Two configs differing only in that produced the same stem and
+# overwrote each other's draws and gate, so the scale is part of the name.
+draws_stem <- function(config, type, rank, cut = FALSE,
+                       has_denominator = TRUE) {
   stem <- sprintf(
-    "%s_%s_%s_%d",
-    config$model$outcome_distribution, outcome_name(config), type, rank
+    "%s_%s_%s_%d_%s",
+    config$model$outcome_distribution, outcome_name(config), type, rank,
+    if (isTRUE(has_denominator)) "rate" else "count"
   )
   if (cut) paste0(stem, "_cut") else stem
 }
@@ -87,7 +93,10 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
         type_dir
       }
       dir.create(run_dir, recursive = TRUE, showWarnings = FALSE)
-      stem <- draws_stem(config, type, rank, cut = is_cut)
+      stem <- draws_stem(
+        config, type, rank, cut = is_cut,
+        has_denominator = "denominator" %in% names(data$df)
+      )
 
       if (is_cut) {
         fit <- countsynth_cut_fit(data, rank = rank, config = config)
@@ -160,6 +169,7 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
           fit = fit,
           rate_normalizer = out$rate_normalizer,
           denominator_label = out$denominator_label,
+          rate_label = out$rate_label,
           denominator_time_unit = out$denominator_time_unit,
           denominator_may_be_affected = out$denominator_may_be_affected
         )

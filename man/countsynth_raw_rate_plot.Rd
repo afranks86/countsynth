@@ -12,7 +12,8 @@ countsynth_raw_rate_plot(
   separate_unit = NULL,
   smooth_window = NULL,
   plot_type = "rate",
-  denominator_label = "denominator"
+  denominator_label = "denominator",
+  rate_label = NULL
 )
 }
 \arguments{

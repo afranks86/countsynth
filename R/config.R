@@ -253,14 +253,34 @@ countsynth_time_aggregation <- function(enabled = FALSE, period = NULL,
 #'
 #' @param groups Character vector of group labels this type models. May
 #'   include the synthetic `"total"` group (see `total_from` / `total_all`).
-#' @param ranks_to_test Integer vector of factorization ranks to fit.
+#' @param ranks_to_test Integer vector of factorization ranks to fit, one fit
+#'   each, into `<type>/rank_<r>/`. Give this or `max_rank`, not both.
+#' @param max_rank A single truncation to fit once and let the model prune
+#'   below, rather than a set of ranks to compare. Requires
+#'   [countsynth_rank_shrinkage_opts()] on the model, since without shrinkage
+#'   nothing prunes and a truncation is only a rank by another name. Read
+#'   `eff_rank` off the fit to see how much of it was used.
 #' @param total_from Labels summed to build the synthetic `"total"` group.
 #' @param total_all If `TRUE`, `"total"` sums every resolved outcome label.
 #' @param exclude_units Units dropped before fitting this type.
 #' @export
-countsynth_type <- function(groups, ranks_to_test, total_from = NULL,
+countsynth_type <- function(groups, ranks_to_test = NULL, max_rank = NULL,
+                       total_from = NULL,
                        total_all = FALSE, exclude_units = NULL) {
   checkmate::assert_character(groups, min.len = 1, any.missing = FALSE)
+  checkmate::assert_int(max_rank, lower = 1, null.ok = TRUE)
+  if (is.null(ranks_to_test) == is.null(max_rank)) {
+    cli::cli_abort(c(
+      "A type needs exactly one of {.field ranks_to_test} and
+       {.field max_rank}.",
+      i = "{.field ranks_to_test} fits each rank separately and compares
+           them; {.field max_rank} fits once and lets the shrinkage prune
+           below the truncation."
+    ))
+  }
+  if (!is.null(max_rank)) {
+    ranks_to_test <- max_rank
+  }
   checkmate::assert_integerish(
     ranks_to_test,
     lower = 1, min.len = 1, any.missing = FALSE
@@ -274,6 +294,10 @@ countsynth_type <- function(groups, ranks_to_test, total_from = NULL,
   new_countsynth_class(
     list(
       groups = groups, ranks_to_test = as.integer(ranks_to_test),
+      # Downstream reads ranks_to_test either way; this only records which
+      # field the user wrote, so model opts can require shrinkage and the
+      # config print can say "max rank" rather than imply a sweep of one.
+      max_rank = if (is.null(max_rank)) NULL else as.integer(max_rank),
       total_from = total_from, total_all = total_all,
       exclude_units = exclude_units
     ),
@@ -464,6 +488,23 @@ countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
     cli::cli_abort(
       "{.field model.treatment_effects} requires {.field model_treated}=TRUE."
     )
+  }
+  # A truncation nothing prunes below is just a rank, and a generous one
+  # fitted flat is the single worst combination: every unused component is
+  # sampled at full weight. Catch it here rather than let it run.
+  max_rank_types <- names(types)[vapply(
+    types, function(tp) !is.null(tp$max_rank), logical(1)
+  )]
+  if (length(max_rank_types) > 0 && is.null(rank_shrinkage)) {
+    cli::cli_abort(c(
+      "{.field max_rank} needs {.field model.rank_shrinkage}
+       (type{?s} {.val {max_rank_types}}).",
+      i = "Without shrinkage nothing prunes below the truncation, so
+           {.field max_rank} would just be a rank -- and a generous one
+           fitted flat costs accuracy and time.",
+      i = "Set {.code rank_shrinkage: true}, or use {.field ranks_to_test}
+           to sweep ranks instead."
+    ))
   }
   new_countsynth_class(
     list(
@@ -684,12 +725,21 @@ normalize_figures <- function(v) {
 #'   (default 1000). Purely a display scale: it cancels out of every
 #'   percent-change figure and only sets the scale of the rate columns and
 #'   the rate-difference axis.
-#' @param denominator_label Singular noun for one unit of the denominator --
+#' @param denominator_label Noun for one unit of the denominator --
 #'   `"person"`, `"birth"`, `"vehicle-mile"`, whatever your denominator
 #'   column counts. Combined with `denominator_time_unit` to name the
 #'   exposure ("person-years"), which labels the rate columns and axes.
 #'   Defaults to the neutral `"denominator"`, since the package has no way to
-#'   know what yours measures.
+#'   know what yours measures. Singular reads best, but an already-plural
+#'   noun is taken as given rather than pluralized twice.
+#' @param rate_label Complete text for the rate label, used verbatim in place
+#'   of the composed "Rate per 10,000 births" -- set it to say what the
+#'   numerator counts, e.g. `"deaths per 10,000 births"`. It labels the rate
+#'   spanner in the summary tables, the rate axis in the fit figures, and the
+#'   rate-difference axis in the interval plot. Display only, and unchecked:
+#'   `rate_normalizer` and `denominator_time_unit` still set the numbers, so
+#'   a label quoting a different scale will contradict them. `NULL` (default)
+#'   composes the text from the parts.
 #' @param denominator_time_unit Time unit the denominator is weighted by when
 #'   forming exposure: one of `"year"` (default), `"month"`, `"week"`,
 #'   `"day"`, or `"none"`. This is part of the quantity, not decoration --
@@ -727,6 +777,7 @@ countsynth_output_opts <- function(figures = FALSE, clean = FALSE,
                               rate_normalizer = 1000,
                               denominator_label = "denominator",
                               denominator_time_unit = "year",
+                              rate_label = NULL,
                               denominator_may_be_affected = TRUE) {
   figures <- normalize_figures(figures)
   checkmate::assert_flag(clean)
@@ -744,6 +795,7 @@ countsynth_output_opts <- function(figures = FALSE, clean = FALSE,
   checkmate::assert_number(rate_normalizer, lower = .Machine$double.eps)
   checkmate::assert_string(denominator_label, min.chars = 1)
   checkmate::assert_choice(denominator_time_unit, DENOMINATOR_TIME_UNITS)
+  checkmate::assert_string(rate_label, min.chars = 1, null.ok = TRUE)
   checkmate::assert_flag(denominator_may_be_affected)
   aggregate_units <- coerce_countsynth_list(
     aggregate_units, "countsynth_aggregate_unit", "countsynth_aggregate_unit",
@@ -779,6 +831,7 @@ countsynth_output_opts <- function(figures = FALSE, clean = FALSE,
       rate_normalizer = rate_normalizer,
       denominator_label = denominator_label,
       denominator_time_unit = denominator_time_unit,
+      rate_label = rate_label,
       denominator_may_be_affected = denominator_may_be_affected
     ),
     "countsynth_output_opts"
@@ -953,8 +1006,13 @@ print.countsynth_config <- function(x, ...) {
   if (length(x$model$types) > 0) {
     for (nm in names(x$model$types)) {
       tp <- x$model$types[[nm]]
+      rank_text <- if (is.null(tp$max_rank)) {
+        "rank{?s} {.val {tp$ranks_to_test}}"
+      } else {
+        "max rank {.val {tp$max_rank}}"
+      }
       cli::cli_li(
-        "type {.strong {nm}}: {length(tp$groups)} group{?s}, rank{?s} {.val {tp$ranks_to_test}}"
+        paste("type {.strong {nm}}: {length(tp$groups)} group{?s},", rank_text)
       )
     }
   }

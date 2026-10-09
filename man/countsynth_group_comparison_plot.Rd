@@ -10,7 +10,8 @@ countsynth_group_comparison_plot(
   rate_multiplier = 1000,
   treatment_dates = NULL,
   plot_type = "rate",
-  denominator_label = "denominator"
+  denominator_label = "denominator",
+  rate_label = NULL
 )
 }
 \arguments{

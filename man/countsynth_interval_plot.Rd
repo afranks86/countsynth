@@ -13,6 +13,7 @@ countsynth_interval_plot(
   rate_normalizer = 1000,
   denominator_label = "denominator",
   denominator_time_unit = "year",
+  rate_label = NULL,
   color_group = NULL,
   separate_units = NULL
 )

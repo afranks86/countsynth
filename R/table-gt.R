@@ -42,6 +42,7 @@ countsynth_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
                            rate_normalizer = 1000,
                            title = NULL, subtitle = NULL,
                            denominator_label = "denominator",
+                           rate_label = NULL,
                            denominator_time_unit = "year",
                            denominator_may_be_affected = TRUE) {
   rlang::check_installed("gt", reason = "to render HTML summary tables")
@@ -74,7 +75,8 @@ countsynth_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
   any_imputed <- any(tbl$Imputed)
   tbl$Imputed <- NULL
   rate_label <- format_rate_label(
-    rate_normalizer, denominator_label, denominator_time_unit
+    rate_normalizer, denominator_label, denominator_time_unit,
+    rate_label = rate_label
   )
   exposure_col <- exposure_column_name(
     denominator_label, denominator_time_unit
@@ -163,6 +165,7 @@ countsynth_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
 write_gt_tables <- function(draws, target_unit, figs_dir,
                             rate_normalizer = 1000,
                             denominator_label = "denominator",
+                            rate_label = NULL,
                             denominator_time_unit = "year",
                             denominator_may_be_affected = TRUE) {
   if (!requireNamespace("gt", quietly = TRUE)) {
@@ -187,6 +190,7 @@ write_gt_tables <- function(draws, target_unit, figs_dir,
             rate_normalizer = rate_normalizer,
             denominator_label = denominator_label,
             denominator_time_unit = denominator_time_unit,
+            rate_label = rate_label,
             denominator_may_be_affected = denominator_may_be_affected
           ),
           path

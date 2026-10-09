@@ -6,7 +6,8 @@
 \usage{
 countsynth_type(
   groups,
-  ranks_to_test,
+  ranks_to_test = NULL,
+  max_rank = NULL,
   total_from = NULL,
   total_all = FALSE,
   exclude_units = NULL
@@ -16,7 +17,14 @@ countsynth_type(
 \item{groups}{Character vector of group labels this type models. May
 include the synthetic \code{"total"} group (see \code{total_from} / \code{total_all}).}
 
-\item{ranks_to_test}{Integer vector of factorization ranks to fit.}
+\item{ranks_to_test}{Integer vector of factorization ranks to fit, one fit
+each, into \verb{<type>/rank_<r>/}. Give this or \code{max_rank}, not both.}
+
+\item{max_rank}{A single truncation to fit once and let the model prune
+below, rather than a set of ranks to compare. Requires
+\code{\link[=countsynth_rank_shrinkage_opts]{countsynth_rank_shrinkage_opts()}} on the model, since without shrinkage
+nothing prunes and a truncation is only a rank by another name. Read
+\code{eff_rank} off the fit to see how much of it was used.}
 
 \item{total_from}{Labels summed to build the synthetic \code{"total"} group.}
 

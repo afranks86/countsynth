@@ -111,13 +111,18 @@ parse_yaml_model <- function(x, path = "model") {
       tp <- x$types[[nm]]
       check_known_keys(
         tp,
-        c("groups", "ranks_to_test", "total_from", "total_all",
+        c("groups", "ranks_to_test", "max_rank", "total_from", "total_all",
           "exclude_units"),
         glue::glue("{path}.types.{nm}")
       )
       countsynth_type(
         groups = yaml_chr(tp$groups),
-        ranks_to_test = unlist(tp$ranks_to_test, use.names = FALSE),
+        ranks_to_test = if (is.null(tp$ranks_to_test)) {
+          NULL
+        } else {
+          unlist(tp$ranks_to_test, use.names = FALSE)
+        },
+        max_rank = tp$max_rank,
         total_from = yaml_chr(tp$total_from),
         total_all = yaml_flag(tp$total_all, glue::glue("{path}.types.{nm}.total_all"), FALSE),
         exclude_units = yaml_chr(tp$exclude_units)
@@ -247,7 +252,7 @@ parse_yaml_output <- function(x, path = "output") {
       "print_tables", "print_target_table", "html_tables",
       "aggregate_units", "ppc_units", "ppc_exclude_units", "ppc_acf_lags",
       "ppc_unit_corr_max_time", "draws_format", "rate_normalizer",
-      "denominator_label", "denominator_time_unit",
+      "denominator_label", "denominator_time_unit", "rate_label",
       "denominator_may_be_affected"),
     path
   )
@@ -307,6 +312,7 @@ parse_yaml_output <- function(x, path = "output") {
     rate_normalizer = x$rate_normalizer %||% 1000,
     denominator_label = x$denominator_label %||% "denominator",
     denominator_time_unit = x$denominator_time_unit %||% "year",
+    rate_label = x$rate_label,
     denominator_may_be_affected = yaml_flag(
       x$denominator_may_be_affected,
       glue::glue("{path}.denominator_may_be_affected"), TRUE

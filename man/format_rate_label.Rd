@@ -8,7 +8,8 @@ format_rate_label(
   rate_normalizer,
   denominator_label = "denominator",
   time_unit = "year",
-  prefix = "Rate per"
+  prefix = "Rate per",
+  rate_label = NULL
 )
 }
 \arguments{
@@ -19,6 +20,14 @@ format_rate_label(
 \item{time_unit}{One of \link{DENOMINATOR_TIME_UNITS}.}
 
 \item{prefix}{Leading words, e.g. \code{"Rate per"} or \code{"per"}.}
+
+\item{rate_label}{Complete replacement for the composed text, used
+verbatim. Composing from parts keeps the words and the arithmetic in
+step, but it cannot know what the numerator counts -- "Rate per 10,000
+births" where "deaths per 10,000 births" is what the reader wants -- so
+the caller can say it outright instead. Nothing validates it against
+\code{rate_normalizer}, which does change the numbers, so a label naming a
+different scale will simply be wrong.}
 }
 \description{
 "Rate per 1,000 denominator-years", or "Rate per 100,000 birth-years" once

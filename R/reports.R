@@ -98,6 +98,7 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
                          print_target_table = FALSE, html_tables = TRUE,
                          fit = NULL, rate_normalizer = 1000,
                          denominator_label = "denominator",
+                         rate_label = NULL,
                          denominator_time_unit = "year",
                          denominator_may_be_affected = TRUE) {
   selected <- figures %||% FIGURE_NAMES
@@ -175,7 +176,8 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
           draws,
           group = grp, separate_unit = target_unit,
           rate_multiplier = rate_normalizer,
-          denominator_label = denominator_label
+          denominator_label = denominator_label,
+          rate_label = rate_label
         ),
         file.path(grp_dir, "raw_rate.png")
       )
@@ -194,6 +196,7 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
         rate_normalizer = rate_normalizer,
         denominator_label = denominator_label,
         denominator_time_unit = denominator_time_unit,
+        rate_label = rate_label,
         separate_units = if (interval_aggregates) NULL else character()
       ),
       file.path(figs_dir, "interval.png"),
@@ -205,7 +208,8 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
       countsynth_group_comparison_plot(
         draws,
         rate_multiplier = rate_normalizer,
-        denominator_label = denominator_label
+        denominator_label = denominator_label,
+        rate_label = rate_label
       ),
       file.path(figs_dir, "group_comparison.png"),
       width = 11, height = 7
@@ -308,6 +312,7 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
       rate_normalizer = rate_normalizer,
       denominator_label = denominator_label,
       denominator_time_unit = denominator_time_unit,
+      rate_label = rate_label,
       denominator_may_be_affected = denominator_may_be_affected
     )
   }

@@ -24,6 +24,7 @@ countsynth_report(
   fit = NULL,
   rate_normalizer = 1000,
   denominator_label = "denominator",
+  rate_label = NULL,
   denominator_time_unit = "year",
   denominator_may_be_affected = TRUE
 )
@@ -75,12 +76,22 @@ draws frame; without it those figures are skipped.}
 percent-change figure and only sets the scale of the rate columns and
 the rate-difference axis.}
 
-\item{denominator_label}{Singular noun for one unit of the denominator --
+\item{denominator_label}{Noun for one unit of the denominator --
 \code{"person"}, \code{"birth"}, \code{"vehicle-mile"}, whatever your denominator
 column counts. Combined with \code{denominator_time_unit} to name the
 exposure ("person-years"), which labels the rate columns and axes.
 Defaults to the neutral \code{"denominator"}, since the package has no way to
-know what yours measures.}
+know what yours measures. Singular reads best, but an already-plural
+noun is taken as given rather than pluralized twice.}
+
+\item{rate_label}{Complete text for the rate label, used verbatim in place
+of the composed "Rate per 10,000 births" -- set it to say what the
+numerator counts, e.g. \code{"deaths per 10,000 births"}. It labels the rate
+spanner in the summary tables, the rate axis in the fit figures, and the
+rate-difference axis in the interval plot. Display only, and unchecked:
+\code{rate_normalizer} and \code{denominator_time_unit} still set the numbers, so
+a label quoting a different scale will contradict them. \code{NULL} (default)
+composes the text from the parts.}
 
 \item{denominator_time_unit}{Time unit the denominator is weighted by when
 forming exposure: one of \code{"year"} (default), \code{"month"}, \code{"week"},

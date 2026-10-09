@@ -156,7 +156,10 @@ format_exposure_noun <- function(denominator_label = "denominator",
   checkmate::assert_choice(time_unit, DENOMINATOR_TIME_UNITS)
   label <- denominator_label %||% "denominator"
   if (identical(time_unit, "none")) {
-    return(paste0(label, "s"))
+    # The field is documented as singular, but "births" is the obvious thing
+    # to write for a births denominator and pluralizing it again produced
+    # "birthss" in a column header. Take an already-plural noun as given.
+    return(if (grepl("s$", label)) label else paste0(label, "s"))
   }
   paste0(label, "-", time_unit, "s")
 }
@@ -188,11 +191,22 @@ exposure_column_name <- function(denominator_label = "denominator",
 #' @param rate_normalizer Rates are per this many units of exposure.
 #' @inheritParams format_exposure_noun
 #' @param prefix Leading words, e.g. `"Rate per"` or `"per"`.
+#' @param rate_label Complete replacement for the composed text, used
+#'   verbatim. Composing from parts keeps the words and the arithmetic in
+#'   step, but it cannot know what the numerator counts -- "Rate per 10,000
+#'   births" where "deaths per 10,000 births" is what the reader wants -- so
+#'   the caller can say it outright instead. Nothing validates it against
+#'   `rate_normalizer`, which does change the numbers, so a label naming a
+#'   different scale will simply be wrong.
 #' @keywords internal
 format_rate_label <- function(rate_normalizer,
                               denominator_label = "denominator",
                               time_unit = "year",
-                              prefix = "Rate per") {
+                              prefix = "Rate per",
+                              rate_label = NULL) {
+  if (!is.null(rate_label)) {
+    return(rate_label)
+  }
   scale <- format(
     rate_normalizer,
     big.mark = ",", scientific = FALSE, trim = TRUE

@@ -97,6 +97,7 @@ countsynth_interval_plot <- function(draws, units = NULL, categories = NULL,
                                 rate_normalizer = 1000,
                                 denominator_label = "denominator",
                                 denominator_time_unit = "year",
+                                rate_label = NULL,
                                 color_group = NULL,
                                 separate_units = NULL) {
   estimand <- match.arg(estimand)
@@ -168,7 +169,7 @@ countsynth_interval_plot <- function(draws, units = NULL, categories = NULL,
       "Rate Difference (%s)",
       format_rate_label(
         rate_normalizer, denominator_label, denominator_time_unit,
-        prefix = "per"
+        prefix = "per", rate_label = rate_label
       )
     )
   }
