@@ -42,16 +42,16 @@ test_that("the report writes HTML tables and can be told not to", {
 
   on_dir <- withr::local_tempdir()
   countsynth_report(draws, on_dir, figures = character(), print_tables = FALSE)
-  expect_true(all(file.exists(file.path(on_dir, "figs", html))))
+  expect_true(all(file.exists(file.path(on_dir, "tables", html))))
 
   off_dir <- withr::local_tempdir()
   countsynth_report(
     draws, off_dir,
     figures = character(), print_tables = FALSE, html_tables = FALSE
   )
-  expect_false(any(file.exists(file.path(off_dir, "figs", html))))
+  expect_false(any(file.exists(file.path(off_dir, "tables", html))))
   # The CSVs are unaffected either way.
-  expect_true(file.exists(file.path(off_dir, "figs", "summary_table_by_unit.csv")))
+  expect_true(file.exists(file.path(off_dir, "tables", "summary_table_by_unit.csv")))
 })
 
 test_that("terminal output is one table by default, two on request", {
@@ -198,7 +198,7 @@ test_that("a denominator-free run renders every figure in the report", {
   expect_no_error(
     countsynth_report(draws, out_dir, print_tables = FALSE, html_tables = FALSE)
   )
-  figs <- list.files(file.path(out_dir, "figs"), recursive = TRUE)
+  figs <- list.files(file.path(out_dir, "figures"), recursive = TRUE)
   expect_true(all(
     c("raw_rate.png", "group_comparison.png", "interval.png") %in% figs
   ))
@@ -314,7 +314,7 @@ test_that("rate_normalizer and denominator_label reach the report from config", 
     rate_normalizer = 1e5, denominator_label = "person"
   )
   html <- paste(
-    readLines(file.path(out_dir, "figs", "summary_table.html"), warn = FALSE),
+    readLines(file.path(out_dir, "tables", "summary_table.html"), warn = FALSE),
     collapse = "\n"
   )
   expect_match(html, "Rate per 100,000 person-years")

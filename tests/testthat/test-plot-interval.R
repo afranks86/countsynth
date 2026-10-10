@@ -81,7 +81,7 @@ test_that("interval_aggregates gates whether the aggregate reaches the plot", {
       target_unit = "C", figures = "interval",
       aggregate_units = spec, interval_aggregates = on, print_tables = FALSE
     )
-    expect_true(file.exists(file.path(dir, "figs", "interval.png")))
+    expect_true(file.exists(file.path(dir, "figures", "interval.png")))
   }
   # The gate is on the plot data, which the PNG hides -- check it directly.
   agg <- add_aggregate_units(draws, spec)
@@ -105,7 +105,7 @@ test_that("a configured aggregate unit becomes the default headline unit", {
   expect_equal(res$target_unit, "All treated")
   expect_true("All treated" %in% res$per_unit$unit)
   # ... and it reaches the by-unit table, not just post_treatment_summary.
-  by_unit <- utils::read.csv(file.path(dir, "figs", "summary_table_by_unit.csv"))
+  by_unit <- utils::read.csv(file.path(dir, "tables", "summary_table_by_unit.csv"))
   expect_true("All treated" %in% by_unit$Unit)
 
   # Without any aggregate the old rule still applies: most treated periods.

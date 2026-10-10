@@ -1,13 +1,18 @@
-# Figure/table orchestration with artifact-layout parity: figures and tables
-# under <output_dir>/figs/ with the same filenames the Python package writes
-# (fit_<unit>.png, gap_<unit>.png, raw_rate.png, interval.png,
-# group_comparison.png, ppc/ppc_*.png + ppc_pvalues.csv,
-# ppc/rank_*.png + rank_*.csv when rank shrinkage is on,
-# summary_table_by_unit.csv, expected_vs_observed.csv,
-# post_treatment_summary.csv). Tables ALWAYS write; only figures are gated by
-# the `figures` selection. The target unit's headline table is not written
-# separately: it is the `Unit == target_unit` subset of
-# summary_table_by_unit.csv.
+# Figure and table orchestration. Output is split three ways by what the
+# reader wants from it, under <output_dir>/:
+#
+#   figures/            what happened -- fit_<unit>.png, gap_<unit>.png,
+#                       raw_rate.png, interval.png, group_comparison.png,
+#                       plus <group>/ per-group and te/ effect figures
+#   tables/             the numbers behind it -- summary_table*.html,
+#                       summary_table_by_unit.csv, expected_vs_observed.csv,
+#                       post_treatment_summary.csv
+#   model_diagnostics/  whether to believe the fit -- ppc_*.png,
+#                       ppc_pvalues.csv, and rank_*.{png,csv} under shrinkage
+#
+# Tables ALWAYS write; only figures are gated by the `figures` selection. The
+# target unit's headline table is not written separately: it is the
+# `Unit == target_unit` subset of summary_table_by_unit.csv.
 
 # write.csv serializes doubles at full 15-17 significant digits, which makes
 # the tables unreadable and implies precision the posterior does not have.
@@ -86,7 +91,8 @@ ppc_plot_dims <- function(n_facets, ncol,
 #'   draws frame; without it those figures are skipped.
 #' @inheritParams countsynth_output_opts
 #' @return Invisible list with `summary`, `per_unit`, `detail`,
-#'   `target_unit`, `figs_dir`, `treated_units`.
+#'   `target_unit`, `figures_dir`, `tables_dir`, `diagnostics_dir`,
+#'   `treated_units`.
 #' @export
 countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
                          figures = NULL, aggregate_units = NULL,
@@ -109,8 +115,16 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
        valid names are {.val {sort(FIGURE_NAMES)}}."
     )
   }
-  figs_dir <- file.path(output_dir, "figs")
-  dir.create(figs_dir, recursive = TRUE, showWarnings = FALSE)
+  # Three destinations rather than one figs/: what happened (figures), the
+  # numbers behind it (tables), and whether to believe the fit at all
+  # (model_diagnostics). The last is named for what it holds -- the rank
+  # figures in it were never posterior predictive checks, so "ppc" was wrong.
+  figures_dir <- file.path(output_dir, "figures")
+  tables_dir <- file.path(output_dir, "tables")
+  diagnostics_dir <- file.path(output_dir, "model_diagnostics")
+  for (d in c(figures_dir, tables_dir, diagnostics_dir)) {
+    dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  }
 
   reporting <- if (!is.null(aggregate_units)) {
     add_aggregate_units(draws, aggregate_units)
@@ -150,9 +164,9 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
   # Per-group unit-level figures.
   for (grp in report_groups) {
     grp_dir <- if (length(report_groups) > 1) {
-      file.path(figs_dir, grp)
+      file.path(figures_dir, grp)
     } else {
-      figs_dir
+      figures_dir
     }
     dir.create(grp_dir, recursive = TRUE, showWarnings = FALSE)
     for (unit in fit_gap_units(grp)) {
@@ -199,7 +213,7 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
         rate_label = rate_label,
         separate_units = if (interval_aggregates) NULL else character()
       ),
-      file.path(figs_dir, "interval.png"),
+      file.path(figures_dir, "interval.png"),
       width = 10, height = 8
     )
   }
@@ -211,13 +225,13 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
         denominator_label = denominator_label,
         rate_label = rate_label
       ),
-      file.path(figs_dir, "group_comparison.png"),
+      file.path(figures_dir, "group_comparison.png"),
       width = 11, height = 7
     )
   }
   if ("te_regression" %in% selected && !is.null(fit) &&
     !is.null(fit$te_design)) {
-    te_dir <- file.path(figs_dir, "te")
+    te_dir <- file.path(figures_dir, "te")
     dir.create(te_dir, recursive = TRUE, showWarnings = FALSE)
     te_figs <- te_report_figures(fit)
     for (nm in names(te_figs)) {
@@ -230,7 +244,7 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
     )
   }
   if ("ppc" %in% selected) {
-    ppc_dir <- file.path(figs_dir, "ppc")
+    ppc_dir <- diagnostics_dir
     dir.create(ppc_dir, recursive = TRUE, showWarnings = FALSE)
     ppc_source <- ppc_draws %||% reporting
     if (!is.null(ppc_draws) && !is.null(aggregate_units)) {
@@ -264,7 +278,7 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
   # is skipped without a design.
   if ("rank_shrinkage" %in% selected && !is.null(fit) &&
     !is.null(rank_shrinkage_source(fit))) {
-    ppc_dir <- file.path(figs_dir, "ppc")
+    ppc_dir <- diagnostics_dir
     dir.create(ppc_dir, recursive = TRUE, showWarnings = FALSE)
     rank_figs <- rank_report_figures(fit)
     for (nm in names(rank_figs)) {
@@ -296,19 +310,19 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
     denominator_time_unit = denominator_time_unit
   )
   write_table_csv(
-    by_unit_tbl, file.path(figs_dir, "summary_table_by_unit.csv")
+    by_unit_tbl, file.path(tables_dir, "summary_table_by_unit.csv")
   )
   detail <- countsynth_expected_vs_observed(reporting, target_unit)
   write_table_csv(
-    detail, file.path(figs_dir, "expected_vs_observed.csv")
+    detail, file.path(tables_dir, "expected_vs_observed.csv")
   )
   per_unit <- countsynth_post_treatment_summary(reporting)
   write_table_csv(
-    per_unit, file.path(figs_dir, "post_treatment_summary.csv")
+    per_unit, file.path(tables_dir, "post_treatment_summary.csv")
   )
   if (html_tables) {
     write_gt_tables(
-      reporting, target_unit, figs_dir,
+      reporting, target_unit, tables_dir,
       rate_normalizer = rate_normalizer,
       denominator_label = denominator_label,
       denominator_time_unit = denominator_time_unit,
@@ -362,7 +376,8 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
 
   invisible(list(
     summary = summary_tbl, per_unit = per_unit, detail = detail,
-    target_unit = target_unit, figs_dir = figs_dir,
+    target_unit = target_unit, figures_dir = figures_dir,
+    tables_dir = tables_dir, diagnostics_dir = diagnostics_dir,
     treated_units = treated_units
   ))
 }

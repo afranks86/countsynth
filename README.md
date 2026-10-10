@@ -684,18 +684,34 @@ table, so it is off by default.
 more than one rank is requested):
 
 ```
-<output_dir>/<type>/<rate|count>/
-  df_<type>.csv                              # the standardized long panel
-  {NB|Poisson}_{outcome}_{type}_{rank}_{rate|count}.csv
+<output_dir>/<type>/<rate|count>/[rank_<rank>/]
+  raw_results/                               # for machines, not for reading
+    {NB|Poisson}_{outcome}_{type}_{rank}_{rate|count}.csv
                                              # tidy draws (or .parquet)
-  ..._convergence.json                       # gate: R-hat, ESS, divergences
-  [rank_<rank>/]figs/
+    ..._convergence.json                     # gate: R-hat, ESS, divergences
+    df_<type>.csv                            # the standardized long panel
+    ..._draws.rds                            # if output.save_traces
+  tables/                                    # the numbers
     summary_table_by_unit.csv                # display-formatted, per unit
     summary_table*.html                      # the same, via gt
     post_treatment_summary.csv               # numeric estimands + CIs
     expected_vs_observed.csv                 # per (unit, time, group) detail
-    *.png                                    # figures, if output.figures
+  figures/                                   # what happened, if output.figures
+    interval.png, group_comparison.png, raw_rate.png
+    fit_<unit>.png, gap_<unit>.png
+    <group>/                                 # per group, when a type has several
+    te/                                      # treatment-effect figures
+  model_diagnostics/                         # whether to believe the fit
+    ppc_*.png, ppc_pvalues.csv               # posterior predictive checks
+    rank_*.png, rank_*.csv                   # effective rank, under shrinkage
 ```
+
+The four directories split by what you want from the output: the draws are
+for machines and happen to be enormous, the tables and figures are the
+result, and the diagnostics answer a different question — whether the fit is
+worth reading at all — usually before you look at any of it. Everything a
+rank produces sits under that rank, so a sweep gives complete parallel sets
+rather than draws pooled at the top and figures nested below.
 
 `rate` or `count` is chosen by whether the run had a denominator, which
 changes what the estimates mean (see "Pct Change" above), not just which

@@ -85,11 +85,6 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
     }
     dir.create(type_dir, recursive = TRUE, showWarnings = FALSE)
 
-    utils::write.csv(
-      data$df, file.path(type_dir, sprintf("df_%s.csv", type)),
-      row.names = FALSE
-    )
-
     rank_list <- ranks %||% type_spec$ranks_to_test
     for (rank in rank_list) {
       cli::cli_h1("{type} @ rank {rank} ({if (is_cut) 'cut' else 'joint'})")
@@ -98,7 +93,15 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
       } else {
         type_dir
       }
-      dir.create(run_dir, recursive = TRUE, showWarnings = FALSE)
+      # Everything a rank produces lives under its own directory, raw
+      # artifacts included: a sweep used to leave draws flat at the type
+      # level, distinguished only by stem, while figures nested per rank.
+      raw_dir <- file.path(run_dir, "raw_results")
+      dir.create(raw_dir, recursive = TRUE, showWarnings = FALSE)
+      utils::write.csv(
+        data$df, file.path(raw_dir, sprintf("df_%s.csv", type)),
+        row.names = FALSE
+      )
       stem <- draws_stem(
         config, type, rank, cut = is_cut,
         has_denominator = identical(scale, "rate")
@@ -110,7 +113,7 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
         gate <- fit$manifest
         ppc_draws <- fit$stage1_ppc
         write_draws_file(
-          ppc_draws, paste0(stem, "_stage1_ppc"), type_dir, "csv"
+          ppc_draws, paste0(stem, "_stage1_ppc"), raw_dir, "csv"
         )
         cut_component_table(fit)
       } else {
@@ -120,9 +123,9 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
         ppc_draws <- NULL
       }
 
-      draws_path <- write_draws_file(draws, stem, type_dir, out$draws_format)
+      draws_path <- write_draws_file(draws, stem, raw_dir, out$draws_format)
       write_convergence_json(
-        gate, file.path(type_dir, paste0(stem, "_convergence.json"))
+        gate, file.path(raw_dir, paste0(stem, "_convergence.json"))
       )
       if (isFALSE(gate$converged)) {
         reasons <- gate_failure_bullets(
@@ -150,7 +153,7 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
       if (out$save_traces) {
         saveRDS(
           posterior::as_draws_rvars(fit$fit$draws()),
-          file.path(type_dir, paste0(stem, "_draws.rds"))
+          file.path(raw_dir, paste0(stem, "_draws.rds"))
         )
       }
 

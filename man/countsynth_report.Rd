@@ -120,7 +120,8 @@ turn it on.}
 }
 \value{
 Invisible list with \code{summary}, \code{per_unit}, \code{detail},
-\code{target_unit}, \code{figs_dir}, \code{treated_units}.
+\code{target_unit}, \code{figures_dir}, \code{tables_dir}, \code{diagnostics_dir},
+\code{treated_units}.
 }
 \description{
 Port of \code{reports.generate_reports}. Per-unit figures are nested under

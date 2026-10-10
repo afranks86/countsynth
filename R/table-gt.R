@@ -162,7 +162,7 @@ countsynth_gt_table <- function(draws, target_unit = NULL, by_unit = FALSE,
 
 # Write the report's HTML tables. gt is optional, so a missing install is a
 # warning that names the fix, not a failed run -- the CSVs already landed.
-write_gt_tables <- function(draws, target_unit, figs_dir,
+write_gt_tables <- function(draws, target_unit, tables_dir,
                             rate_normalizer = 1000,
                             denominator_label = "denominator",
                             rate_label = NULL,
@@ -181,7 +181,7 @@ write_gt_tables <- function(draws, target_unit, figs_dir,
     list(file = "summary_table_by_unit.html", by_unit = TRUE)
   )
   for (spec in specs) {
-    path <- file.path(figs_dir, spec$file)
+    path <- file.path(tables_dir, spec$file)
     ok <- tryCatch(
       {
         gt::gtsave(
