@@ -489,15 +489,22 @@ Share these iff you share the curves.
 
 Pooling `unit_weight_sd` is the one that looks safest and is not: "how far a
 unit sits from its own group's profile" sounds like the same quantity
-everywhere, but a group whose counts are mostly censored has units scattered
-far from any profile, and under a pooled scalar every other group inherits
-that spread. Measured on a 51-state infant-mortality panel, adding a fourth
-group with 47% censored cells moved the pooled scalar from 0.270 to 1.203,
-collapsed the other three groups' `eff_rank` from about 2 to about 1, and
-raised divergences from 2 to 112. Per group, those three keep their own
-values (0.33, 0.32, 0.24 — the same they take when fit without the fourth
-group), the awkward group takes its own 1.98, and `eff_rank` and divergences
-both return to where they were.
+everywhere, but groups differ in how much their units genuinely differ, and
+a pooled scalar makes every group pay for the most heterogeneous one.
+Measured on a 51-state infant-mortality panel, adding a fourth group moved
+the pooled scalar from 0.270 to 1.203, collapsed the other three groups'
+`eff_rank` from about 2 to about 1, and raised divergences from 2 to 112.
+Per group, those three keep their own values (0.33, 0.32, 0.24 — the same
+they take when fit without the fourth group), the heterogeneous group takes
+its own 1.98, and `eff_rank` and divergences both return to where they were.
+
+That fourth group's spread was real rather than a symptom of its sparse
+data. Across observed cells alone, its state-level log rates have sd 0.512
+against 0.17–0.32 for the other three: it was a residual "other
+race/ethnicity" category whose composition, and so whose rate, differs by
+state. The distinction matters when reading the figure below — thin data
+would leave `unit_weight_sd` near its half-normal prior, whereas a group
+that really is more variable pushes the whole posterior above it.
 
 Read both panels of `countsynth_rank_hyper_plot()` across groups: a density
 sitting well away from the others marks a group whose profile, or whose

@@ -115,11 +115,14 @@ Two things to check rather than assume:
 - **Compare the hyperparameters across groups.** Each group draws its own
   `group_weight_mass` and `unit_weight_sd`, so both panels of
   `countsynth_rank_hyper_plot()` show one density per group. A group sitting
-  well away from the others is unlike them — typically one whose counts are
-  mostly censored, leaving its units scattered and saying little about how
-  many components it needs. Both are per group precisely so that such a group
-  does not drag the others with it; seeing it stand apart on the figure is
-  the signal to treat its effects with more care than the rest.
+  well away from the others has units that really do differ more than the
+  rest's — a heterogeneous group, not a poorly observed one. Sparse data
+  would leave its `unit_weight_sd` near the half-normal prior drawn on the
+  panel; a posterior pushed well above the prior is the data insisting the
+  spread is there. Both hyperparameters are per group precisely so that such
+  a group does not drag the others with it, and seeing it stand apart is the
+  signal to read its effects on their own terms rather than alongside the
+  others'.
 
 ## Reporting
 

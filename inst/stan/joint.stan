@@ -374,16 +374,23 @@ model {
   //
   // Both are per group. Pooling unit_weight_sd looks defensible -- "how far
   // a unit sits from its own group's profile" sounds like the same quantity
-  // everywhere -- but it is not when one group's cells are mostly censored,
-  // and it was the channel that carried that group's pathology into the rest.
-  // Measured on a 51-state infant-mortality panel, adding a fourth group with
-  // 47% censored cells moved the pooled scalar from 0.270 [0.058, 0.518] to
-  // 1.203 [0.702, 2.013]. A value that large lets every group's units drift
-  // freely from their profile, which makes the profile redundant and collapses
-  // the stick-breaking onto one component: the other three groups' eff_rank
-  // fell from ~2 to ~1, and their masses followed (1.74 -> 0.97, 1.73 -> 0.54,
+  // everywhere -- but groups differ in how much their units really do differ,
+  // and a pooled scalar makes every group pay for the most heterogeneous one.
+  // Measured on a 51-state infant-mortality panel, adding a fourth group
+  // moved the pooled scalar from 0.270 [0.058, 0.518] to 1.203 [0.702,
+  // 2.013]. A value that large lets every group's units drift freely from
+  // their profile, which makes the profile redundant and collapses the
+  // stick-breaking onto one component: the other three groups' eff_rank fell
+  // from ~2 to ~1, and their masses followed (1.74 -> 0.97, 1.73 -> 0.54,
   // 1.57 -> 0.44). Per-group masses alone did not stop it, because the masses
   // were downstream of this.
+  //
+  // The fourth group's spread was genuine, not an artifact of its 47%
+  // censored cells: across observed cells only, its state-level log rates
+  // have sd 0.512 against 0.17-0.32 for the other three. It was a residual
+  // "other race/ethnicity" category whose composition, and so whose rate,
+  // varies by state. Thin data would have left unit_weight_sd near its
+  // half-normal prior; instead the whole posterior sat above it.
   //
   // The cost is K - 1 extra scalars, but each is informed by that group's D
   // units -- far better identified than a mass informed by R - 1 sticks.
