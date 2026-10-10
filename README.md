@@ -473,7 +473,9 @@ components group `k` occupies — an inverse Simpson index, so it reads *m*
 when `m` components split the weight evenly. Check it with
 `countsynth_component_weight_plot()` (a Bayesian scree plot) and
 `countsynth_rank_hyper_plot()` (hyperparameters against their priors), both
-written to `figs/ppc/rank_*.png`.  The rule is that `eff_rank` should sit comfortably below `R`; if it presses
+written to `model_diagnostics/rank_*.png`.
+
+The rule is that `eff_rank` should sit comfortably below `R`; if it presses
 against `R`, raise the rank and refit. On some
 panels it keeps climbing instead of settling, which means the value of `R` is
 still binding and the "generous" rank was not generous enough. Stick-breaking gives `1/(1 + mass)`
