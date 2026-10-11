@@ -276,22 +276,26 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
   # sweep was answering, and are read together with it. Skipped, not an
   # error, when the fit did not use shrinkage -- the same way te_regression
   # is skipped without a design.
-  if ("rank_shrinkage" %in% selected && !is.null(fit) &&
-    !is.null(rank_shrinkage_source(fit))) {
-    ppc_dir <- diagnostics_dir
-    dir.create(ppc_dir, recursive = TRUE, showWarnings = FALSE)
-    rank_figs <- rank_report_figures(fit)
-    for (nm in names(rank_figs)) {
-      save_plot(rank_figs[[nm]], file.path(ppc_dir, paste0(nm, ".png")))
-    }
+  if (!is.null(fit) && !is.null(rank_shrinkage_source(fit))) {
+    dir.create(diagnostics_dir, recursive = TRUE, showWarnings = FALSE)
+    # The CSVs follow the always-write rule the other tables do: eff_rank is
+    # how you learn whether the truncation was generous enough, which is a
+    # property of the fit rather than a picture someone asked for. Only the
+    # rendering is gated, since that is what the `figures` list is for.
     write_table_csv(
       countsynth_component_weight_summary(fit),
-      file.path(ppc_dir, "rank_component_weight.csv")
+      file.path(diagnostics_dir, "rank_component_weight.csv")
     )
     write_table_csv(
       countsynth_eff_rank_summary(fit),
-      file.path(ppc_dir, "rank_eff_rank.csv")
+      file.path(diagnostics_dir, "rank_eff_rank.csv")
     )
+    if ("rank_shrinkage" %in% selected) {
+      rank_figs <- rank_report_figures(fit)
+      for (nm in names(rank_figs)) {
+        save_plot(rank_figs[[nm]], file.path(diagnostics_dir, paste0(nm, ".png")))
+      }
+    }
   }
 
   # Tables: always written, never gated by `figures`.

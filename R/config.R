@@ -980,6 +980,22 @@ countsynth_config <- function(input_file, output_dir, schema,
   checkmate::assert_class(time_aggregation, "countsynth_time_aggregation")
   checkmate::assert_flag(allow_unbalanced_panel)
   checkmate::assert_string(outcome, min.chars = 1, null.ok = TRUE)
+  # An enumerated `figures` list written before rank shrinkage existed will
+  # not name it, so turning the model option on quietly buys no scree plot --
+  # and the two share a name, which makes them look like one switch. Only
+  # when figures were asked for at all: `figures: false` means no figures.
+  if (!is.null(model$rank_shrinkage) && length(output$figures) > 0 &&
+    !"rank_shrinkage" %in% output$figures) {
+    cli::cli_warn(c(
+      "{.field model.rank_shrinkage} is on, but {.field output.figures} does
+       not list {.val rank_shrinkage}, so the scree and hyperparameter
+       figures will be skipped.",
+      i = "Add {.val rank_shrinkage} to {.field output.figures}, or set
+           {.code figures: true} for all of them.",
+      i = "{.file rank_eff_rank.csv} and {.file rank_component_weight.csv}
+           are written either way."
+    ))
+  }
   new_countsynth_class(
     list(
       input_file = input_file, output_dir = output_dir, schema = schema,
