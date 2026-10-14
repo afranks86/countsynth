@@ -10,7 +10,9 @@ countsynth_ppc_unit_corr(
   categories = NULL,
   ndraws = 1000,
   ppc_units = NULL,
-  ppc_exclude_units = NULL
+  ppc_exclude_units = NULL,
+  max_na_frac = 0.25,
+  max_zero_frac = 0.5
 )
 }
 \arguments{
@@ -23,10 +25,17 @@ control-period filter.}
 \code{\link[=countsynth_output_opts]{countsynth_output_opts()}}).}
 
 \item{ndraws}{Cap on the number of draws used.}
+
+\item{max_na_frac}{Drop a (unit, group) whose control-period outcome is
+missing in at least this fraction of periods.}
+
+\item{max_zero_frac}{Drop a (unit, group) whose observed control-period
+outcome is zero in more than this fraction of the periods it does have.}
 }
 \description{
 Tests whether the model captures cross-sectional dependence. Uses the
 control period (or \code{time < max_treat_date} when given), every unit (this
-check needs >= 2 units), capped at \code{ndraws} draws for speed; units with
-more than 25\% missing outcomes are dropped.
+check needs >= 2 units), capped at \code{ndraws} draws for speed. Cells whose
+observed series carries no usable variation are dropped first: too many
+missing outcomes, too many zeros, or a series that never moves at all.
 }

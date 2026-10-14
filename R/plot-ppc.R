@@ -237,21 +237,76 @@ spectral_norm <- function(m) {
   sqrt(max(max(eigen(cm, symmetric = TRUE, only.values = TRUE)$values), 0))
 }
 
+# A (unit, group) whose observed control-period outcome never moves -- a state
+# with zero homicides in every period, say -- has residual `outcome - exp(mu)`
+# equal to `-exp(mu)`: a smooth deterministic curve, not noise. Any two such
+# units correlate near-perfectly, so a handful of them dominates the observed
+# correlation matrix and inflates its spectral norm, while the predicted
+# residuals keep their sampling variation. The check then reports a tiny
+# p-value that is an artifact of the sparse units rather than evidence about
+# cross-sectional dependence. Drop those cells, along with the mostly-missing
+# and mostly-zero ones that are degenerate for the same reason.
+drop_degenerate_corr_cells <- function(df, max_na_frac = 0.25,
+                                       max_zero_frac = 0.5) {
+  if (nrow(df) == 0) {
+    return(df)
+  }
+  # One row per (unit, group, time): the outcome is repeated across draws, and
+  # the counts below are about the observed series, not the posterior.
+  series <- unique(df[, c("unit", "group", "time", "outcome")])
+  cells <- series |>
+    dplyr::group_by(.data$unit, .data$group) |>
+    dplyr::summarise(
+      na_frac = mean(is.na(.data$outcome)),
+      zero_frac = mean(.data$outcome == 0, na.rm = TRUE),
+      flat = {
+        obs <- .data$outcome[!is.na(.data$outcome)]
+        length(obs) < 2 || stats::sd(obs) == 0
+      },
+      .groups = "drop"
+    )
+  cells$reason <- dplyr::case_when(
+    cells$na_frac >= max_na_frac ~ "mostly missing",
+    cells$flat ~ "no variation",
+    cells$zero_frac > max_zero_frac ~ "mostly zeros",
+    TRUE ~ NA_character_
+  )
+  bad <- cells[!is.na(cells$reason), ]
+  if (nrow(bad) == 0) {
+    return(df)
+  }
+  labels <- sprintf("%s/%s (%s)", bad$unit, bad$group, bad$reason)
+  cli::cli_warn(c(
+    "Dropping {nrow(bad)} cell{?s} from the unit-correlation check:
+     {.val {labels}}.",
+    i = "Their residuals carry no usable variation, so they would correlate
+         near-perfectly with each other and inflate the observed spectral
+         norm."
+  ))
+  dplyr::anti_join(df, bad[, c("unit", "group")], by = c("unit", "group"))
+}
+
 #' PPC: spectral norm of the cross-unit residual correlation matrix
 #'
 #' Tests whether the model captures cross-sectional dependence. Uses the
 #' control period (or `time < max_treat_date` when given), every unit (this
-#' check needs >= 2 units), capped at `ndraws` draws for speed; units with
-#' more than 25% missing outcomes are dropped.
+#' check needs >= 2 units), capped at `ndraws` draws for speed. Cells whose
+#' observed series carries no usable variation are dropped first: too many
+#' missing outcomes, too many zeros, or a series that never moves at all.
 #'
 #' @inheritParams countsynth_ppc_abs
 #' @param max_treat_date Optional `YYYY-MM-DD` cutoff replacing the
 #'   control-period filter.
 #' @param ndraws Cap on the number of draws used.
+#' @param max_na_frac Drop a (unit, group) whose control-period outcome is
+#'   missing in at least this fraction of periods.
+#' @param max_zero_frac Drop a (unit, group) whose observed control-period
+#'   outcome is zero in more than this fraction of the periods it does have.
 #' @export
 countsynth_ppc_unit_corr <- function(draws, max_treat_date = NULL,
                                 categories = NULL, ndraws = 1000,
-                                ppc_units = NULL, ppc_exclude_units = NULL) {
+                                ppc_units = NULL, ppc_exclude_units = NULL,
+                                max_na_frac = 0.25, max_zero_frac = 0.5) {
   df <- draws
   categories <- categories %||% unique(df$group)
   df <- df[df$group %in% categories, ]
@@ -272,11 +327,7 @@ countsynth_ppc_unit_corr <- function(draws, max_treat_date = NULL,
   # pred residuals are masked where the observation is missing
   df$pred_residual[is.na(df$obs_residual)] <- NA_real_
 
-  na_frac <- df |>
-    dplyr::group_by(.data$unit, .data$group) |>
-    dplyr::summarise(na_frac = mean(is.na(.data$outcome)), .groups = "drop")
-  valid <- na_frac[na_frac$na_frac < 0.25, c("unit", "group")]
-  df <- dplyr::inner_join(df, valid, by = c("unit", "group"))
+  df <- drop_degenerate_corr_cells(df, max_na_frac, max_zero_frac)
 
   results <- list()
   for (grp in categories) {
