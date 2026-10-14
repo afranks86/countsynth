@@ -27,8 +27,9 @@ countsynth_ppc_plots(
 \item{max_treat_date}{Cutoff date for the unit-correlation check.}
 }
 \value{
-List with \code{plots} (named list of ggplots) and \code{pvals} (combined
-tibble with a \code{check_type} column).
+List with \code{plots} (named list of ggplots), \code{pvals} (combined
+tibble with a \code{check_type} column) and \code{unit_corr_dropped} (the cells the
+unit-correlation check screened out, \code{NULL} when that check did not run).
 }
 \description{
 Run the full PPC suite

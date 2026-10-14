@@ -77,6 +77,22 @@ ppc_insufficient_data_plot <- function(label) {
     ggplot2::theme_void()
 }
 
+# Left-aligned and small: the caption is a footnote about the data the figure
+# could use, not a second title.
+add_plot_caption <- function(p, caption) {
+  if (is.null(caption)) {
+    return(p)
+  }
+  p +
+    ggplot2::labs(caption = caption) +
+    ggplot2::theme(
+      plot.caption = ggplot2::element_text(
+        hjust = 0, size = 8, colour = "grey30"
+      ),
+      plot.caption.position = "plot"
+    )
+}
+
 #' Autocorrelation at one lag (NaN if too short or zero-variance)
 #' @keywords internal
 autocorrelation_at_lag <- function(x, lag) {
@@ -246,10 +262,17 @@ spectral_norm <- function(m) {
 # p-value that is an artifact of the sparse units rather than evidence about
 # cross-sectional dependence. Drop those cells, along with the mostly-missing
 # and mostly-zero ones that are degenerate for the same reason.
+#
+# The drops are reported on the figure's caption rather than at the console:
+# which cells a diagnostic plot could use belongs beside the plot, where it is
+# still legible months later in `model_diagnostics/`.
 drop_degenerate_corr_cells <- function(df, max_na_frac = 0.25,
                                        max_zero_frac = 0.5) {
+  empty <- tibble::tibble(
+    unit = character(), group = character(), reason = character()
+  )
   if (nrow(df) == 0) {
-    return(df)
+    return(list(df = df, dropped = empty, n_cells = 0L))
   }
   # One row per (unit, group, time): the outcome is repeated across draws, and
   # the counts below are about the observed series, not the posterior.
@@ -271,19 +294,37 @@ drop_degenerate_corr_cells <- function(df, max_na_frac = 0.25,
     cells$zero_frac > max_zero_frac ~ "mostly zeros",
     TRUE ~ NA_character_
   )
-  bad <- cells[!is.na(cells$reason), ]
-  if (nrow(bad) == 0) {
-    return(df)
+  bad <- cells[!is.na(cells$reason), c("unit", "group", "reason")]
+  list(
+    df = dplyr::anti_join(df, bad, by = c("unit", "group")),
+    dropped = bad,
+    n_cells = nrow(cells)
+  )
+}
+
+# One or two lines for the figure's caption: the tally by reason, then as many
+# cell names as fit before the list stops being readable.
+dropped_cells_caption <- function(dropped, n_cells, max_named = 8) {
+  if (nrow(dropped) == 0) {
+    return(NULL)
   }
-  labels <- sprintf("%s/%s (%s)", bad$unit, bad$group, bad$reason)
-  cli::cli_warn(c(
-    "Dropping {nrow(bad)} cell{?s} from the unit-correlation check:
-     {.val {labels}}.",
-    i = "Their residuals carry no usable variation, so they would correlate
-         near-perfectly with each other and inflate the observed spectral
-         norm."
-  ))
-  dplyr::anti_join(df, bad[, c("unit", "group")], by = c("unit", "group"))
+  by_reason <- table(dropped$reason)
+  tally <- paste(sprintf("%d %s", as.integer(by_reason), names(by_reason)),
+                 collapse = ", ")
+  labels <- sprintf("%s/%s", dropped$unit, dropped$group)
+  named <- paste(utils::head(labels, max_named), collapse = ", ")
+  if (length(labels) > max_named) {
+    named <- sprintf("%s, and %d more", named, length(labels) - max_named)
+  }
+  lines <- c(
+    sprintf(
+      paste("Dropped %d of %d unit-group cells whose observed series carries",
+            "no usable variation (%s)."),
+      nrow(dropped), n_cells, tally
+    ),
+    paste0(named, ".")
+  )
+  paste(strwrap(lines, width = 110), collapse = "\n")
 }
 
 #' PPC: spectral norm of the cross-unit residual correlation matrix
@@ -327,7 +368,9 @@ countsynth_ppc_unit_corr <- function(draws, max_treat_date = NULL,
   # pred residuals are masked where the observation is missing
   df$pred_residual[is.na(df$obs_residual)] <- NA_real_
 
-  df <- drop_degenerate_corr_cells(df, max_na_frac, max_zero_frac)
+  screened <- drop_degenerate_corr_cells(df, max_na_frac, max_zero_frac)
+  df <- screened$df
+  caption <- dropped_cells_caption(screened$dropped, screened$n_cells)
 
   results <- list()
   for (grp in categories) {
@@ -359,20 +402,28 @@ countsynth_ppc_unit_corr <- function(draws, max_treat_date = NULL,
   }
   if (nrow(stats_df) == 0) {
     return(list(
-      plot = ppc_insufficient_data_plot("Insufficient data for spectral norm computation"),
-      pvals = tibble::tibble(group = character(), pval = numeric())
+      plot = add_plot_caption(
+        ppc_insufficient_data_plot("Insufficient data for spectral norm computation"),
+        caption
+      ),
+      pvals = tibble::tibble(group = character(), pval = numeric()),
+      dropped = screened$dropped
     ))
   }
   pvals <- stats_df |>
     dplyr::group_by(.data$group) |>
     dplyr::summarise(pval = mean(.data$eval_diff < 0), .groups = "drop")
   list(
-    plot = ppc_histogram(
-      stats_df, pvals, "eval_diff",
-      "Difference in Unit Correlations",
-      "Observed - Predicted Spectral Norm", "group"
+    plot = add_plot_caption(
+      ppc_histogram(
+        stats_df, pvals, "eval_diff",
+        "Difference in Unit Correlations",
+        "Observed - Predicted Spectral Norm", "group"
+      ),
+      caption
     ),
-    pvals = pvals
+    pvals = pvals,
+    dropped = screened$dropped
   )
 }
 
@@ -382,8 +433,9 @@ countsynth_ppc_unit_corr <- function(draws, max_treat_date = NULL,
 #' @param checks Subset of `c("abs", "acf", "rmse", "unit_corr")`.
 #' @param acf_lags Integer lags for the ACF check (one figure per lag).
 #' @param max_treat_date Cutoff date for the unit-correlation check.
-#' @return List with `plots` (named list of ggplots) and `pvals` (combined
-#'   tibble with a `check_type` column).
+#' @return List with `plots` (named list of ggplots), `pvals` (combined
+#'   tibble with a `check_type` column) and `unit_corr_dropped` (the cells the
+#'   unit-correlation check screened out, `NULL` when that check did not run).
 #' @export
 countsynth_ppc_plots <- function(draws, checks = c("abs", "acf", "rmse", "unit_corr"),
                             acf_lags = 1, categories = NULL,
@@ -392,6 +444,7 @@ countsynth_ppc_plots <- function(draws, checks = c("abs", "acf", "rmse", "unit_c
   checkmate::assert_subset(checks, c("abs", "acf", "rmse", "unit_corr"))
   plots <- list()
   pvals <- list()
+  unit_corr_dropped <- NULL
   if ("abs" %in% checks) {
     r <- countsynth_ppc_abs(draws, categories, ppc_units, ppc_exclude_units)
     plots$ppc_abs_residual <- r$plot
@@ -419,9 +472,13 @@ countsynth_ppc_plots <- function(draws, checks = c("abs", "acf", "rmse", "unit_c
       ppc_exclude_units = ppc_exclude_units
     )
     plots$ppc_unit_corr <- r$plot
+    unit_corr_dropped <- r$dropped
     if (nrow(r$pvals) > 0) {
       pvals$unit_corr <- dplyr::mutate(r$pvals, check_type = "unit_corr")
     }
   }
-  list(plots = plots, pvals = dplyr::bind_rows(pvals))
+  list(
+    plots = plots, pvals = dplyr::bind_rows(pvals),
+    unit_corr_dropped = unit_corr_dropped
+  )
 }

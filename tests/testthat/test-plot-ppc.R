@@ -108,11 +108,33 @@ make_flat_unit_draws <- function() {
 
 test_that("the unit-correlation check drops flat and mostly-zero cells", {
   draws <- make_flat_unit_draws()
-  expect_warning(res <- countsynth_ppc_unit_corr(draws), "no variation")
+  expect_silent(res <- countsynth_ppc_unit_corr(draws))
   expect_equal(nrow(res$pvals), 1)
   # All five all-zero units and the mostly-zero one are gone, so the observed
   # spectral norm is no longer dominated by -exp(mu) curves.
   expect_gt(res$pvals$pval, 0.05)
+  expect_setequal(res$dropped$unit, c(sprintf("flat%d", 1:5), "sparse1"))
+})
+
+test_that("the dropped cells are reported on the figure, not at the console", {
+  draws <- make_flat_unit_draws()
+  res <- countsynth_ppc_unit_corr(draws)
+  # A console warning scrolls away; the caption stays with the PNG in
+  # model_diagnostics/, which is where the figure is read from.
+  cap <- gsub("\\s+", " ", res$plot$labels$caption)
+  expect_match(cap, "Dropped 6 of 12")
+  expect_match(cap, "5 no variation")
+  expect_match(cap, "1 mostly zeros")
+  expect_match(cap, "flat1/total")
+})
+
+test_that("a clean panel gets no caption", {
+  draws <- make_flat_unit_draws()
+  draws <- draws[startsWith(draws$unit, "busy"), ]
+  class(draws) <- c("countsynth_draws", class(draws))
+  res <- countsynth_ppc_unit_corr(draws)
+  expect_null(res$plot$labels$caption)
+  expect_equal(nrow(res$dropped), 0)
 })
 
 test_that("flat residual columns are what inflate the observed spectral norm", {
@@ -130,10 +152,8 @@ test_that("a mostly-zero cell with some variation is kept at a loose threshold",
   draws <- make_flat_unit_draws()
   draws <- draws[!startsWith(draws$unit, "flat"), ]
   class(draws) <- c("countsynth_draws", class(draws))
-  expect_warning(
-    tight <- countsynth_ppc_unit_corr(draws, max_zero_frac = 0.5),
-    "mostly zeros"
-  )
-  expect_silent(loose <- countsynth_ppc_unit_corr(draws, max_zero_frac = 1))
-  expect_true(is.data.frame(tight$pvals) && is.data.frame(loose$pvals))
+  tight <- countsynth_ppc_unit_corr(draws, max_zero_frac = 0.5)
+  loose <- countsynth_ppc_unit_corr(draws, max_zero_frac = 1)
+  expect_equal(tight$dropped$reason, "mostly zeros")
+  expect_equal(nrow(loose$dropped), 0)
 })

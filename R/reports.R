@@ -270,6 +270,15 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
     write_table_csv(
       ppc$pvals, file.path(ppc_dir, "ppc_pvalues.csv")
     )
+    # The figure's caption names only the first few; the full screen-out list
+    # is written beside the p-values, and written even when it is empty so a
+    # reader can tell "nothing was dropped" from "this run predates the file".
+    if (!is.null(ppc$unit_corr_dropped)) {
+      write_table_csv(
+        ppc$unit_corr_dropped,
+        file.path(ppc_dir, "ppc_unit_corr_dropped.csv")
+      )
+    }
   }
   # Rank-shrinkage diagnostics go beside the PPC figures deliberately: they
   # answer the question ("is this rank adequate?") that a PPC-driven rank
