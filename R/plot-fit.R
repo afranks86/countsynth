@@ -158,6 +158,32 @@ observed_rows <- function(df) {
   dplyr::distinct(df, .data$unit, .data$time, .data$group, .keep_all = TRUE)
 }
 
+# observed_rows() done once, up front, for the reporting path -- where the
+# saving is not the deduplication but what it lets the caller skip. Pooling a
+# reporting group on the full draws frame reduces over (draw x unit x time),
+# the single most expensive thing a report does, to feed figures that never
+# look at a draw; pooling the cells instead costs nothing.
+#
+# mu/mu_treated are collapsed to the log of their posterior mean rate rather
+# than carried from whichever draw came first, because they are not purely
+# decorative here: aggregate_over() fills a suppressed cell with
+# mean(exp(mu_treated)) over that cell, and the fill has to be the number it
+# would have been on the full frame rather than one draw's guess at it.
+observed_cell_frame <- function(df) {
+  cell_key <- intersect(c("unit", "time", "group"), names(df))
+  if (length(cell_key) < 3 || nrow(df) == 0) {
+    return(df)
+  }
+  cid <- vctrs::vec_group_id(df[cell_key])
+  n_cells <- attr(cid, "n")
+  out <- df[match(seq_len(n_cells), cid), ]
+  n_per <- tabulate(cid, n_cells)
+  for (col in intersect(c("mu", "mu_treated"), names(df))) {
+    out[[col]] <- log(group_sum(exp(df[[col]]), cid, n_cells) / n_per)
+  }
+  out
+}
+
 #' Raw outcome rate (or count) for treated vs control units
 #'
 #' @param df A `countsynth_draws` frame or standardized long data frame with

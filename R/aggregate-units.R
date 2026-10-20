@@ -46,26 +46,73 @@ source_units_for_spec <- function(spec, source_df) {
   sources
 }
 
-logsumexp_narm <- function(x) {
-  x <- x[!is.na(x)]
-  if (length(x) == 0) {
-    return(NA_real_)
-  }
-  logsumexp(x)
+# Grouped reductions here have to stay in C. Pooling the group axis keys on
+# (draw, time, unit), so `include_all_groups` over a 10k-draw, 141-unit,
+# 20-period panel asks for 28.6M groups of two rows each: a grouped
+# summarise then calls an R-level log-sum-exp 57M times and carries a group
+# index costing ~92 bytes per group -- 2.6 GB before a single summary is
+# computed, on top of a full copy of the frame. That is what turned a report
+# into a 3.3-hour OOM. rowsum() and order() do the same reductions in one C
+# pass each.
+
+# max() per group, with max()'s own NA semantics: a group holding any NA
+# gives NA. `gid` is never NA, so ordering on (gid, x) sorts NAs last *within*
+# each group's block, leaving each group's maximum -- or its NA -- last.
+group_max <- function(x, gid, ng) {
+  o <- order(gid, x, method = "radix", na.last = TRUE)
+  x[o][cumsum(tabulate(gid, ng))]
+}
+
+# rowsum() answers with a one-column matrix whose rownames are the group ids;
+# unname() keeps those ids from riding along as names on every pooled column.
+group_sum <- function(x, gid, ng) {
+  unname(rowsum(x, gid, reorder = TRUE)[, 1L])
+}
+
+# logsumexp() per group, NAs dropped and an all-NA group giving NA. Shifting
+# by each group's own maximum keeps the exponentials in range exactly as
+# logsumexp() does, and a non-finite maximum passes straight through the same
+# way (all -Inf gives -Inf, any +Inf gives +Inf).
+group_logsumexp <- function(x, gid, ng) {
+  na <- is.na(x)
+  finite_x <- x
+  finite_x[na] <- -Inf
+  m <- group_max(finite_x, gid, ng)
+  shift <- m
+  shift[!is.finite(shift)] <- 0
+  e <- exp(x - shift[gid])
+  e[na] <- 0
+  total <- group_sum(e, gid, ng)
+  n_obs <- group_sum(as.numeric(!na), gid, ng)
+  out <- log(total) + shift
+  out[n_obs == 0] <- NA_real_
+  out
 }
 
 # Collapse `axis` ("unit" or "group") over `sources` into one synthetic row
 # per remaining cell key. Every other key -- draw, time, and the opposite
 # axis -- is preserved, so a spec on one axis never disturbs the other.
 aggregate_over <- function(source_df, axis, new_name, sources) {
-  sub <- source_df[source_df[[axis]] %in% sources, ]
-  if (nrow(sub) == 0) {
+  keep <- source_df[[axis]] %in% sources
+  if (!any(keep)) {
     return(NULL)
   }
   kept_axis <- setdiff(c("unit", "group"), axis)
   group_cols <- intersect(
-    c(".draw", ".chain", ".iteration", "time", kept_axis), names(sub)
+    c(".draw", ".chain", ".iteration", "time", kept_axis), names(source_df)
   )
+  # Only the columns the reduction actually reads. Narrowing matters at
+  # report scale: when every level of the axis is a source (the
+  # `include_all_*` specs), `keep` is all TRUE and this becomes a column
+  # selection that copies no rows at all, where subsetting the frame
+  # duplicated it outright.
+  value_cols <- intersect(
+    c("outcome", "ypred", "denominator", "treatment", "mu", "mu_treated",
+      "outcome_imputed", "start_date", "end_date"),
+    names(source_df)
+  )
+  needed <- unique(c(group_cols, axis, value_cols))
+  sub <- if (all(keep)) source_df[needed] else source_df[keep, needed]
   has <- function(col) col %in% names(sub)
   # A single source row's suppressed/missing count would otherwise NA out
   # the whole summed cell (and everything downstream that sums it), even
@@ -86,12 +133,11 @@ aggregate_over <- function(source_df, axis, new_name, sources) {
     outcome_imputed <- is.na(sub$outcome)
     if (has("mu_treated") && any(outcome_imputed)) {
       cell_key <- intersect(c("unit", "time", "group"), names(sub))
-      fill <- sub |>
-        dplyr::group_by(dplyr::across(dplyr::all_of(cell_key))) |>
-        dplyr::summarise(.fill = mean(exp(.data$mu_treated)), .groups = "drop")
-      sub <- dplyr::left_join(sub, fill, by = cell_key)
-      sub$outcome[outcome_imputed] <- sub$.fill[outcome_imputed]
-      sub$.fill <- NULL
+      cid <- vctrs::vec_group_id(sub[cell_key])
+      n_cells <- attr(cid, "n")
+      fill <- group_sum(exp(sub$mu_treated), cid, n_cells) /
+        tabulate(cid, n_cells)
+      sub$outcome[outcome_imputed] <- fill[cid[outcome_imputed]]
     }
   }
   # OR against any flag already on the frame rather than overwriting it:
@@ -102,19 +148,29 @@ aggregate_over <- function(source_df, axis, new_name, sources) {
   } else {
     FALSE
   }
-  sub$outcome_imputed <- outcome_imputed | prior_imputed
-  agg <- sub |>
-    dplyr::group_by(dplyr::across(dplyr::all_of(group_cols))) |>
-    dplyr::summarise(
-      dplyr::across(
-        dplyr::any_of(c("outcome", "ypred", "denominator")), sum
-      ),
-      dplyr::across(dplyr::any_of("treatment"), max),
-      outcome_imputed = any(.data$outcome_imputed),
-      dplyr::across(dplyr::any_of(c("start_date", "end_date")), dplyr::first),
-      dplyr::across(dplyr::any_of(c("mu", "mu_treated")), logsumexp_narm),
-      .groups = "drop"
-    )
+  imputed <- rep_len(outcome_imputed | prior_imputed, nrow(sub))
+
+  gid <- vctrs::vec_group_id(sub[group_cols])
+  ng <- attr(gid, "n")
+  # vec_group_id() numbers groups by first appearance and rowsum(reorder =
+  # TRUE) returns them in increasing id order, so every column below lands in
+  # the same order as these keys -- the frame's own row order, rather than
+  # the sorted order a grouped summarise would have imposed.
+  first_row <- match(seq_len(ng), gid)
+  agg <- sub[first_row, group_cols]
+  for (col in intersect(c("outcome", "ypred", "denominator"), names(sub))) {
+    agg[[col]] <- group_sum(sub[[col]], gid, ng)
+  }
+  if (has("treatment")) {
+    agg$treatment <- group_max(sub$treatment, gid, ng)
+  }
+  agg$outcome_imputed <- group_sum(as.numeric(imputed), gid, ng) > 0
+  for (col in intersect(c("start_date", "end_date"), names(sub))) {
+    agg[[col]] <- sub[[col]][first_row]
+  }
+  for (col in intersect(c("mu", "mu_treated"), names(sub))) {
+    agg[[col]] <- group_logsumexp(sub[[col]], gid, ng)
+  }
   agg[[axis]] <- new_name
   ordered_cols <- intersect(names(source_df), names(agg))
   extra_cols <- setdiff(names(agg), ordered_cols)

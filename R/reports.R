@@ -55,6 +55,103 @@ ppc_plot_dims <- function(n_facets, ncol,
   )
 }
 
+# Total physical memory, or NA when we cannot tell. It only scales a warning,
+# so not knowing it just means reporting the projected size on its own.
+system_memory_bytes <- function() {
+  val <- tryCatch(
+    {
+      if (identical(Sys.info()[["sysname"]], "Darwin")) {
+        as.numeric(system2("sysctl", c("-n", "hw.memsize"), stdout = TRUE))
+      } else if (file.exists("/proc/meminfo")) {
+        line <- grep(
+          "^MemTotal:", readLines("/proc/meminfo", warn = FALSE),
+          value = TRUE
+        )
+        as.numeric(sub("^MemTotal:[^0-9]*([0-9]+).*$", "\\1", line[1])) * 1024
+      } else {
+        NA_real_
+      }
+    },
+    error = function(e) NA_real_,
+    warning = function(w) NA_real_
+  )
+  if (length(val) != 1L || !is.finite(val)) NA_real_ else val
+}
+
+fmt_gb <- function(x) sprintf("%.1f GB", x / 2^30)
+fmt_rows <- function(x) {
+  if (x >= 1e6) sprintf("%.1fM", x / 1e6) else format(round(x), big.mark = ",")
+}
+
+# Everything the report will hold is known from the cell counts before any of
+# it is built, so say so at second zero. The failure this exists to prevent is
+# the worst one the package has: a report that reduces over tens of millions
+# of rows, runs for hours, gets killed by the OS, and leaves nothing behind to
+# say what it was doing.
+report_size_guard <- function(draws, aggregate_units, aggregate_groups,
+                              budget = NULL) {
+  n_rows <- nrow(draws)
+  if (n_rows == 0 || !".draw" %in% names(draws)) {
+    return(invisible(NULL))
+  }
+  n_groups <- length(attr(draws, "groups") %||% unique(draws$group))
+  n_units <- length(attr(draws, "units") %||% unique(draws$unit))
+  n_times <- length(attr(draws, "times") %||% unique(draws$time))
+  n_draws <- max(draws$.draw)
+  n_unit_specs <- length(aggregate_units %||% list())
+  n_group_specs <- length(aggregate_groups %||% list())
+  # One synthetic unit per unit spec covers every (draw, time, group); one
+  # synthetic group per group spec covers every (draw, time, unit), the
+  # pooled units included, which is why the group axis is the expensive one.
+  extra <- n_unit_specs * n_draws * n_times * n_groups +
+    n_group_specs * n_draws * n_times * (n_units + n_unit_specs)
+  projected <- n_rows + extra
+  sample_n <- min(1000L, n_rows)
+  per_row <- as.numeric(
+    utils::object.size(utils::head(draws, sample_n))
+  ) / sample_n
+  projected_bytes <- projected * per_row
+  # The draws frame stays live while the reporting frame is built beside it,
+  # so the working set is roughly twice what the rows themselves weigh.
+  peak <- 2 * projected_bytes
+  ram <- system_memory_bytes()
+  budget <- budget %||% if (is.na(ram)) Inf else 0.5 * ram
+  if (peak <= budget) {
+    return(invisible(projected))
+  }
+  thin <- ceiling(peak / budget)
+  size_msg <- if (is.na(ram)) {
+    sprintf(
+      "Projected reporting frame: %s rows (~%s), peaking near %s.",
+      fmt_rows(projected), fmt_gb(projected_bytes), fmt_gb(peak)
+    )
+  } else {
+    sprintf(
+      paste(
+        "Projected reporting frame: %s rows (~%s), peaking near %s",
+        "against %s of memory."
+      ),
+      fmt_rows(projected), fmt_gb(projected_bytes), fmt_gb(peak), fmt_gb(ram)
+    )
+  }
+  made_of <- sprintf(
+    "%s draw rows plus %s aggregate rows.", fmt_rows(n_rows), fmt_rows(extra)
+  )
+  thin_msg <- sprintf(
+    "Thin to 1 draw in %d for ~%s rows, or drop the aggregate groups.",
+    thin, fmt_rows(projected / thin)
+  )
+  cli::cli_warn(c(
+    size_msg,
+    i = made_of,
+    i = thin_msg,
+    i = "Thinning is set with {.field mcmc.thinning} and costs little when
+         the chains are autocorrelated; aggregate groups with
+         {.field output.aggregate_groups}."
+  ))
+  invisible(projected)
+}
+
 #' Generate figures and tables from posterior draws
 #'
 #' Port of `reports.generate_reports`. Per-unit figures are nested under
@@ -86,6 +183,10 @@ ppc_plot_dims <- function(n_facets, ncol,
 #'   split off into their own band above the individual units, and the
 #'   `aggregate_groups` as an extra colored series. Set `FALSE` to plot only
 #'   the real units and groups. No effect when both are `NULL`.
+#' @param progress Report progress to the terminal as each stage of the
+#'   report is built. On by default: a report over tens of millions of draw
+#'   rows can run for a long time, and a silent run gives no way to tell a
+#'   slow stage from a stuck one.
 #' @param print_tables Print the by-unit summary table to the terminal.
 #' @param print_target_table Also print the target unit's own table. Its rows
 #'   are the target unit's slice of the by-unit table, so this is off by
@@ -109,13 +210,15 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
                          ppc_exclude_units = NULL, ppc_acf_lags = NULL,
                          ppc_unit_corr_max_time = NULL,
                          fit_gap_per_unit = FALSE,
-                         interval_aggregates = TRUE, print_tables = TRUE,
+                         interval_aggregates = TRUE, progress = TRUE,
+                         print_tables = TRUE,
                          print_target_table = FALSE, html_tables = TRUE,
                          fit = NULL, rate_normalizer = 1000,
                          denominator_label = "denominator",
                          rate_label = NULL,
                          denominator_time_unit = "year",
                          denominator_may_be_affected = TRUE) {
+  checkmate::assert_flag(progress)
   selected <- figures %||% FIGURE_NAMES
   unknown <- setdiff(selected, FIGURE_NAMES)
   if (length(unknown) > 0) {
@@ -135,6 +238,9 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
     dir.create(d, recursive = TRUE, showWarnings = FALSE)
   }
 
+  report_size_guard(draws, aggregate_units, aggregate_groups)
+
+  if (progress) cli::cli_progress_step("Building reporting frame")
   reporting <- if (!is.null(aggregate_units)) {
     add_aggregate_units(draws, aggregate_units)
   } else {
@@ -149,10 +255,16 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
   # see the aggregate units -- each would double-count every unit it covers.
   # It does need the aggregate groups, or the pooled group's own figure
   # directory below would be handed a frame with no rows for it.
+  #
+  # Both it and group_comparison.png read observed columns only, so they work
+  # from the collapsed cell frame: pooling groups on the draws-sized frame
+  # repeated the most expensive reduction in the report to produce a figure
+  # that never looks at a draw (see observed_cell_frame()).
+  observed_cells <- observed_cell_frame(draws)
   raw_rate_source <- if (!is.null(aggregate_groups)) {
-    add_aggregate_groups(draws, aggregate_groups)
+    add_aggregate_groups(observed_cells, aggregate_groups)
   } else {
-    draws
+    observed_cells
   }
 
   # Detect on `reporting`, not `draws`: an aggregate unit exists only in the
@@ -182,10 +294,15 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
     }
   }
 
+  if (progress) cli::cli_progress_step("Summarising posterior draws")
   quantiles <- compute_quantiles(reporting)
 
   # Per-group unit-level figures.
   for (grp in report_groups) {
+    # Closed at the foot of the loop rather than left for the next step to
+    # supersede: cli renders a step's completion line by re-evaluating its
+    # template, and by then `grp` has already moved on to the next group.
+    if (progress) cli::cli_progress_step("Rendering figures for group {grp}")
     grp_dir <- if (length(report_groups) > 1) {
       file.path(figures_dir, grp)
     } else {
@@ -219,9 +336,11 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
         file.path(grp_dir, "raw_rate.png")
       )
     }
+    if (progress) cli::cli_progress_done()
   }
 
   # Cross-group figures.
+  if (progress) cli::cli_progress_step("Rendering cross-group figures")
   if ("interval" %in% selected) {
     # An aggregate unit pools the same draws as the units it covers, so it is
     # shown in its own band rather than ranked among them; `interval_aggregates
@@ -243,7 +362,7 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
   if ("group_comparison" %in% selected) {
     save_plot(
       countsynth_group_comparison_plot(
-        draws,
+        observed_cells,
         rate_multiplier = rate_normalizer,
         denominator_label = denominator_label,
         rate_label = rate_label
@@ -267,6 +386,7 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
     )
   }
   if ("ppc" %in% selected) {
+    if (progress) cli::cli_progress_step("Running posterior predictive checks")
     ppc_dir <- diagnostics_dir
     dir.create(ppc_dir, recursive = TRUE, showWarnings = FALSE)
     ppc_source <- ppc_draws %||% reporting
@@ -336,6 +456,7 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
   }
 
   # Tables: always written, never gated by `figures`.
+  if (progress) cli::cli_progress_step("Writing tables")
   # Returned (and printed) but not written: its rows are the target unit's
   # slice of summary_table_by_unit.csv below.
   summary_tbl <- countsynth_summary_table(
@@ -371,6 +492,8 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
       denominator_may_be_affected = denominator_may_be_affected
     )
   }
+
+  if (progress) cli::cli_progress_done()
 
   if (print_tables && nrow(by_unit_tbl) > 0) {
     # One formatted table, not two: the by-unit table is the target table plus

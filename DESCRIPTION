@@ -30,6 +30,7 @@ Imports:
     tidyr,
     tools,
     utils,
+    vctrs,
     withr,
     yaml
 Suggests:

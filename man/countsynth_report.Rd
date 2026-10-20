@@ -19,6 +19,7 @@ countsynth_report(
   ppc_unit_corr_max_time = NULL,
   fit_gap_per_unit = FALSE,
   interval_aggregates = TRUE,
+  progress = TRUE,
   print_tables = TRUE,
   print_target_table = FALSE,
   html_tables = TRUE,
@@ -65,6 +66,11 @@ the stage-1 PPC frame).}
 split off into their own band above the individual units, and the
 \code{aggregate_groups} as an extra colored series. Set \code{FALSE} to plot only
 the real units and groups. No effect when both are \code{NULL}.}
+
+\item{progress}{Report progress to the terminal as each stage of the
+report is built. On by default: a report over tens of millions of draw
+rows can run for a long time, and a silent run gives no way to tell a
+slow stage from a stuck one.}
 
 \item{print_tables}{Print the by-unit summary table to the terminal.}
 

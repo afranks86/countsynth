@@ -61,7 +61,7 @@ test_that("terminal output is one table by default, two on request", {
     msgs <- character()
     out <- utils::capture.output(withCallingHandlers(
       countsynth_report(draws, withr::local_tempdir(), figures = character(),
-                   html_tables = FALSE, ...),
+                   html_tables = FALSE, progress = FALSE, ...),
       message = function(m) {
         msgs <<- c(msgs, conditionMessage(m))
         invokeRestart("muffleMessage")
@@ -78,6 +78,28 @@ test_that("terminal output is one table by default, two on request", {
   expect_match(both_out, "Post-treatment effect by unit")
 
   expect_equal(trimws(quiet(print_tables = FALSE)), "")
+})
+
+test_that("progress steps report each stage, and only when asked", {
+  draws <- make_draws_frame()
+  run <- function(...) {
+    msgs <- character()
+    utils::capture.output(withCallingHandlers(
+      countsynth_report(draws, withr::local_tempdir(), figures = character(),
+                   html_tables = FALSE, print_tables = FALSE, ...),
+      message = function(m) {
+        msgs <<- c(msgs, conditionMessage(m))
+        invokeRestart("muffleMessage")
+      }
+    ))
+    paste(msgs, collapse = "\n")
+  }
+  # On by default: the failure this exists to prevent is a report that runs
+  # for hours and dies with nothing written and nothing said.
+  default_out <- run()
+  expect_match(default_out, "Building reporting frame")
+  expect_match(default_out, "Writing tables")
+  expect_equal(trimws(run(progress = FALSE)), "")
 })
 
 test_that("html_tables flows through the config layers", {
