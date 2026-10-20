@@ -165,6 +165,7 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
           groups = out$report_groups,
           figures = out$figures,
           aggregate_units = out$aggregate_units,
+          aggregate_groups = out$aggregate_groups,
           ppc_draws = ppc_draws,
           ppc_units = out$ppc_units,
           ppc_exclude_units = out$ppc_exclude_units,

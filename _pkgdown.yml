@@ -21,6 +21,7 @@ reference:
   - gamma_shape_from_pct
   - countsynth_time_aggregation
   - countsynth_aggregate_unit
+  - countsynth_aggregate_group
 - title: Data
   contents:
   - countsynth_data
@@ -38,6 +39,7 @@ reference:
   - countsynth_draws
   - countsynth_te_draws
   - add_aggregate_units
+  - add_aggregate_groups
   - compute_quantiles
   - auto_detect_target
 - title: Diagnostics

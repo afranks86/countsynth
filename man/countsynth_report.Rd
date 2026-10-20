@@ -11,6 +11,7 @@ countsynth_report(
   groups = NULL,
   figures = NULL,
   aggregate_units = NULL,
+  aggregate_groups = NULL,
   ppc_draws = NULL,
   ppc_units = NULL,
   ppc_exclude_units = NULL,
@@ -44,6 +45,14 @@ tables only.}
 
 \item{aggregate_units}{List of \code{\link[=countsynth_aggregate_unit]{countsynth_aggregate_unit()}} specs.}
 
+\item{aggregate_groups}{List of \code{\link[=countsynth_aggregate_group]{countsynth_aggregate_group()}} specs.
+Applied after \code{aggregate_units}, so a pooled group also covers the
+pooled units. The pooled group flows into every table and gets its own
+\verb{figures/<group>/} directory; it enters \code{interval.png} only when
+\code{interval_aggregates} is \code{TRUE}, and never enters
+\code{group_comparison.png}, which exists to contrast the fitted groups
+against each other.}
+
 \item{ppc_draws}{Alternative draws frame for the PPC suite only (cut mode:
 the stage-1 PPC frame).}
 
@@ -53,8 +62,9 @@ the stage-1 PPC frame).}
 (restricted to the \code{"total"} group).}
 
 \item{interval_aggregates}{Include the \code{aggregate_units} in \code{interval.png},
-split off into their own band above the individual units. Set \code{FALSE} to
-plot only the real units. No effect when \code{aggregate_units} is \code{NULL}.}
+split off into their own band above the individual units, and the
+\code{aggregate_groups} as an extra colored series. Set \code{FALSE} to plot only
+the real units and groups. No effect when both are \code{NULL}.}
 
 \item{print_tables}{Print the by-unit summary table to the terminal.}
 

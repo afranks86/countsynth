@@ -25,3 +25,6 @@ The names of the units actually created are recorded in an
 a pooled unit from a real one -- they are otherwise ordinary rows. Read it
 with \code{\link[=aggregate_unit_names]{aggregate_unit_names()}}.
 }
+\seealso{
+\code{\link[=add_aggregate_groups]{add_aggregate_groups()}} to pool the other axis of the cell.
+}

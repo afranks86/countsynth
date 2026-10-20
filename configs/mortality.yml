@@ -74,6 +74,9 @@ output:
   # aggregate_units:             # synthetic reporting-only units
   #   - unit: "All treated"
   #     include_treated_units: true   # or include_all_units / include_units
+  # aggregate_groups:            # synthetic reporting-only groups
+  #   - group: "All causes"            # needs 2+ groups to do anything
+  #     include_all_groups: true       # or include_groups / exclude_groups
 
 # Only read when model.inference_mode is "cut":
 cut:

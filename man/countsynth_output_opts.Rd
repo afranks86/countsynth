@@ -16,6 +16,7 @@ countsynth_output_opts(
   print_target_table = FALSE,
   html_tables = TRUE,
   aggregate_units = NULL,
+  aggregate_groups = NULL,
   ppc_units = NULL,
   ppc_exclude_units = NULL,
   ppc_acf_lags = NULL,
@@ -50,6 +51,14 @@ one; its rows are already in the by-unit table, so it defaults to off.}
 \item{html_tables}{Also write the \code{gt} HTML summary tables.}
 
 \item{aggregate_units}{List of \code{\link[=countsynth_aggregate_unit]{countsynth_aggregate_unit()}} specs.}
+
+\item{aggregate_groups}{List of \code{\link[=countsynth_aggregate_group]{countsynth_aggregate_group()}} specs:
+reporting-only groups pooling two or more of the fitted groups, so the
+tables and per-group figures also carry the implied total behind a
+by-race or by-age split. Needs at least two groups to do anything; a
+spec that resolves to fewer is skipped with a warning. Like the pooled
+units, they appear in \code{interval.png} only when \code{interval_aggregates} is
+\code{TRUE} -- a pooled group shares every draw with the groups it covers.}
 
 \item{ppc_units, ppc_exclude_units}{Unit filters for the PPC suite.}
 

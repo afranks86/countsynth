@@ -678,6 +678,58 @@ countsynth_aggregate_unit <- function(unit, include_treated_units = FALSE,
   )
 }
 
+#' One synthetic reporting-only aggregate group
+#'
+#' The group-axis counterpart to [countsynth_aggregate_unit()]: pools two or
+#' more of the fitted groups into a synthetic one so the report can show the
+#' implied total behind a by-race, by-age or by-cause split. Reporting only --
+#' it never enters the fit (contrast `total_from` / `total_all` in the data
+#' schema, which fit `"total"` as an additional modeled group).
+#'
+#' Exactly one of `include_all_groups` or `include_groups` must select the
+#' member groups. There is no treated-group selector: treatment varies over
+#' units and time, not over groups.
+#'
+#' @param group Name of the synthetic group.
+#' @param include_all_groups Pool every group present in the draws.
+#' @param include_groups Explicit member group names.
+#' @param exclude_groups Groups removed after selection.
+#' @param strict Error (instead of warn) when a listed group is absent.
+#' @param overwrite Replace an existing group of the same name.
+#' @export
+countsynth_aggregate_group <- function(group, include_all_groups = FALSE,
+                                       include_groups = NULL,
+                                       exclude_groups = NULL,
+                                       strict = FALSE, overwrite = FALSE) {
+  checkmate::assert_string(group, min.chars = 1)
+  checkmate::assert_flag(include_all_groups)
+  checkmate::assert_character(
+    include_groups,
+    min.len = 1, any.missing = FALSE, null.ok = TRUE
+  )
+  checkmate::assert_character(exclude_groups, any.missing = FALSE, null.ok = TRUE)
+  checkmate::assert_flag(strict)
+  checkmate::assert_flag(overwrite)
+  active <- c(
+    include_all_groups = include_all_groups,
+    include_groups = !is.null(include_groups)
+  )
+  if (sum(active) != 1) {
+    cli::cli_abort(
+      "aggregate group {.val {group}} must have exactly one include selector;
+       got {.val {names(active)[active]}}."
+    )
+  }
+  new_countsynth_class(
+    list(
+      group = group, include_all_groups = include_all_groups,
+      include_groups = include_groups, exclude_groups = exclude_groups,
+      strict = strict, overwrite = overwrite
+    ),
+    "countsynth_aggregate_group"
+  )
+}
+
 normalize_figures <- function(v) {
   if (is.logical(v) && length(v) == 1 && !is.na(v)) {
     return(if (v) sort(FIGURE_NAMES) else character())
@@ -717,6 +769,13 @@ normalize_figures <- function(v) {
 #'   one; its rows are already in the by-unit table, so it defaults to off.
 #' @param html_tables Also write the `gt` HTML summary tables.
 #' @param aggregate_units List of [countsynth_aggregate_unit()] specs.
+#' @param aggregate_groups List of [countsynth_aggregate_group()] specs:
+#'   reporting-only groups pooling two or more of the fitted groups, so the
+#'   tables and per-group figures also carry the implied total behind a
+#'   by-race or by-age split. Needs at least two groups to do anything; a
+#'   spec that resolves to fewer is skipped with a warning. Like the pooled
+#'   units, they appear in `interval.png` only when `interval_aggregates` is
+#'   `TRUE` -- a pooled group shares every draw with the groups it covers.
 #' @param ppc_units,ppc_exclude_units Unit filters for the PPC suite.
 #' @param ppc_acf_lags Integer lags for the ACF check (default 1).
 #' @param ppc_unit_corr_max_time Cutoff date for the unit-correlation check.
@@ -770,7 +829,8 @@ countsynth_output_opts <- function(figures = FALSE, clean = FALSE,
                               interval_aggregates = TRUE,
                               print_tables = TRUE, print_target_table = FALSE,
                               html_tables = TRUE,
-                              aggregate_units = NULL, ppc_units = NULL,
+                              aggregate_units = NULL,
+                              aggregate_groups = NULL, ppc_units = NULL,
                               ppc_exclude_units = NULL, ppc_acf_lags = NULL,
                               ppc_unit_corr_max_time = NULL,
                               draws_format = "csv",
@@ -805,6 +865,14 @@ countsynth_output_opts <- function(figures = FALSE, clean = FALSE,
     aggregate_units,
     types = "countsynth_aggregate_unit", null.ok = TRUE
   )
+  aggregate_groups <- coerce_countsynth_list(
+    aggregate_groups, "countsynth_aggregate_group", "countsynth_aggregate_group",
+    "aggregate_groups"
+  )
+  checkmate::assert_list(
+    aggregate_groups,
+    types = "countsynth_aggregate_group", null.ok = TRUE
+  )
   checkmate::assert_character(ppc_units, any.missing = FALSE, null.ok = TRUE)
   checkmate::assert_character(
     ppc_exclude_units,
@@ -823,7 +891,8 @@ countsynth_output_opts <- function(figures = FALSE, clean = FALSE,
       fit_gap_per_unit = fit_gap_per_unit,
       interval_aggregates = interval_aggregates, print_tables = print_tables,
       print_target_table = print_target_table, html_tables = html_tables,
-      aggregate_units = aggregate_units, ppc_units = ppc_units,
+      aggregate_units = aggregate_units,
+      aggregate_groups = aggregate_groups, ppc_units = ppc_units,
       ppc_exclude_units = ppc_exclude_units,
       ppc_acf_lags = if (is.null(ppc_acf_lags)) NULL else as.integer(ppc_acf_lags),
       ppc_unit_corr_max_time = ppc_unit_corr_max_time,

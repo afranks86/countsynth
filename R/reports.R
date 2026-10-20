@@ -69,6 +69,13 @@ ppc_plot_dims <- function(n_facets, ncol,
 #'   [countsynth_output_opts()]); `NULL` renders everything, `character()` renders
 #'   tables only.
 #' @param aggregate_units List of [countsynth_aggregate_unit()] specs.
+#' @param aggregate_groups List of [countsynth_aggregate_group()] specs.
+#'   Applied after `aggregate_units`, so a pooled group also covers the
+#'   pooled units. The pooled group flows into every table and gets its own
+#'   `figures/<group>/` directory; it enters `interval.png` only when
+#'   `interval_aggregates` is `TRUE`, and never enters
+#'   `group_comparison.png`, which exists to contrast the fitted groups
+#'   against each other.
 #' @param ppc_draws Alternative draws frame for the PPC suite only (cut mode:
 #'   the stage-1 PPC frame).
 #' @param ppc_units,ppc_exclude_units,ppc_acf_lags,ppc_unit_corr_max_time
@@ -76,8 +83,9 @@ ppc_plot_dims <- function(n_facets, ncol,
 #' @param fit_gap_per_unit Also render fit/gap for every treated unit
 #'   (restricted to the `"total"` group).
 #' @param interval_aggregates Include the `aggregate_units` in `interval.png`,
-#'   split off into their own band above the individual units. Set `FALSE` to
-#'   plot only the real units. No effect when `aggregate_units` is `NULL`.
+#'   split off into their own band above the individual units, and the
+#'   `aggregate_groups` as an extra colored series. Set `FALSE` to plot only
+#'   the real units and groups. No effect when both are `NULL`.
 #' @param print_tables Print the by-unit summary table to the terminal.
 #' @param print_target_table Also print the target unit's own table. Its rows
 #'   are the target unit's slice of the by-unit table, so this is off by
@@ -96,6 +104,7 @@ ppc_plot_dims <- function(n_facets, ncol,
 #' @export
 countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NULL,
                          figures = NULL, aggregate_units = NULL,
+                         aggregate_groups = NULL,
                          ppc_draws = NULL, ppc_units = NULL,
                          ppc_exclude_units = NULL, ppc_acf_lags = NULL,
                          ppc_unit_corr_max_time = NULL,
@@ -128,6 +137,20 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
 
   reporting <- if (!is.null(aggregate_units)) {
     add_aggregate_units(draws, aggregate_units)
+  } else {
+    draws
+  }
+  # Groups second, over a frame that already holds the pooled units, so the
+  # pooled group covers them too -- the "all treated units, all groups" cell.
+  if (!is.null(aggregate_groups)) {
+    reporting <- add_aggregate_groups(reporting, aggregate_groups)
+  }
+  # raw_rate.png pools treated vs control across units itself, so it must not
+  # see the aggregate units -- each would double-count every unit it covers.
+  # It does need the aggregate groups, or the pooled group's own figure
+  # directory below would be handed a frame with no rows for it.
+  raw_rate_source <- if (!is.null(aggregate_groups)) {
+    add_aggregate_groups(draws, aggregate_groups)
   } else {
     draws
   }
@@ -187,7 +210,7 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
     if ("raw_rate" %in% selected) {
       save_plot(
         countsynth_raw_rate_plot(
-          draws,
+          raw_rate_source,
           group = grp, separate_unit = target_unit,
           rate_multiplier = rate_normalizer,
           denominator_label = denominator_label,
@@ -247,8 +270,13 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
     ppc_dir <- diagnostics_dir
     dir.create(ppc_dir, recursive = TRUE, showWarnings = FALSE)
     ppc_source <- ppc_draws %||% reporting
-    if (!is.null(ppc_draws) && !is.null(aggregate_units)) {
-      ppc_source <- add_aggregate_units(ppc_draws, aggregate_units)
+    if (!is.null(ppc_draws)) {
+      if (!is.null(aggregate_units)) {
+        ppc_source <- add_aggregate_units(ppc_source, aggregate_units)
+      }
+      if (!is.null(aggregate_groups)) {
+        ppc_source <- add_aggregate_groups(ppc_source, aggregate_groups)
+      }
     }
     ppc <- countsynth_ppc_plots(
       ppc_source,

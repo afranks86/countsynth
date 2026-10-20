@@ -250,7 +250,8 @@ parse_yaml_output <- function(x, path = "output") {
     c("figures", "clean", "save_traces", "target_unit", "report_groups",
       "fit_gap_per_unit", "interval_aggregates",
       "print_tables", "print_target_table", "html_tables",
-      "aggregate_units", "ppc_units", "ppc_exclude_units", "ppc_acf_lags",
+      "aggregate_units", "aggregate_groups",
+      "ppc_units", "ppc_exclude_units", "ppc_acf_lags",
       "ppc_unit_corr_max_time", "draws_format", "rate_normalizer",
       "denominator_label", "denominator_time_unit", "rate_label",
       "denominator_may_be_affected"),
@@ -288,6 +289,28 @@ parse_yaml_output <- function(x, path = "output") {
       )
     })
   }
+  aggregate_groups <- NULL
+  if (!is.null(x$aggregate_groups)) {
+    aggregate_groups <- lapply(seq_along(x$aggregate_groups), function(i) {
+      a <- x$aggregate_groups[[i]]
+      apath <- glue::glue("{path}.aggregate_groups[{i}]")
+      check_known_keys(
+        a,
+        c("group", "include_all_groups", "include_groups", "exclude_groups",
+          "strict", "overwrite"),
+        apath
+      )
+      countsynth_aggregate_group(
+        group = a$group,
+        include_all_groups =
+          yaml_flag(a$include_all_groups, glue::glue("{apath}.include_all_groups"), FALSE),
+        include_groups = yaml_chr(a$include_groups),
+        exclude_groups = yaml_chr(a$exclude_groups),
+        strict = yaml_flag(a$strict, glue::glue("{apath}.strict"), FALSE),
+        overwrite = yaml_flag(a$overwrite, glue::glue("{apath}.overwrite"), FALSE)
+      )
+    })
+  }
   countsynth_output_opts(
     figures = figures,
     clean = yaml_flag(x$clean, glue::glue("{path}.clean"), FALSE),
@@ -303,6 +326,7 @@ parse_yaml_output <- function(x, path = "output") {
       yaml_flag(x$print_target_table, glue::glue("{path}.print_target_table"), FALSE),
     html_tables = yaml_flag(x$html_tables, glue::glue("{path}.html_tables"), TRUE),
     aggregate_units = aggregate_units,
+    aggregate_groups = aggregate_groups,
     ppc_units = yaml_chr(x$ppc_units),
     ppc_exclude_units = yaml_chr(x$ppc_exclude_units),
     ppc_acf_lags =

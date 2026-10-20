@@ -331,10 +331,13 @@ output:
   # ppc_exclude_units: [Alaska]
   # ppc_acf_lags: [1]
   # ppc_unit_corr_max_time: "2022-01-01"
-  interval_aggregates: true      # show aggregate units in interval.png
+  interval_aggregates: true      # show aggregate units/groups in interval.png
   # aggregate_units:             # synthetic reporting-only units
   #   - unit: "All treated"
   #     include_treated_units: true   # or include_all_units / include_units
+  # aggregate_groups:            # synthetic reporting-only groups
+  #   - group: "All races"             # needs 2+ groups to do anything
+  #     include_all_groups: true       # or include_groups / exclude_groups
 
   # Optional: covariate model for the treatment effect (see the
   # "Treatment-effect covariates" vignette). Omit for the default
@@ -663,6 +666,37 @@ Aggregate units also appear in `interval.png`, in their own band above the
 individual units — they pool the same draws as the units they cover, so
 ranking them together would read as a peer comparison when it is not. Set
 `interval_aggregates: false` to plot only the real units.
+
+**Aggregate groups.** `aggregate_groups` is the same idea on the other axis of
+the cell: for a model fit by race, age or cause, it pools two or more of those
+groups into one reporting-only group so the tables and figures also carry the
+implied total. It needs at least two groups — a spec resolving to fewer is
+skipped with a warning.
+
+```yaml
+output:
+  aggregate_groups:
+    - group: "All races"
+      include_all_groups: true
+```
+
+This is not the same as adding `total` to a model type's `groups` via
+`total_from` / `total_all`. That fits the total as an *additional modeled
+group*: it re-enters the likelihood, double-counts the same events and
+consumes a factor dimension. An aggregate group never touches the fit — it
+pools the posterior that is already there.
+
+The pooled effect is `sum(exp(mu_treated)) / sum(exp(mu))` over the member
+groups: the total weighted by each group's own exposure, not the average of
+the per-group percent changes, so a large group moves it more than a small
+one. Member groups therefore need a shared denominator definition for the
+summed exposure to mean anything. Specs apply after `aggregate_units`, so the
+pooled group also covers the pooled units — the "all treated states, all
+races" cell. The pooled group lands in every table and gets its own
+`figures/<group>/` directory; it enters `interval.png` as an extra colored
+series only when `interval_aggregates` is `true`, and never enters
+`group_comparison.png`, which exists to contrast the fitted groups against
+each other.
 
 **Tables.** Every run writes `summary_table_by_unit.csv` (display-formatted:
 counts, rates per `output.rate_normalizer` units of exposure (`denominator ×
