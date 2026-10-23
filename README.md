@@ -313,7 +313,9 @@ output:
                                  # `none` when the denominator is itself a
                                  # per-period flow (births DURING each
                                  # quarter) rather than a level standing
-                                 # through it (population).
+                                 # through it (population). Also sets time
+                                 # aggregation: `none` sums the denominator
+                                 # within a block, anything else averages it.
   # rate_label: "deaths per 10,000 births"
                                  # Optional. Replaces the composed "Rate per
                                  # 10,000 births" wherever the rate is
@@ -599,8 +601,12 @@ unknown" or "not collected", set it to `false` — those cells are then simply
 dropped from the likelihood.
 
 **Time filtering and aggregation.** `end_date` is exclusive. Aggregation sums
-counts, averages denominators, and takes the max of the treatment indicator
-within each period — so a period that is partly exposed counts as exposed.
+counts and takes the max of the treatment indicator within each period — so a
+period that is partly exposed counts as exposed. Denominators follow
+`output.denominator_time_unit`: a level standing through the period
+(population, with `year`/`month`/...) is averaged, and a per-period flow
+(births, with `none`) is summed like the counts, so a quarterly
+deaths-per-birth rate is the quarter's deaths over the quarter's births.
 Choose the period to balance signal and length: coarser periods mean less
 noise per cell but fewer time points for the factorization to work with.
 

@@ -226,6 +226,12 @@ countsynth_schema <- function(unit_col, time_col, treatment_col,
 #'   `n_periods` points is kept (and warned about); its shorter exposure is
 #'   carried in `start_date`/`end_date`, so exposure-weighted rates stay
 #'   correct.
+#'
+#' Within a block, counts are summed and the treatment indicator is max'd, so
+#' a partly exposed block counts as exposed. The denominator is averaged when
+#' it is a level standing through the period (population), and summed when
+#' it is a per-period flow (births during the period). Which one is set by
+#' `denominator_time_unit` in [countsynth_output_opts()]: `"none"` marks a flow.
 #' @export
 countsynth_time_aggregation <- function(enabled = FALSE, period = NULL,
                                    n_periods = NULL) {
@@ -806,7 +812,9 @@ normalize_figures <- function(v) {
 #'   numbers. Use `"none"` when the denominator is itself a per-period flow
 #'   (births *during* each quarter) rather than a level standing through the
 #'   period (population), since time-weighting a flow double-counts the
-#'   period length.
+#'   period length. The same setting decides how [countsynth_time_aggregation()]
+#'   combines the denominator within a block: `"none"` sums it, like the
+#'   counts, and every other unit averages it.
 #' @param denominator_may_be_affected The model treats the denominator as a
 #'   fixed, treatment-unaffected exposure: `mu_ctrl` bakes in
 #'   `log(denominator)` as a constant offset, so "Expected"/"Pct Change" are

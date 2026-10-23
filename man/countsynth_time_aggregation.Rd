@@ -16,7 +16,13 @@ countsynth_time_aggregation(enabled = FALSE, period = NULL, n_periods = NULL)
 Mutually exclusive with \code{period}. A trailing block with fewer than
 \code{n_periods} points is kept (and warned about); its shorter exposure is
 carried in \code{start_date}/\code{end_date}, so exposure-weighted rates stay
-correct.}
+correct.
+
+Within a block, counts are summed and the treatment indicator is max'd, so
+a partly exposed block counts as exposed. The denominator is averaged when
+it is a level standing through the period (population), and summed when
+it is a per-period flow (births during the period). Which one is set by
+\code{denominator_time_unit} in \code{\link[=countsynth_output_opts]{countsynth_output_opts()}}: \code{"none"} marks a flow.}
 }
 \description{
 Two ways to coarsen the time axis, one of which must be chosen when

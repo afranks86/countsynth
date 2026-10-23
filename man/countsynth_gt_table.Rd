@@ -57,7 +57,9 @@ rates are counts per \code{denominator * time}, so changing it changes the
 numbers. Use \code{"none"} when the denominator is itself a per-period flow
 (births \emph{during} each quarter) rather than a level standing through the
 period (population), since time-weighting a flow double-counts the
-period length.}
+period length. The same setting decides how \code{\link[=countsynth_time_aggregation]{countsynth_time_aggregation()}}
+combines the denominator within a block: \code{"none"} sums it, like the
+counts, and every other unit averages it.}
 
 \item{denominator_may_be_affected}{The model treats the denominator as a
 fixed, treatment-unaffected exposure: \code{mu_ctrl} bakes in

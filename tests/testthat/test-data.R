@@ -296,6 +296,31 @@ test_that("temporal aggregation sums outcomes, maxes treatment, means denominato
   )
 })
 
+test_that("a flow denominator sums under temporal aggregation", {
+  # births as the denominator of an infant mortality rate: averaging them
+  # over a quarter while summing the deaths tripled every rate.
+  wide <- make_wide_df()
+  types <- list(both = countsynth_type(groups = c("g1", "g2"), ranks_to_test = 2))
+  raw <- make_test_data()
+  q1 <- raw[raw$unit == "A" & raw$group == "g1" &
+    raw$time < as.Date("2020-04-01"), ]
+  for (period in c("quarterly", "n_periods")) {
+    agg <- if (period == "quarterly") {
+      countsynth_time_aggregation(enabled = TRUE, period = "quarterly")
+    } else {
+      countsynth_time_aggregation(enabled = TRUE, n_periods = 3)
+    }
+    cfg <- wide_config(
+      types,
+      time_aggregation = agg,
+      output = countsynth_output_opts(denominator_time_unit = "none")
+    )
+    dat <- suppressWarnings(countsynth_data(cfg, df = wide))
+    expect_equal(dat$Y[1, 1, 1], sum(q1$outcome))
+    expect_equal(dat$denominators[1, 1, 1], sum(q1$denominator) / 1e4)
+  }
+})
+
 test_that("no denominator means denominator 1 everywhere, aggregation included", {
   # Regression: temporal aggregation used to fabricate a literal denominator
   # of 1 for a denominator-less outcome, which then got divided by

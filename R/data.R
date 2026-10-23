@@ -247,16 +247,22 @@ wide_to_long <- function(df, schema, outcomes, groups, total_from_labels) {
 }
 
 # Cell-level aggregation rule, shared by both binning strategies: counts sum,
-# denominators average (they are stocks, not flows), and treatment is max'd so
-# a partly exposed block counts as exposed.
-summarise_blocks <- function(df, block_cols) {
+# and treatment is max'd so a partly exposed block counts as exposed. The
+# denominator follows what it measures. A stock (population standing through
+# the period) averages, and reporting turns it into person-time by weighting
+# with the block's length. A flow (births *during* the period) sums, exactly
+# as the counts do: averaging it instead left a quarterly deaths-per-birth
+# rate at 3x its true value, since the deaths were summed over three months
+# against one month's births.
+summarise_blocks <- function(df, block_cols, denominator_flow = FALSE) {
   has_denom <- "denominator" %in% names(df)
+  combine_denom <- if (denominator_flow) sum else mean
   out <- df |>
     dplyr::group_by(dplyr::across(dplyr::all_of(block_cols))) |>
     dplyr::summarise(
       outcome = sum(.data$outcome),
       treatment = max(.data$treatment),
-      denominator = if (has_denom) mean(.data$denominator) else NA_real_,
+      denominator = if (has_denom) combine_denom(.data$denominator) else NA_real_,
       .groups = "drop"
     )
   # "No denominator" means every cell behaves as if denominator == 1 (see
@@ -273,7 +279,7 @@ summarise_blocks <- function(df, block_cols) {
 
 # Calendar binning: bins land on calendar boundaries regardless of when the
 # panel starts. Assumes monthly-or-finer input, since it bins on year+month.
-aggregate_calendar <- function(df, period) {
+aggregate_calendar <- function(df, period, denominator_flow = FALSE) {
   months_per_period <- switch(period,
     monthly = 1L, bimonthly = 2L, quarterly = 3L, yearly = 12L,
     cli::cli_abort(
@@ -289,7 +295,9 @@ aggregate_calendar <- function(df, period) {
     (month - 1L) %/% months_per_period + 1L
   }
 
-  df_agg <- summarise_blocks(df, c("unit", ".year", ".period", "group"))
+  df_agg <- summarise_blocks(
+    df, c("unit", ".year", ".period", "group"), denominator_flow
+  )
 
   first_month <- (df_agg$.period - 1L) * months_per_period + 1L
   df_agg$time <- as.Date(sprintf("%d-%02d-01", df_agg$.year, first_month))
@@ -305,7 +313,7 @@ aggregate_calendar <- function(df, period) {
 # panel's native resolution is. Blocks are cut from the panel's sorted
 # distinct times (not per unit), so every unit lands in the same blocks even
 # when some unit is missing a period.
-aggregate_n_periods <- function(df, n) {
+aggregate_n_periods <- function(df, n, denominator_flow = FALSE) {
   times <- sort(unique(df$time))
   n_blocks <- ceiling(length(times) / n)
   remainder <- length(times) %% n
@@ -327,7 +335,7 @@ aggregate_n_periods <- function(df, n) {
   )
   df$.block <- (match(df$time, times) - 1L) %/% n + 1L
 
-  df_agg <- summarise_blocks(df, c("unit", ".block", "group"))
+  df_agg <- summarise_blocks(df, c("unit", ".block", "group"), denominator_flow)
   is_date <- inherits(times, "Date")
   last_idx <- pmin(seq_len(n_blocks) * n, nt)
   bounds <- data.frame(
@@ -348,11 +356,11 @@ aggregate_n_periods <- function(df, n) {
   dplyr::arrange(df_agg, .data$unit, .data$time, .data$group)
 }
 
-aggregate_temporal <- function(df, spec) {
+aggregate_temporal <- function(df, spec, denominator_flow = FALSE) {
   if (!is.null(spec$n_periods)) {
-    aggregate_n_periods(df, spec$n_periods)
+    aggregate_n_periods(df, spec$n_periods, denominator_flow)
   } else {
-    aggregate_calendar(df, spec$period)
+    aggregate_calendar(df, spec$period, denominator_flow)
   }
 }
 
@@ -436,7 +444,14 @@ countsynth_data <- function(config, type = NULL, df = NULL) {
   validate_denominators(df_long, outcomes)
 
   if (config$time_aggregation$enabled) {
-    df_long <- aggregate_temporal(df_long, config$time_aggregation)
+    # `denominator_time_unit: none` is how a config says its denominator is a
+    # per-period flow rather than a standing level (see
+    # countsynth_output_opts()), and that one setting decides both how the
+    # denominator is weighted in reporting and how it combines here.
+    df_long <- aggregate_temporal(
+      df_long, config$time_aggregation,
+      denominator_flow = identical(config$output$denominator_time_unit, "none")
+    )
   }
 
   arrays <- build_model_arrays(
