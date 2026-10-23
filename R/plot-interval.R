@@ -107,13 +107,11 @@ countsynth_interval_plot <- function(draws, units = NULL, categories = NULL,
     any.missing = FALSE, null.ok = TRUE
   )
   separate_units <- separate_units %||% aggregate_unit_names(draws)
-  df <- draws
+  # A pooled unit's post-treatment rows are its members' own exposed cells,
+  # not its own calendar-time rows -- see post_treatment_rows().
+  df <- post_treatment_rows(draws, units)
   if (!is.null(categories)) {
     df <- df[df$group %in% categories, ]
-  }
-  df <- df[!is.na(df$treatment) & df$treatment == 1, ]
-  if (!is.null(units)) {
-    df <- df[df$unit %in% units, ]
   }
   if (nrow(df) == 0) {
     cli::cli_abort("No post-treatment rows to plot.")

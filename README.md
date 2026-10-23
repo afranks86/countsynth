@@ -661,6 +661,15 @@ per-unit figures. For a summary across treated units, add an
 reporting-only synthetic units, computed from draws after fitting, so they do
 not change the model.
 
+A pooled unit respects staggered adoption. Its effect — every column of the
+summary tables, `post_treatment_summary.csv`, and its row in `interval.png` —
+sums each member only over the periods that member is itself exposed, so a
+state still waiting on its own start date adds nothing to the counterfactual
+or the exposure. (Counting every member from the first member's start would
+leave the count difference unchanged but pull every percent change and rate
+difference toward zero.) Its fit and gap figures still draw the calendar-time
+total over every member, with the dashed line at the first member's exposure.
+
 Left unset, `target_unit` is auto-detected: **a configured aggregate unit wins
 when there is one**, on the reasoning that if you defined a pooled unit, the
 pooled effect is the headline. Failing that, it falls back to the treated unit

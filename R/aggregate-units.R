@@ -12,6 +12,12 @@
 #
 # The two commute (log-sum-exp is associative), so applying both yields a
 # well-defined cross cell: the pooled group of the pooled unit.
+#
+# A pooled unit's max'd treatment marks it exposed from its first member's
+# exposure on, which is right for drawing it but wrong for its effect when
+# members adopt at different times. Effects are therefore computed from the
+# members' own exposed cells instead (post_treatment_rows()), using the member
+# sets recorded in the `aggregate_unit_sources` attribute.
 
 source_units_for_spec <- function(spec, source_df) {
   all_units <- unique(source_df$unit)
@@ -89,6 +95,45 @@ group_logsumexp <- function(x, gid, ng) {
   out
 }
 
+# A single source row's suppressed/missing count would otherwise NA out the
+# whole summed cell (and everything downstream that sums it), even when every
+# other source has real data -- e.g. one small state missing a subgroup blanks
+# the entire "all treated states" total for every period it's missing. Fill
+# it with the model's factual expectation instead: mu_treated already equals
+# mu on control cells and mu + te on exposed ones, so exp(mu_treated) is
+# E[Y(1)] where the cell is exposed and E[Y(0)] otherwise -- whichever
+# actually happened there -- and flag the cell in `outcome_imputed` so
+# reporting can mark it. The fill must be constant across draws (the
+# posterior mean, not the per-draw mu_treated): outcome is supposed to be
+# fixed data, and downstream code (compute_quantiles) groups by it to carry it
+# through summaries, assuming it never varies within a (unit, time, group)
+# cell -- a per-draw fill would silently split every draw into its own group.
+#
+# The flag is OR'd against any already on the frame rather than overwriting
+# it: pooling the second axis sees a cell the first pass already filled,
+# whose outcome is no longer NA, and the imputation has to stay visible.
+impute_missing_outcomes <- function(sub) {
+  missing <- FALSE
+  if ("outcome" %in% names(sub)) {
+    missing <- is.na(sub$outcome)
+    if ("mu_treated" %in% names(sub) && any(missing)) {
+      cell_key <- intersect(c("unit", "time", "group"), names(sub))
+      cid <- vctrs::vec_group_id(sub[cell_key])
+      n_cells <- attr(cid, "n")
+      fill <- group_sum(exp(sub$mu_treated), cid, n_cells) /
+        tabulate(cid, n_cells)
+      sub$outcome[missing] <- fill[cid[missing]]
+    }
+  }
+  prior <- if ("outcome_imputed" %in% names(sub)) {
+    !is.na(sub$outcome_imputed) & sub$outcome_imputed
+  } else {
+    FALSE
+  }
+  sub$outcome_imputed <- rep_len(missing | prior, nrow(sub))
+  sub
+}
+
 # Collapse `axis` ("unit" or "group") over `sources` into one synthetic row
 # per remaining cell key. Every other key -- draw, time, and the opposite
 # axis -- is preserved, so a spec on one axis never disturbs the other.
@@ -114,41 +159,8 @@ aggregate_over <- function(source_df, axis, new_name, sources) {
   needed <- unique(c(group_cols, axis, value_cols))
   sub <- if (all(keep)) source_df[needed] else source_df[keep, needed]
   has <- function(col) col %in% names(sub)
-  # A single source row's suppressed/missing count would otherwise NA out
-  # the whole summed cell (and everything downstream that sums it), even
-  # when every other source has real data -- e.g. one small state
-  # missing a subgroup blanks the entire "all treated states" total for
-  # every period it's missing. Fill it with the model's factual expectation
-  # instead: mu_treated already equals mu on control cells and mu + te on
-  # exposed ones, so exp(mu_treated) is E[Y(1)] where the cell is exposed
-  # and E[Y(0)] otherwise -- whichever actually happened there -- and flag
-  # the cell as imputed so reporting can mark it. The fill must be constant
-  # across draws (the posterior mean, not the per-draw mu_treated): outcome
-  # is supposed to be fixed data, and downstream code (compute_quantiles)
-  # groups by it to carry it through summaries, assuming it never varies
-  # within a (unit, time, group) cell -- a per-draw fill would silently
-  # split every draw into its own group.
-  outcome_imputed <- FALSE
-  if (has("outcome")) {
-    outcome_imputed <- is.na(sub$outcome)
-    if (has("mu_treated") && any(outcome_imputed)) {
-      cell_key <- intersect(c("unit", "time", "group"), names(sub))
-      cid <- vctrs::vec_group_id(sub[cell_key])
-      n_cells <- attr(cid, "n")
-      fill <- group_sum(exp(sub$mu_treated), cid, n_cells) /
-        tabulate(cid, n_cells)
-      sub$outcome[outcome_imputed] <- fill[cid[outcome_imputed]]
-    }
-  }
-  # OR against any flag already on the frame rather than overwriting it:
-  # pooling the second axis sees a cell the first pass already filled, whose
-  # outcome is no longer NA, and the imputation has to stay visible.
-  prior_imputed <- if (has("outcome_imputed")) {
-    !is.na(sub$outcome_imputed) & sub$outcome_imputed
-  } else {
-    FALSE
-  }
-  imputed <- rep_len(outcome_imputed | prior_imputed, nrow(sub))
+  sub <- impute_missing_outcomes(sub)
+  imputed <- sub$outcome_imputed
 
   gid <- vctrs::vec_group_id(sub[group_cols])
   ng <- attr(gid, "n")
@@ -180,8 +192,11 @@ aggregate_over <- function(source_df, axis, new_name, sources) {
 # Shared driver behind add_aggregate_units() / add_aggregate_groups(). Every
 # spec aggregates from the *original* frame, so chaining specs on one axis
 # never double-counts; `resolve_sources` is the axis-specific selector.
+# `sources_attr`, when given, names an attribute recording which members each
+# aggregate pooled (see post_treatment_rows() for why units need it).
 apply_aggregate_specs <- function(draws, specs, axis, spec_class,
-                                  resolve_sources, attr_name) {
+                                  resolve_sources, attr_name,
+                                  sources_attr = NULL) {
   if (is.null(specs) || length(specs) == 0) {
     return(draws)
   }
@@ -190,7 +205,7 @@ apply_aggregate_specs <- function(draws, specs, axis, spec_class,
   # attributes, and pooling one axis must not forget what the other stamped.
   attr_names <- c(
     "groups", "units", "times", "has_denominator",
-    "aggregate_units", "aggregate_groups"
+    "aggregate_units", "aggregate_groups", "aggregate_unit_sources"
   )
   attrs <- stats::setNames(lapply(attr_names, function(a) attr(draws, a)), attr_names)
   attrs <- attrs[!vapply(attrs, is.null, logical(1))]
@@ -198,6 +213,8 @@ apply_aggregate_specs <- function(draws, specs, axis, spec_class,
   result_df <- draws
   existing <- unique(draws[[axis]])
   aggregate_frames <- list()
+  source_sets <- list()
+  replaced <- character()
 
   for (spec in specs) {
     name <- spec[[axis]]
@@ -210,6 +227,8 @@ apply_aggregate_specs <- function(draws, specs, axis, spec_class,
     if (spec$overwrite) {
       result_df <- result_df[result_df[[axis]] != name, ]
       aggregate_frames[[name]] <- NULL
+      source_sets[[name]] <- NULL
+      replaced <- c(replaced, name)
       existing <- setdiff(existing, name)
     }
     sources <- resolve_sources(spec, source_df)
@@ -221,6 +240,7 @@ apply_aggregate_specs <- function(draws, specs, axis, spec_class,
       next
     }
     aggregate_frames[[name]] <- aggregate
+    source_sets[[name]] <- sources
     existing <- c(existing, name)
   }
 
@@ -234,6 +254,12 @@ apply_aggregate_specs <- function(draws, specs, axis, spec_class,
   attr(out, attr_name) <- unique(c(
     attrs[[attr_name]] %||% character(), names(aggregate_frames)
   ))
+  if (!is.null(sources_attr)) {
+    all_sources <- attrs[[sources_attr]] %||% list()
+    all_sources[intersect(replaced, names(all_sources))] <- NULL
+    all_sources[names(source_sets)] <- source_sets
+    attr(out, sources_attr) <- all_sources
+  }
   if (!inherits(out, "countsynth_draws")) {
     class(out) <- c("countsynth_draws", class(out))
   }
@@ -251,6 +277,17 @@ apply_aggregate_specs <- function(draws, specs, axis, spec_class,
 #' a pooled unit from a real one -- they are otherwise ordinary rows. Read it
 #' with [aggregate_unit_names()].
 #'
+#' A pooled unit's rows total every member at every time, and its `treatment`
+#' is 1 wherever any member's is -- the calendar-time series the fit and gap
+#' figures draw. Its *effect* respects staggered adoption instead:
+#' [countsynth_summary_table()], [countsynth_post_treatment_summary()] and
+#' [countsynth_interval_plot()] sum only over the cells where each member is
+#' itself exposed, so a member still waiting on its own start date adds
+#' nothing to the counterfactual or the exposure. The member sets behind this
+#' are kept in an `aggregate_unit_sources` attribute, and the members' own
+#' rows must stay in the frame: with one missing, the effect falls back to the
+#' pooled unit's own rows, with a warning.
+#'
 #' @param draws A `countsynth_draws` frame.
 #' @param specs A list of [countsynth_aggregate_unit()] specs.
 #' @return The draws frame with aggregate-unit rows appended.
@@ -260,8 +297,69 @@ add_aggregate_units <- function(draws, specs) {
   apply_aggregate_specs(
     draws, specs,
     axis = "unit", spec_class = "countsynth_aggregate_unit",
-    resolve_sources = source_units_for_spec, attr_name = "aggregate_units"
+    resolve_sources = source_units_for_spec, attr_name = "aggregate_units",
+    sources_attr = "aggregate_unit_sources"
   )
+}
+
+# Post-treatment rows as the effect estimands read them, for `units` (NULL =
+# every unit).
+#
+# A pooled unit's own rows can't answer this. Its `treatment` is max'd over
+# its members, so it counts as exposed from the first member's exposure on,
+# and summing its post-treatment rows folds every other member's
+# not-yet-exposed periods into the counterfactual and the exposure. The count
+# difference survives that (mu_treated == mu on those cells, so they cancel),
+# but every ratio is pulled toward zero: with one state exposed ten months
+# before the rest, a third of the pooled post-period can be unexposed. So a
+# pooled unit's post-treatment rows are rebuilt here from its members' own
+# exposed cells, relabeled to the pooled unit -- each member enters on its own
+# adoption date, the usual overall effect under staggered adoption. The
+# pooled unit's own rows are left alone for the fit and gap figures, where
+# the calendar-time total over every member is the series worth drawing.
+#
+# `source_unit` names the unit each row came from (the unit itself on real
+# rows), since relabeled member rows share their (unit, time, group) key.
+post_treatment_rows <- function(draws, units = NULL) {
+  treated <- !is.na(draws$treatment) & draws$treatment == 1
+  wanted <- if (is.null(units)) treated else treated & draws$unit %in% units
+  sources <- attr(draws, "aggregate_unit_sources") %||% list()
+  pooled <- names(sources)
+  if (!is.null(units)) {
+    pooled <- intersect(pooled, units)
+  }
+  rebuilt <- list()
+  if (length(pooled) > 0) {
+    real_units <- setdiff(unique(draws$unit), names(sources))
+    for (u in pooled) {
+      members <- sources[[u]]
+      absent <- setdiff(members, real_units)
+      # A member can be missing because the frame was subset to the pooled
+      # unit, or because the spec overwrote a real unit it also pooled. Its
+      # rows are gone either way, so there is nothing to rebuild from.
+      if (length(absent) > 0) {
+        cli::cli_warn(c(
+          "Pooled unit {.val {u}} is missing member unit{?s} {.val {absent}}.",
+          i = "Its effect falls back to its own rows, which count every member
+               as exposed from the first member's exposure on."
+        ))
+        next
+      }
+      rows <- impute_missing_outcomes(draws[treated & draws$unit %in% members, ])
+      rows$source_unit <- rows$unit
+      rows$unit <- rep(u, nrow(rows))
+      rebuilt[[u]] <- rows
+    }
+  }
+  post <- draws[wanted & !draws$unit %in% names(rebuilt), ]
+  post$source_unit <- post$unit
+  if (length(rebuilt) == 0) {
+    return(post)
+  }
+  if (!"outcome_imputed" %in% names(post)) {
+    post$outcome_imputed <- rep(FALSE, nrow(post))
+  }
+  dplyr::bind_rows(c(list(post), unname(rebuilt)))
 }
 
 #' Names of the synthetic aggregate units in a draws frame

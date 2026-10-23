@@ -19,6 +19,10 @@ for transparency only. \code{observed_imputed} flags a unit-group whose
 post-treatment window includes a cell imputed by \code{\link[=add_aggregate_units]{add_aggregate_units()}}.
 }
 \details{
+A pooled unit's totals cover each member only from that member's own
+exposure on (see \code{\link[=add_aggregate_units]{add_aggregate_units()}}); its \code{n_periods} counts the
+periods in which at least one member was exposed.
+
 All raw counts here -- no denominator involved -- but \code{expected} still
 assumes the observed denominator baked into \code{mu} is fixed/exogenous; see
 \code{\link[=countsynth_summary_table]{countsynth_summary_table()}} for the caveat when treatment could also affect

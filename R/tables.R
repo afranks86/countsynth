@@ -155,8 +155,9 @@ countsynth_summary_table <- function(draws, target_unit = NULL,
   if (is.null(target_unit)) {
     cli::cli_abort("No treated units in draws and no {.arg target_unit} given.")
   }
-  df <- draws[draws$unit == target_unit &
-    !is.na(draws$treatment) & draws$treatment == 1, ]
+  # A pooled unit's post-treatment rows are its members' own exposed cells,
+  # not its own calendar-time rows -- see post_treatment_rows().
+  df <- post_treatment_rows(draws, target_unit)
   if (nrow(df) == 0) {
     return(tibble::tibble())
   }
@@ -186,9 +187,11 @@ countsynth_summary_table <- function(draws, target_unit = NULL,
       outcome_diff = .data$treated - .data$untreated
     )
 
+  # Over every row rather than one per (time, group): a pooled unit's rows
+  # come from several members at each time, and any of them may be the one
+  # that was imputed.
   imputed_by_group <- if (has_imputed) {
     df |>
-      dplyr::distinct(.data$time, .data$group, .keep_all = TRUE) |>
       dplyr::group_by(.data$group) |>
       dplyr::summarise(imputed = any(.data$outcome_imputed), .groups = "drop")
   } else {
@@ -283,6 +286,10 @@ countsynth_summary_table_by_unit <- function(draws, units = NULL,
 #' for transparency only. `observed_imputed` flags a unit-group whose
 #' post-treatment window includes a cell imputed by [add_aggregate_units()].
 #'
+#' A pooled unit's totals cover each member only from that member's own
+#' exposure on (see [add_aggregate_units()]); its `n_periods` counts the
+#' periods in which at least one member was exposed.
+#'
 #' All raw counts here -- no denominator involved -- but `expected` still
 #' assumes the observed denominator baked into `mu` is fixed/exogenous; see
 #' [countsynth_summary_table()] for the caveat when treatment could also affect
@@ -291,7 +298,7 @@ countsynth_summary_table_by_unit <- function(draws, units = NULL,
 #' @param draws A `countsynth_draws` frame.
 #' @export
 countsynth_post_treatment_summary <- function(draws) {
-  post <- draws[!is.na(draws$treatment) & draws$treatment == 1, ]
+  post <- post_treatment_rows(draws)
   cols <- c(
     "unit", "group", "n_periods", "observed", "observed_imputed",
     "expected_mean", "expected_lower_95", "expected_upper_95",
@@ -318,8 +325,13 @@ countsynth_post_treatment_summary <- function(draws) {
       excess_pct = 100 * (.data$treated / .data$expected - 1)
     )
 
+  # One row per observed cell; `source_unit` keeps a pooled unit's members
+  # apart, since they share its (unit, group, time) key.
   observed_totals <- post |>
-    dplyr::distinct(.data$unit, .data$group, .data$time, .keep_all = TRUE) |>
+    dplyr::distinct(
+      .data$unit, .data$source_unit, .data$group, .data$time,
+      .keep_all = TRUE
+    ) |>
     dplyr::group_by(.data$unit, .data$group) |>
     dplyr::summarise(
       n_periods = length(unique(.data$time)),

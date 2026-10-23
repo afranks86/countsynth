@@ -24,6 +24,17 @@ The names of the units actually created are recorded in an
 \code{aggregate_units} attribute on the result, so downstream reporting can tell
 a pooled unit from a real one -- they are otherwise ordinary rows. Read it
 with \code{\link[=aggregate_unit_names]{aggregate_unit_names()}}.
+
+A pooled unit's rows total every member at every time, and its \code{treatment}
+is 1 wherever any member's is -- the calendar-time series the fit and gap
+figures draw. Its \emph{effect} respects staggered adoption instead:
+\code{\link[=countsynth_summary_table]{countsynth_summary_table()}}, \code{\link[=countsynth_post_treatment_summary]{countsynth_post_treatment_summary()}} and
+\code{\link[=countsynth_interval_plot]{countsynth_interval_plot()}} sum only over the cells where each member is
+itself exposed, so a member still waiting on its own start date adds
+nothing to the counterfactual or the exposure. The member sets behind this
+are kept in an \code{aggregate_unit_sources} attribute, and the members' own
+rows must stay in the frame: with one missing, the effect falls back to the
+pooled unit's own rows, with a warning.
 }
 \seealso{
 \code{\link[=add_aggregate_groups]{add_aggregate_groups()}} to pool the other axis of the cell.
