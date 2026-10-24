@@ -39,12 +39,19 @@ data {
   array[n_exposed] int<lower=1, upper=KDN> exp_cell;
 
   // Censoring adjustment sets (all cells if model_treated, else control).
-  int<lower=0> n_cens;                   // suppressed: add log P(y in 1..9)
+  int<lower=0> n_cens;                   // suppressed: add log P(y in supp range)
   array[n_cens] int<lower=1, upper=KDN> cens_cell;
   array[n_cens] int<lower=1, upper=D> cens_unit;
-  int<lower=0> n_notcens;                // observed: add log P(y not in 1..9)
-  array[n_notcens] int<lower=1, upper=KDN> notcens_cell;
-  array[n_notcens] int<lower=1, upper=D> notcens_unit;
+  // Suppressed cells with a range of their own: a time block or synthetic
+  // total pooling a suppressed count with others lies in the sum of its
+  // parts' ranges, icens_lo..icens_hi. Each adds log P(y in that range).
+  int<lower=0> n_icens;
+  array[n_icens] int<lower=1, upper=KDN> icens_cell;
+  array[n_icens] int<lower=1, upper=D> icens_unit;
+  array[n_icens] int<lower=0> icens_lo;
+  array[n_icens] int<lower=0> icens_hi;
+  int<lower=0> supp_lo;                  // the counts the source suppresses
+  int<lower=supp_lo> supp_hi;
 
   int<lower=0, upper=1> model_treated;
   int<lower=0, upper=1> is_nb;           // 1 = NB2, 0 = Poisson
@@ -121,19 +128,44 @@ transformed data {
   int DN = D * N;
   // Legacy treatment hierarchy is active only without the regression design.
   int te_legacy = (model_treated == 1 && te_reg == 0) ? 1 : 0;
-  vector[9] sup;                         // censored-count support 1..9
-  vector[9] lgamma_sup1;
-  for (v in 1 : 9) {
-    sup[v] = v;
-    lgamma_sup1[v] = lgamma(v + 1);
+  int n_sup = supp_hi - supp_lo + 1;
+  vector[n_sup] sup;                     // censored-count support supp_lo..supp_hi
+  vector[n_sup] lgamma_sup1;
+  for (j in 1 : n_sup) {
+    sup[j] = supp_lo + j - 1;
+    lgamma_sup1[j] = lgamma(sup[j] + 1);
   }
-  vector[9] neg_lgamma_sup1 = -lgamma_sup1;
+  vector[n_sup] neg_lgamma_sup1 = -lgamma_sup1;
   // Fixed-dispersion fast path: when sample_disp == 0 the concentration is
   // data, so the likelihood's phi and the censoring coefficients carry no
   // autodiff cost at all.
   real phi_fixed = inv(nb_disp);
   real log_phi_fixed = log(phi_fixed);
-  vector[9] b_fixed = nb_censor_coeff(phi_fixed, sup, lgamma_sup1);
+  vector[n_sup] b_fixed = nb_censor_coeff(phi_fixed, sup, lgamma_sup1);
+
+  // Ranged cells' supports, laid end to end: cell i's run starts at
+  // icens_start[i] and holds icens_len[i] values.
+  array[n_icens] int icens_start;
+  array[n_icens] int icens_len;
+  int n_isup = 0;
+  for (i in 1 : n_icens) {
+    if (icens_hi[i] < icens_lo[i]) {
+      reject("icens_hi[", i, "] is below icens_lo[", i, "]");
+    }
+    icens_start[i] = n_isup + 1;
+    icens_len[i] = icens_hi[i] - icens_lo[i] + 1;
+    n_isup += icens_len[i];
+  }
+  vector[n_isup] isup;
+  vector[n_isup] ilgamma_sup1;
+  for (i in 1 : n_icens) {
+    for (j in 1 : icens_len[i]) {
+      isup[icens_start[i] + j - 1] = icens_lo[i] + j - 1;
+      ilgamma_sup1[icens_start[i] + j - 1] = lgamma(icens_lo[i] + j);
+    }
+  }
+  vector[n_isup] ineg_lgamma_sup1 = -ilgamma_sup1;
+  vector[n_isup] ib_fixed = nb_censor_coeff(phi_fixed, isup, ilgamma_sup1);
 }
 parameters {
   array[K] matrix<lower=0>[N, R] time_fac;   // Gamma(shape, shape), logged
@@ -443,17 +475,22 @@ model {
     y ~ poisson_log(mu[obs_cell]);
   }
 
-  // Censored small-count marginalization (likelihood.py): suppressed cells
-  // contribute log P(y in 1..9); observed cells log P(y not in 1..9).
-  // Concentration-only terms are precomputed once per unit (or in
-  // transformed data when dispersion is fixed); each cell then costs a
-  // single log_sum_exp over the nine-point support.
+  // Censored small-count marginalization: a suppressed cell contributes
+  // log P(y in supp range), all that is known about it. An observed cell
+  // needs nothing beyond its direct likelihood above -- P(y = 25) already
+  // says 25 was not suppressed; the Python model's extra
+  // log P(y not in range) on observed cells counted that twice and pulled
+  // small cells' means up. Concentration-only terms are precomputed once
+  // per unit (or in transformed data when dispersion is fixed); each cell
+  // then costs a single log_sum_exp over the support. Ranged cells have a
+  // support each, so with sampled dispersion their coefficients are
+  // computed per cell.
   if (adjust_missing == 1) {
     vector[n_cens] mass_c;
-    vector[n_notcens] mass_nc;
+    vector[n_icens] mass_ic;
     if (is_nb == 1 && sample_disp == 1) {
       vector[D] log_phi = log(phi_unit);
-      array[D] vector[9] b;
+      array[D] vector[n_sup] b;
       for (d in 1 : D) {
         b[d] = nb_censor_coeff(phi_unit[d], sup, lgamma_sup1);
       }
@@ -462,32 +499,40 @@ model {
         mass_c[i] = suppressed_mass_nb(mu[cens_cell[i]], phi_unit[d],
                                        log_phi[d], b[d], sup);
       }
-      for (i in 1 : n_notcens) {
-        int d = notcens_unit[i];
-        mass_nc[i] = suppressed_mass_nb(mu[notcens_cell[i]], phi_unit[d],
-                                        log_phi[d], b[d], sup);
+      for (i in 1 : n_icens) {
+        int d = icens_unit[i];
+        vector[icens_len[i]] s = segment(isup, icens_start[i], icens_len[i]);
+        mass_ic[i] = suppressed_mass_nb(
+          mu[icens_cell[i]], phi_unit[d], log_phi[d],
+          nb_censor_coeff(phi_unit[d], s,
+                          segment(ilgamma_sup1, icens_start[i], icens_len[i])),
+          s);
       }
     } else if (is_nb == 1) {
       for (i in 1 : n_cens) {
         mass_c[i] = suppressed_mass_nb(mu[cens_cell[i]], phi_fixed,
                                        log_phi_fixed, b_fixed, sup);
       }
-      for (i in 1 : n_notcens) {
-        mass_nc[i] = suppressed_mass_nb(mu[notcens_cell[i]], phi_fixed,
-                                        log_phi_fixed, b_fixed, sup);
+      for (i in 1 : n_icens) {
+        mass_ic[i] = suppressed_mass_nb(
+          mu[icens_cell[i]], phi_fixed, log_phi_fixed,
+          segment(ib_fixed, icens_start[i], icens_len[i]),
+          segment(isup, icens_start[i], icens_len[i]));
       }
     } else {
       for (i in 1 : n_cens) {
         mass_c[i] = suppressed_mass_pois(mu[cens_cell[i]],
                                          neg_lgamma_sup1, sup);
       }
-      for (i in 1 : n_notcens) {
-        mass_nc[i] = suppressed_mass_pois(mu[notcens_cell[i]],
-                                          neg_lgamma_sup1, sup);
+      for (i in 1 : n_icens) {
+        mass_ic[i] = suppressed_mass_pois(
+          mu[icens_cell[i]],
+          segment(ineg_lgamma_sup1, icens_start[i], icens_len[i]),
+          segment(isup, icens_start[i], icens_len[i]));
       }
     }
     target += sum(mass_c);
-    target += sum(log1m_exp(mass_nc));
+    target += sum(mass_ic);
   }
 }
 generated quantities {

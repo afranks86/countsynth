@@ -232,6 +232,32 @@ countsynth_schema <- function(unit_col, time_col, treatment_col,
 #' it is a level standing through the period (population), and summed when
 #' it is a per-period flow (births during the period). Which one is set by
 #' `denominator_time_unit` in [countsynth_output_opts()]: `"none"` marks a flow.
+#'
+#' @section Warning -- prefer to aggregate before fitting:
+#' Aggregating inside the package is a convenience, and it is easy to get
+#' subtly wrong. Where you can, aggregate the data yourself before fitting,
+#' check the result, and leave `enabled` off; every run that aggregates here
+#' warns, and says what it did to your data. If you do use it, check:
+#'
+#' * **The denominator.** It is averaged unless `denominator_time_unit` is
+#'   `"none"`. Births, conceptions or any other per-period flow must be summed;
+#'   averaging them leaves every rate inflated by the block length.
+#' * **Exposure.** A block is exposed if any period in it is, so a block that
+#'   straddles a unit's start date mixes exposed and unexposed months into one
+#'   exposed cell. Choose bins that line up with adoption where you can.
+#' * **Suppressed periods.** A block pooling a suppressed period with others
+#'   is censored on its summed range -- the observed periods' total plus the
+#'   `suppression_range` once per suppressed period -- which is right only if
+#'   the source suppressed each period on its own. This is the one thing that
+#'   is hard to do by hand: a pre-aggregated block cannot say it contains a
+#'   suppressed month (an `NA` there would be read as a lone suppressed count),
+#'   so for suppressed data this option is the better route.
+#' * **Gaps.** A block missing any of its input periods for some unit is an
+#'   unbalanced panel: an error, or with `allow_unbalanced_panel` left out of
+#'   the likelihood, never summed over the periods that are present.
+#' * **Bins the data does not fill.** A bin cut short by the date window, or
+#'   input coarser than the bin, is labelled with the dates the data actually
+#'   covers, so person-time stays right; the warning lists them.
 #' @export
 countsynth_time_aggregation <- function(enabled = FALSE, period = NULL,
                                    n_periods = NULL) {
@@ -393,8 +419,18 @@ countsynth_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 #'   labels (e.g. `"total"`, `"age"`).
 #' @param nb_disp Fixed NB dispersion (concentration is `1/nb_disp`).
 #' @param sample_disp Sample per-unit dispersion instead of fixing it.
-#' @param adjust_for_missingness Integrate the likelihood over censored small
-#'   counts (values 1-9 suppressed in the source data).
+#' @param adjust_for_missingness Read an `NA` outcome as a suppressed count and
+#'   integrate the likelihood over the values it could have been (see
+#'   `suppression_range`). `FALSE` drops `NA` cells from the likelihood
+#'   instead -- the right reading when they mean "not collected".
+#' @param suppression_range Integer vector `c(lower, upper)`: the counts the
+#'   source data suppresses, so that an `NA` outcome is known to lie in
+#'   `lower:upper`. The default `c(1, 9)` is the US vital-statistics
+#'   convention (CDC WONDER and NCHS hide counts of 1-9); set it to match your
+#'   source, e.g. `c(1, 10)` or `c(0, 4)`. A cell that pools a suppressed
+#'   count with others -- a time block or a synthetic `total` -- lies in the
+#'   sum of its parts' ranges, and is censored on that. Ignored when
+#'   `adjust_for_missingness` is `FALSE`.
 #' @param model_treated Include the treatment-effect block.
 #' @param inference_mode `NULL` (default joint), `"joint"`, or `"cut"`.
 #' @param treatment_effects Optional [countsynth_te_opts()] object replacing the
@@ -441,6 +477,7 @@ countsynth_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
                              nb_disp = 1e-4, sample_disp = FALSE,
                              adjust_for_missingness = TRUE,
+                             suppression_range = DEFAULT_SUPPRESSION_RANGE,
                              model_treated = TRUE, inference_mode = NULL,
                              treatment_effects = NULL,
                              factor_variation_pct = NULL,
@@ -457,6 +494,17 @@ countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
   checkmate::assert_number(nb_disp, lower = .Machine$double.xmin)
   checkmate::assert_flag(sample_disp)
   checkmate::assert_flag(adjust_for_missingness)
+  checkmate::assert_integerish(
+    suppression_range,
+    lower = 0, len = 2, any.missing = FALSE
+  )
+  suppression_range <- as.integer(suppression_range)
+  if (suppression_range[[2]] < suppression_range[[1]]) {
+    cli::cli_abort(
+      "{.field model.suppression_range} must be {.code c(lower, upper)} with
+       lower <= upper; got {.val {suppression_range}}."
+    )
+  }
   checkmate::assert_flag(model_treated)
   checkmate::assert_choice(inference_mode, c("joint", "cut"), null.ok = TRUE)
   if (identical(inference_mode, "cut") && !model_treated) {
@@ -517,6 +565,7 @@ countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
       outcome_distribution = outcome_distribution, types = types,
       nb_disp = nb_disp, sample_disp = sample_disp,
       adjust_for_missingness = adjust_for_missingness,
+      suppression_range = suppression_range,
       model_treated = model_treated, inference_mode = inference_mode,
       treatment_effects = treatment_effects,
       factor_variation_pct = factor_variation_pct,
@@ -1020,8 +1069,11 @@ countsynth_cut_opts <- function(num_stage1_draws = 25,
 #'   `end_date` **exclusive**.
 #' @param time_aggregation A [countsynth_time_aggregation()] object, or a named
 #'   list of its arguments.
-#' @param allow_unbalanced_panel Treat structurally absent (unit, time) cells
-#'   as missing instead of erroring.
+#' @param allow_unbalanced_panel Leave structurally absent (unit, time) cells
+#'   out of the likelihood instead of erroring. A cell with no row was never
+#'   reported, which is not a suppressed count, so it gets no censoring term.
+#'   Under time aggregation, a block missing any of its input periods counts
+#'   as absent too.
 #' @param outcome Optional label used in draws filenames (falls back to the
 #'   outcome prefix, then `"outcome"`).
 #' @return A validated `countsynth_config` object.

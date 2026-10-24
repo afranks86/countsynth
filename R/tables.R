@@ -59,9 +59,15 @@ auto_detect_target <- function(draws) {
   names(which.max(counts))
 }
 
+# A Date `end_date` is the period's last day, so the period runs one day past
+# end - start: a quarter Jan 1 - Mar 31 is 91 days, not 90. A numeric time
+# index carries an exclusive right edge instead (see period_bounds()).
 years_per_row <- function(df) {
   if (all(c("start_date", "end_date") %in% names(df))) {
-    as.numeric(as.Date(df$end_date) - as.Date(df$start_date)) / 365.25
+    inclusive <- !is.numeric(df$end_date)
+    days <- as.numeric(as.Date(df$end_date) - as.Date(df$start_date)) +
+      if (inclusive) 1 else 0
+    days / 365.25
   } else {
     rep(1.0, nrow(df))
   }
@@ -157,14 +163,24 @@ countsynth_summary_table <- function(draws, target_unit = NULL,
   }
   # A pooled unit's post-treatment rows are its members' own exposed cells,
   # not its own calendar-time rows -- see post_treatment_rows().
-  df <- post_treatment_rows(draws, target_unit)
+  summarise_post_rows(
+    post_treatment_rows(draws, target_unit),
+    has_denom = draws_has_denominator(draws),
+    rate_normalizer = rate_normalizer,
+    denominator_label = denominator_label,
+    denominator_time_unit = denominator_time_unit
+  )
+}
+
+# The body of countsynth_summary_table(), on one unit's post-treatment rows.
+summarise_post_rows <- function(df, has_denom, rate_normalizer,
+                                denominator_label, denominator_time_unit) {
   if (nrow(df) == 0) {
     return(tibble::tibble())
   }
   df$years <- time_weight_per_row(df, denominator_time_unit)
   # countsynth_draws() always emits a denominator column (1 everywhere when none
   # was configured -- see build_cell_table()), but a hand-built frame may not.
-  has_denom <- draws_has_denominator(draws)
   if (!"denominator" %in% names(df)) {
     df$denominator <- 1
   }
@@ -262,9 +278,16 @@ countsynth_summary_table_by_unit <- function(draws, units = NULL,
                                         denominator_label = "denominator",
                                         denominator_time_unit = "year") {
   units <- units %||% identify_treated_units(draws)
+  # One pass over the frame for every unit rather than one per unit: at
+  # report scale each pass scans tens of millions of rows, and the report
+  # builds this table twice.
+  post <- post_treatment_rows(draws, units)
+  rows_of <- split(seq_len(nrow(post)), post$unit)
+  has_denom <- draws_has_denominator(draws)
   dplyr::bind_rows(lapply(units, function(u) {
-    tbl <- countsynth_summary_table(
-      draws, u,
+    tbl <- summarise_post_rows(
+      post[rows_of[[u]] %||% integer(), ],
+      has_denom = has_denom,
       rate_normalizer = rate_normalizer,
       denominator_label = denominator_label,
       denominator_time_unit = denominator_time_unit

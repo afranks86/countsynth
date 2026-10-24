@@ -5,9 +5,11 @@ print.countsynth_fit <- function(x, ...) {
   cli::cli_h1("countsynth fit ({x$type}, rank {x$rank})")
   cli::cli_li("model: {if (x$model_treated) 'joint (treated)' else 'baseline (untreated)'}")
   cli::cli_li("method: {fit_method_label(x$fit_method %||% 'sample')}")
+  sr <- x$config$model$suppression_range %||% DEFAULT_SUPPRESSION_RANGE
   cli::cli_li(
     "distribution: {x$config$model$outcome_distribution}, censoring adjustment:
-     {x$config$model$adjust_for_missingness}"
+     {x$config$model$adjust_for_missingness} (suppressed range
+     {sr[[1]]}..{sr[[2]]})"
   )
   cli::cli_li(
     "{length(x$data$groups)} group{?s} x {length(x$data$units)} unit{?s} x

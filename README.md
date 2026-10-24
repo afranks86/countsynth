@@ -19,7 +19,8 @@ subgroup, state, and bimonth) with a 0/1 treatment indicator:
   scales), optionally driven by **covariates** through an lme4-style formula
   so the effect can vary with time since treatment or a mediator,
 - optionally integrates the likelihood over **censored small counts** (values
-  1–9 suppressed in the source data),
+  1–9 suppressed in the source data by default; set `suppression_range` to
+  match yours),
 - supports **joint** inference and two-stage **cut** (modular) inference,
   where the baseline is fit on control data only and treatment effects are
   estimated conditional on frozen baseline draws,
@@ -105,8 +106,10 @@ Requirements and gotchas:
   declare. The indicator is one column shared by all groups.
 - **The panel must be balanced** across (group, unit, time). If some cells
   genuinely do not exist, set `allow_unbalanced_panel: true` and they are
-  marked missing (with a warning). Duplicate (group, unit, time) rows are an
-  error.
+  left out of the likelihood (with a warning). That is also how to say a
+  count was *not collected* rather than suppressed: drop its row instead of
+  leaving it `NA`, since an `NA` reads as a suppressed count. Duplicate
+  (group, unit, time) rows are an error.
 - **Denominators are optional but recommended.** They enter as an exposure
   offset (must be non-negative; `NA` is an error, and a `0` denominator is
   only valid alongside an observed outcome of `0`, treated as a
@@ -216,7 +219,7 @@ data:
   date_format: auto              # or an explicit strptime format
   start_date: "2016-01-01"       # inclusive
   end_date: "2024-01-01"         # EXCLUSIVE
-  time_aggregation:
+  time_aggregation:              # prefer aggregating before fitting -- see below
     enabled: false
     period: bimonthly            # calendar bins: monthly | bimonthly | quarterly | yearly
     # n_periods: 3               # ...or combine N consecutive periods (any resolution)
@@ -227,7 +230,8 @@ model:
   outcome_distribution: NB       # NB | Poisson
   nb_disp: 0.0001                # fixed dispersion; concentration = 1/nb_disp
   sample_disp: false             # sample per-unit dispersion instead (NB only)
-  adjust_for_missingness: true   # integrate over suppressed counts 1-9
+  adjust_for_missingness: true   # read NA as a suppressed count, integrate over it
+  # suppression_range: [1, 9]    # the counts your source suppresses (default 1-9)
   model_treated: true            # false = baseline-only fit, no effects
   inference_mode: joint          # joint | cut
   # factor_variation_pct: 25     # expected swing of the unit-specific temporal
@@ -595,20 +599,54 @@ where `time_fe` sits.
 **Missingness.** `adjust_for_missingness: true` is meaningful only for data
 that suppresses small counts, i.e. where a blank cell means "somewhere in
 1–9" (US vital-statistics conventions, among others). It integrates the
-likelihood over exactly those values and additionally tells the model that
-every *observed* cell was **not** in 1–9. If your `NA`s mean "genuinely
-unknown" or "not collected", set it to `false` — those cells are then simply
-dropped from the likelihood.
+likelihood over exactly those values. Observed cells need nothing extra —
+seeing a count of 25 already says it was not suppressed. (Fits before
+2026-10-23, and the Python model, also multiplied every observed cell by
+P(count not in 1–9); that counted the same fact twice and pulled cells with
+counts near the range upward.) The range is
+`model.suppression_range`, `[1, 9]` by default; set it to what your source
+hides (`[1, 10]`, `[0, 4]`, ...). A cell that pools a suppressed count with
+others is censored on the range it really has: a synthetic `total` with one
+suppressed subgroup lies in the observed subgroups' sum plus 1–9, and so does
+a time block with one suppressed month.
 
-**Time filtering and aggregation.** `end_date` is exclusive. Aggregation sums
-counts and takes the max of the treatment indicator within each period — so a
-period that is partly exposed counts as exposed. Denominators follow
+Three kinds of missing are kept apart. An `NA` outcome is a **suppressed**
+count and is censored as above. A cell with **no row** was never reported:
+with `allow_unbalanced_panel: true` it is left out of the likelihood, with no
+censoring term. And if your `NA`s mean "genuinely unknown" or "not collected"
+across the board, set `adjust_for_missingness: false` — every `NA` cell is
+then simply dropped from the likelihood. Mixing the first two readings in one
+column is what to avoid: an `NA` in a series running far above 9 says "1–9",
+and the fit bends to agree. Drop those rows instead.
+
+**Time filtering and aggregation.** `end_date` is exclusive. Each period's
+length comes from the time grid (a period runs until the next one starts), so
+person-year rates are right whether or not you aggregate here.
+
+> **Prefer to aggregate before fitting.** `time_aggregation` is a convenience,
+> and it is easy to get subtly wrong: the denominator rule, partly exposed
+> blocks, suppressed and missing months, and bins the data does not fill all
+> need a decision. Where you can, aggregate the data yourself, check it, and
+> leave `time_aggregation` off; every run that aggregates here warns and says
+> what it did. The exception is suppressed data — a pre-aggregated quarter
+> has no way to say it contains a suppressed month, while `time_aggregation`
+> censors it on its summed range. `?countsynth_time_aggregation` lists what to
+> check.
+
+Aggregation sums counts and takes the max of the treatment indicator within
+each period — so a period that is partly exposed counts as exposed. Denominators follow
 `output.denominator_time_unit`: a level standing through the period
 (population, with `year`/`month`/...) is averaged, and a per-period flow
 (births, with `none`) is summed like the counts, so a quarterly
 deaths-per-birth rate is the quarter's deaths over the quarter's births.
-Choose the period to balance signal and length: coarser periods mean less
-noise per cell but fewer time points for the factorization to work with.
+A block pooling a suppressed month is censored on its summed range (see
+**Missingness** above). A block missing any of its months for some unit is an
+unbalanced panel: an error, or with `allow_unbalanced_panel: true` left out of
+the likelihood — never summed over the months that happen to be there, which
+would read as a drop in the rate. A bin the date window cuts short, or input
+coarser than the bin, carries the dates the data really covers. Choose the
+period to balance signal and length: coarser periods mean less noise per cell
+but fewer time points for the factorization to work with.
 
 `time_aggregation` bins the time axis one of two ways, and you set exactly one
 of them. `period` bins by the **calendar** — rows are grouped into calendar

@@ -4,6 +4,35 @@
 # booleans and the exposed-cell ordering matches numpy's reshape(-1) -- that
 # ordering defines the meaning of treatment_kt_z[e] and cut-mode provenance.
 
+# Split suppressed cells by their censoring range. A cell suppressed on its
+# own lies in the configured suppression_range and goes through the models'
+# fast path, which shares one support across every such cell; a cell pooling
+# a suppressed count with others (a time block, a synthetic total) has its
+# own range and its own support. `cells` are flat indices. Data built by hand
+# without bounds is all lone cells.
+split_censored_cells <- function(data, cells) {
+  sr <- as.integer(data$suppression_range %||% DEFAULT_SUPPRESSION_RANGE)
+  lo <- if (is.null(data$cens_lower)) {
+    rep(sr[[1]], length(cells))
+  } else {
+    flatten_kdn(data$cens_lower)[cells]
+  }
+  hi <- if (is.null(data$cens_upper)) {
+    rep(sr[[2]], length(cells))
+  } else {
+    flatten_kdn(data$cens_upper)[cells]
+  }
+  lo[is.na(lo)] <- sr[[1]]
+  hi[is.na(hi)] <- sr[[2]]
+  standard <- lo == sr[[1]] & hi == sr[[2]]
+  list(
+    supp_lo = sr[[1]], supp_hi = sr[[2]],
+    standard = standard,
+    lo = as.integer(round(lo[!standard])),
+    hi = as.integer(round(hi[!standard]))
+  )
+}
+
 #' Build the Stan data list for the joint / baseline model
 #'
 #' @param data A `countsynth_data` object.
@@ -64,13 +93,16 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
   exp_cell <- which(!control_flat)
   exp_sub <- kdn_from_flat(exp_cell, D, N)
 
-  # Censoring adjustment set: all cells when model_treated (matching joint.py
-  # passing an all-True mask), control-only otherwise. Excluded cells never
-  # enter either side of the censoring split -- they have no likelihood
-  # contribution at all, censored or not.
+  # Censoring set: suppressed cells, all of them when model_treated
+  # (matching joint.py passing an all-True mask), control-only otherwise.
+  # Excluded cells never enter it -- they have no likelihood contribution at
+  # all. Observed cells need no term here: their direct likelihood already
+  # says they were not suppressed.
   adj_flat <- (if (model_treated) rep(TRUE, KDN) else control_flat) & !excluded_flat
-  cens_cell <- which(missing_flat & adj_flat)
-  notcens_cell <- which(!missing_flat & adj_flat)
+  cens_all <- which(missing_flat & adj_flat)
+  split <- split_censored_cells(data, cens_all)
+  cens_cell <- cens_all[split$standard]
+  icens_cell <- cens_all[!split$standard]
 
   unit_of <- function(cell) kdn_from_flat(cell, D, N)$d
 
@@ -90,9 +122,13 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
     n_cens = length(cens_cell),
     cens_cell = as.array(cens_cell),
     cens_unit = as.array(unit_of(cens_cell)),
-    n_notcens = length(notcens_cell),
-    notcens_cell = as.array(notcens_cell),
-    notcens_unit = as.array(unit_of(notcens_cell)),
+    n_icens = length(icens_cell),
+    icens_cell = as.array(icens_cell),
+    icens_unit = as.array(unit_of(icens_cell)),
+    icens_lo = as.array(split$lo),
+    icens_hi = as.array(split$hi),
+    supp_lo = split$supp_lo,
+    supp_hi = split$supp_hi,
     model_treated = as.integer(model_treated),
     is_nb = as.integer(outcome_distribution == "NB"),
     sample_disp = as.integer(sample_disp),
@@ -185,7 +221,10 @@ stan_data_stage2 <- function(data, mu_ctrl_flat, phi_unit = NULL,
   exp_missing <- missing_flat[exp_cell]
   exp_excluded <- excluded_flat[exp_cell]
   obs_e <- which(!exp_missing & !exp_excluded)
-  cens_e <- which(exp_missing & !exp_excluded)
+  cens_all <- which(exp_missing & !exp_excluded)
+  split <- split_censored_cells(data, exp_cell[cens_all])
+  cens_e <- cens_all[split$standard]
+  icens_e <- cens_all[!split$standard]
 
   is_nb <- outcome_distribution == "NB"
   if (is_nb && is.null(phi_unit)) {
@@ -205,6 +244,12 @@ stan_data_stage2 <- function(data, mu_ctrl_flat, phi_unit = NULL,
     y = as.array(as.integer(round(y_flat[exp_cell][obs_e]))),
     n_cens = length(cens_e),
     cens_e = as.array(cens_e),
+    n_icens = length(icens_e),
+    icens_e = as.array(icens_e),
+    icens_lo = as.array(split$lo),
+    icens_hi = as.array(split$hi),
+    supp_lo = split$supp_lo,
+    supp_hi = split$supp_hi,
     is_nb = as.integer(is_nb),
     adjust_missing = as.integer(adjust_for_missingness),
     phi_unit = if (is_nb) as.array(as.numeric(phi_unit)) else numeric(0)

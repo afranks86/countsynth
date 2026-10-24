@@ -121,6 +121,14 @@ unit_slug <- function(x) {
 #' @keywords internal
 DENOMINATOR_TIME_UNITS <- c("year", "month", "week", "day", "none")
 
+#' Counts the source data suppresses by default
+#'
+#' The US vital-statistics convention: CDC WONDER and NCHS tables hide counts
+#' of 1 through 9. A suppressed (`NA`) outcome is read as lying in this range
+#' unless `suppression_range` in [countsynth_model_opts()] says otherwise.
+#' @keywords internal
+DEFAULT_SUPPRESSION_RANGE <- c(1L, 9L)
+
 #' Per-row denominator weight, in the requested time unit
 #'
 #' @param df Rows with `start_date`/`end_date` (else one period each).

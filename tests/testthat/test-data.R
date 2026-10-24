@@ -181,7 +181,7 @@ test_that("a (0, 0) outcome/denominator cell is valid and excluded from the like
   excluded_cell <- flat_idx(1, 3, 1, length(dat$units), length(dat$times))
   expect_false(excluded_cell %in% sd$obs_cell)
   expect_false(excluded_cell %in% sd$cens_cell)
-  expect_false(excluded_cell %in% sd$notcens_cell)
+  expect_false(excluded_cell %in% sd$icens_cell)
 })
 
 test_that("a bad denominator outside the analysis window is not an error", {
@@ -258,7 +258,7 @@ test_that("duplicate (group, unit, time) rows are a hard error", {
   expect_error(countsynth_data(cfg, df = wide), "[Dd]uplicate")
 })
 
-test_that("unbalanced panel errors unless allowed, then marks missing", {
+test_that("unbalanced panel errors unless allowed, then excludes the cells", {
   wide <- make_wide_df()
   wide <- wide[-2, ]
   cfg <- wide_config(
@@ -270,7 +270,13 @@ test_that("unbalanced panel errors unless allowed, then marks missing", {
     allow_unbalanced_panel = TRUE
   )
   expect_warning(dat <- countsynth_data(cfg2, df = wide), "structurally")
-  expect_equal(sum(dat$missing_idx_array), 2) # both groups of the dropped row
+  # Both groups of the dropped row: absent, not suppressed, so they are left
+  # out of the likelihood rather than censored on 1..9.
+  expect_equal(sum(dat$excluded_idx_array), 2)
+  expect_equal(sum(dat$missing_idx_array), 0)
+  sd <- stan_data_joint(dat, rank = 2)
+  absent <- which(flatten_kdn(dat$excluded_idx_array))
+  expect_length(intersect(absent, c(sd$obs_cell, sd$cens_cell, sd$icens_cell)), 0)
 })
 
 test_that("temporal aggregation sums outcomes, maxes treatment, means denominators", {
@@ -279,7 +285,7 @@ test_that("temporal aggregation sums outcomes, maxes treatment, means denominato
     list(both = countsynth_type(groups = c("g1", "g2"), ranks_to_test = 2)),
     time_aggregation = countsynth_time_aggregation(enabled = TRUE, period = "quarterly")
   )
-  dat <- countsynth_data(cfg, df = wide)
+  expect_warning(dat <- countsynth_data(cfg, df = wide), "averaged within each block")
   raw <- make_test_data()
   # Q1 2020 = Jan+Feb+Mar for unit A group g1
   q1 <- raw[raw$unit == "A" & raw$group == "g1" &
@@ -347,7 +353,10 @@ test_that("no denominator means denominator 1 everywhere, aggregation included",
   expect_true(all(flat$denominators == 1))
 
   cfg$time_aggregation <- countsynth_time_aggregation(enabled = TRUE, period = "quarterly")
-  agg <- countsynth_data(cfg, df = tibble::as_tibble(grid))
+  expect_warning(
+    agg <- countsynth_data(cfg, df = tibble::as_tibble(grid)),
+    "Time aggregation is on"
+  )
   expect_true(all(agg$denominators == 1))
 })
 
@@ -374,9 +383,10 @@ test_that("n_periods aggregation combines N consecutive periods", {
   expect_equal(as.Date(bounds$start_date),
                as.Date(c("2020-01-01", "2020-03-01", "2020-05-01")))
   # Each block ends the day before the next input period starts; the trailing
-  # block has no successor, so its width is extrapolated from the last gap.
+  # block has no successor, so it runs for the panel's usual step -- a whole
+  # month here, since every time is the first of one.
   expect_equal(as.Date(bounds$end_date),
-               as.Date(c("2020-02-29", "2020-04-30", "2020-05-30")))
+               as.Date(c("2020-02-29", "2020-04-30", "2020-05-31")))
 })
 
 test_that("n_periods works at daily resolution, where calendar bins cannot", {
@@ -395,7 +405,10 @@ test_that("n_periods works at daily resolution, where calendar bins cannot", {
     ),
     time_aggregation = countsynth_time_aggregation(enabled = TRUE, n_periods = 7)
   )
-  dat <- countsynth_data(cfg, df = tibble::as_tibble(grid))
+  expect_warning(
+    dat <- countsynth_data(cfg, df = tibble::as_tibble(grid)),
+    "Time aggregation is on"
+  )
   expect_equal(dim(dat$Y)[3], 4)
   expect_equal(dat$Y[1, 1, 1], 70) # 7 days x 10
   wk <- unique(dat$df[, c("start_date", "end_date")])
@@ -403,9 +416,15 @@ test_that("n_periods works at daily resolution, where calendar bins cannot", {
   expect_equal(as.Date(wk$start_date), days[c(1, 8, 15, 22)])
   expect_equal(as.Date(wk$end_date), days[c(7, 14, 21, 28)])
 
-  # Calendar monthly collapses the same panel to a single time point.
+  # Calendar monthly collapses the same panel to a single time point, which
+  # covers only 28 of March's 31 days.
   cfg$time_aggregation <- countsynth_time_aggregation(enabled = TRUE, period = "monthly")
-  expect_equal(dim(countsynth_data(cfg, df = tibble::as_tibble(grid))$Y)[3], 1)
+  expect_warning(
+    monthly <- countsynth_data(cfg, df = tibble::as_tibble(grid)),
+    "only partly covered"
+  )
+  expect_equal(dim(monthly$Y)[3], 1)
+  expect_equal(as.Date(unique(monthly$df$end_date)), as.Date("2021-03-28"))
 })
 
 test_that("period and n_periods are mutually exclusive", {

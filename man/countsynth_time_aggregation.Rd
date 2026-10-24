@@ -42,3 +42,32 @@ this when the data is not monthly, or when you want blocks anchored to
 the panel's own start rather than to the calendar.
 }
 }
+\section{Warning -- prefer to aggregate before fitting}{
+
+Aggregating inside the package is a convenience, and it is easy to get
+subtly wrong. Where you can, aggregate the data yourself before fitting,
+check the result, and leave \code{enabled} off; every run that aggregates here
+warns, and says what it did to your data. If you do use it, check:
+\itemize{
+\item \strong{The denominator.} It is averaged unless \code{denominator_time_unit} is
+\code{"none"}. Births, conceptions or any other per-period flow must be summed;
+averaging them leaves every rate inflated by the block length.
+\item \strong{Exposure.} A block is exposed if any period in it is, so a block that
+straddles a unit's start date mixes exposed and unexposed months into one
+exposed cell. Choose bins that line up with adoption where you can.
+\item \strong{Suppressed periods.} A block pooling a suppressed period with others
+is censored on its summed range -- the observed periods' total plus the
+\code{suppression_range} once per suppressed period -- which is right only if
+the source suppressed each period on its own. This is the one thing that
+is hard to do by hand: a pre-aggregated block cannot say it contains a
+suppressed month (an \code{NA} there would be read as a lone suppressed count),
+so for suppressed data this option is the better route.
+\item \strong{Gaps.} A block missing any of its input periods for some unit is an
+unbalanced panel: an error, or with \code{allow_unbalanced_panel} left out of
+the likelihood, never summed over the periods that are present.
+\item \strong{Bins the data does not fill.} A bin cut short by the date window, or
+input coarser than the bin, is labelled with the dates the data actually
+covers, so person-time stays right; the warning lists them.
+}
+}
+

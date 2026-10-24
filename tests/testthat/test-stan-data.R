@@ -31,11 +31,12 @@ test_that("stan_data_joint index sets follow the Python mask logic", {
   control_flat <- flatten_kdn(data$control_idx_array)
 
   # model_treated = TRUE: likelihood on all non-missing cells; censoring
-  # adjustment set = all cells.
+  # adjustment set = all cells. Observed cells carry no censoring term of
+  # their own (the Python model's "not in 1..9" term counted it twice).
   sd <- stan_data_joint(data, rank = 2, model_treated = TRUE)
   expect_equal(as.integer(sd$obs_cell), which(!missing_flat))
   expect_equal(as.integer(sd$cens_cell), which(missing_flat))
-  expect_equal(as.integer(sd$notcens_cell), which(!missing_flat))
+  expect_null(sd$notcens_cell)
   expect_equal(as.integer(sd$exp_cell), which(!control_flat))
   expect_equal(sd$n_exposed, sum(!control_flat))
 
@@ -47,7 +48,6 @@ test_that("stan_data_joint index sets follow the Python mask logic", {
   sd0 <- stan_data_joint(data, rank = 2, model_treated = FALSE)
   expect_equal(as.integer(sd0$obs_cell), which(!missing_flat & control_flat))
   expect_equal(as.integer(sd0$cens_cell), which(missing_flat & control_flat))
-  expect_equal(as.integer(sd0$notcens_cell), which(!missing_flat & control_flat))
 
   # exp_k/exp_d agree with kdn_from_flat.
   sub <- kdn_from_flat(as.integer(sd$exp_cell), sd$D, sd$N)

@@ -11,7 +11,8 @@ countsynth_example_data <- function() {
 #' Smoke-test configuration for the bundled fertility data
 #'
 #' Mirrors the Python package's `fertility_smoke_test.yaml`: total births,
-#' rank 3, bimonthly aggregation, 200 warmup + 200 sampling iterations.
+#' rank 3, 200 warmup + 200 sampling iterations. The data is already
+#' bimonthly, so it needs no time aggregation.
 #' Fast enough to verify the pipeline end-to-end (~minutes); not for
 #' inference.
 #'
@@ -44,8 +45,7 @@ countsynth_example_config <- function(output_dir = file.path(tempdir(), "countsy
     ),
     output = countsynth_output_opts(figures = TRUE),
     date_format = "%Y-%m-%d",
-    start_date = "2016-01-01", end_date = "2024-01-01",
-    time_aggregation = countsynth_time_aggregation(enabled = TRUE, period = "bimonthly")
+    start_date = "2016-01-01", end_date = "2024-01-01"
   )
   override <- list(...)
   for (nm in names(override)) {

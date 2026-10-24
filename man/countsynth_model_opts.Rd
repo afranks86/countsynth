@@ -10,6 +10,7 @@ countsynth_model_opts(
   nb_disp = 1e-04,
   sample_disp = FALSE,
   adjust_for_missingness = TRUE,
+  suppression_range = DEFAULT_SUPPRESSION_RANGE,
   model_treated = TRUE,
   inference_mode = NULL,
   treatment_effects = NULL,
@@ -29,8 +30,19 @@ labels (e.g. \code{"total"}, \code{"age"}).}
 
 \item{sample_disp}{Sample per-unit dispersion instead of fixing it.}
 
-\item{adjust_for_missingness}{Integrate the likelihood over censored small
-counts (values 1-9 suppressed in the source data).}
+\item{adjust_for_missingness}{Read an \code{NA} outcome as a suppressed count and
+integrate the likelihood over the values it could have been (see
+\code{suppression_range}). \code{FALSE} drops \code{NA} cells from the likelihood
+instead -- the right reading when they mean "not collected".}
+
+\item{suppression_range}{Integer vector \code{c(lower, upper)}: the counts the
+source data suppresses, so that an \code{NA} outcome is known to lie in
+\code{lower:upper}. The default \code{c(1, 9)} is the US vital-statistics
+convention (CDC WONDER and NCHS hide counts of 1-9); set it to match your
+source, e.g. \code{c(1, 10)} or \code{c(0, 4)}. A cell that pools a suppressed
+count with others -- a time block or a synthetic \code{total} -- lies in the
+sum of its parts' ranges, and is censored on that. Ignored when
+\code{adjust_for_missingness} is \code{FALSE}.}
 
 \item{model_treated}{Include the treatment-effect block.}
 

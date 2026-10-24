@@ -112,10 +112,21 @@ group_logsumexp <- function(x, gid, ng) {
 # The flag is OR'd against any already on the frame rather than overwriting
 # it: pooling the second axis sees a cell the first pass already filled,
 # whose outcome is no longer NA, and the imputation has to stay visible.
+#
+# Only suppressed cells are filled, not absent ones. A cell with no row in
+# the panel comes through countsynth_draws() with every observed column NA,
+# treatment included -- a reported row always has one. Its model prediction
+# rests on a placeholder exposure, so it is not an estimate of anything, and
+# adding it to a pooled total without its unknown denominator spiked the
+# pooled group's raw rate. It stays NA, so the pooled cell does too, the
+# same way the absent cell drops out of every real unit's figures.
 impute_missing_outcomes <- function(sub) {
   missing <- FALSE
   if ("outcome" %in% names(sub)) {
     missing <- is.na(sub$outcome)
+    if ("treatment" %in% names(sub)) {
+      missing <- missing & !is.na(sub$treatment)
+    }
     if ("mu_treated" %in% names(sub) && any(missing)) {
       cell_key <- intersect(c("unit", "time", "group"), names(sub))
       cid <- vctrs::vec_group_id(sub[cell_key])
@@ -321,8 +332,11 @@ add_aggregate_units <- function(draws, specs) {
 # `source_unit` names the unit each row came from (the unit itself on real
 # rows), since relabeled member rows share their (unit, time, group) key.
 post_treatment_rows <- function(draws, units = NULL) {
-  treated <- !is.na(draws$treatment) & draws$treatment == 1
-  wanted <- if (is.null(units)) treated else treated & draws$unit %in% units
+  # Units are matched on the post-treatment rows only, a small slice of a
+  # report-scale frame. The report builds its summary tables several times
+  # over, and a full-frame %in% on every call added seconds to each report.
+  treated_idx <- which(!is.na(draws$treatment) & draws$treatment == 1)
+  treated_unit <- draws$unit[treated_idx]
   sources <- attr(draws, "aggregate_unit_sources") %||% list()
   pooled <- names(sources)
   if (!is.null(units)) {
@@ -330,13 +344,16 @@ post_treatment_rows <- function(draws, units = NULL) {
   }
   rebuilt <- list()
   if (length(pooled) > 0) {
-    real_units <- setdiff(unique(draws$unit), names(sources))
+    # Which members have any row at all, from one pass over the unit column.
+    # A member can be missing because the frame was subset to the pooled
+    # unit, or because the spec overwrote a real unit it also pooled (its
+    # name is then a pooled unit's). Its rows are gone either way, so there
+    # is nothing to rebuild from.
+    candidates <- unique(unlist(sources[pooled], use.names = FALSE))
+    seen <- tabulate(match(draws$unit, candidates), length(candidates)) > 0
+    present <- setdiff(candidates[seen], names(sources))
     for (u in pooled) {
-      members <- sources[[u]]
-      absent <- setdiff(members, real_units)
-      # A member can be missing because the frame was subset to the pooled
-      # unit, or because the spec overwrote a real unit it also pooled. Its
-      # rows are gone either way, so there is nothing to rebuild from.
+      absent <- setdiff(sources[[u]], present)
       if (length(absent) > 0) {
         cli::cli_warn(c(
           "Pooled unit {.val {u}} is missing member unit{?s} {.val {absent}}.",
@@ -345,13 +362,23 @@ post_treatment_rows <- function(draws, units = NULL) {
         ))
         next
       }
-      rows <- impute_missing_outcomes(draws[treated & draws$unit %in% members, ])
+      rows <- impute_missing_outcomes(
+        draws[treated_idx[treated_unit %in% sources[[u]]], ]
+      )
       rows$source_unit <- rows$unit
       rows$unit <- rep(u, nrow(rows))
       rebuilt[[u]] <- rows
     }
   }
-  post <- draws[wanted & !draws$unit %in% names(rebuilt), ]
+  keep <- if (is.null(units)) {
+    rep(TRUE, length(treated_idx))
+  } else {
+    treated_unit %in% units
+  }
+  if (length(rebuilt) > 0) {
+    keep <- keep & !treated_unit %in% names(rebuilt)
+  }
+  post <- draws[treated_idx[keep], ]
   post$source_unit <- post$unit
   if (length(rebuilt) == 0) {
     return(post)

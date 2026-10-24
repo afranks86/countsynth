@@ -43,8 +43,11 @@ countsynth_config(
 \item{time_aggregation}{A \code{\link[=countsynth_time_aggregation]{countsynth_time_aggregation()}} object, or a named
 list of its arguments.}
 
-\item{allow_unbalanced_panel}{Treat structurally absent (unit, time) cells
-as missing instead of erroring.}
+\item{allow_unbalanced_panel}{Leave structurally absent (unit, time) cells
+out of the likelihood instead of erroring. A cell with no row was never
+reported, which is not a suppressed count, so it gets no censoring term.
+Under time aggregation, a block missing any of its input periods counts
+as absent too.}
 
 \item{outcome}{Optional label used in draws filenames (falls back to the
 outcome prefix, then \code{"outcome"}).}

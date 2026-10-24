@@ -8,7 +8,8 @@ build_model_arrays(
   df,
   groups,
   denominator_scale = 10000,
-  allow_unbalanced_panel = FALSE
+  allow_unbalanced_panel = FALSE,
+  suppression_range = DEFAULT_SUPPRESSION_RANGE
 )
 }
 \arguments{
@@ -21,11 +22,18 @@ optionally \code{denominator}, and \code{treatment}.}
 i.e. rates per 10k).}
 
 \item{allow_unbalanced_panel}{If \code{FALSE}, error when any (group, unit,
-time) cell has no row; if \code{TRUE}, mark such cells missing.}
+time) cell has no row; if \code{TRUE}, leave such cells out of the likelihood.
+A cell with no row was never reported, which is not the same as a
+suppressed count, so it gets no censoring term either.}
+
+\item{suppression_range}{The range a suppressed (\code{NA}) outcome lies in,
+for rows without their own \code{outcome_lower}/\code{outcome_upper} bounds.}
 }
 \value{
 List with \code{Y}, \code{denominators}, \code{control_idx_array},
-\code{missing_idx_array}, \code{excluded_idx_array}, \code{groups}, \code{units}, \code{times}.
+\code{missing_idx_array}, \code{excluded_idx_array}, \code{cens_lower}, \code{cens_upper}
+(each suppressed cell's range, \code{NA} elsewhere), \code{suppression_range},
+\code{groups}, \code{units}, \code{times}.
 }
 \description{
 Convert a standardized long frame into dense (K, D, N) model arrays

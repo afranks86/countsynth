@@ -23,6 +23,14 @@ data {
   array[n_obs] int<lower=0> y;
   int<lower=0> n_cens;                   // exposed & missing (suppressed)
   array[n_cens] int<lower=1, upper=n_exposed> cens_e;
+  // Suppressed exposed cells with a range of their own (a time block or
+  // synthetic total pooling a suppressed count): icens_lo..icens_hi.
+  int<lower=0> n_icens;
+  array[n_icens] int<lower=1, upper=n_exposed> icens_e;
+  array[n_icens] int<lower=0> icens_lo;
+  array[n_icens] int<lower=0> icens_hi;
+  int<lower=0> supp_lo;                  // the counts the source suppresses
+  int<lower=supp_lo> supp_hi;
 
   int<lower=0, upper=1> is_nb;
   int<lower=0, upper=1> adjust_missing;
@@ -47,18 +55,51 @@ data {
   vector<lower=0>[Qtot] te_re_prior_scale;
 }
 transformed data {
-  vector[9] sup;                         // censored-count support 1..9
-  vector[9] lgamma_sup1;
-  for (v in 1 : 9) {
-    sup[v] = v;
-    lgamma_sup1[v] = lgamma(v + 1);
+  int n_sup = supp_hi - supp_lo + 1;
+  vector[n_sup] sup;                     // censored-count support supp_lo..supp_hi
+  vector[n_sup] lgamma_sup1;
+  for (j in 1 : n_sup) {
+    sup[j] = supp_lo + j - 1;
+    lgamma_sup1[j] = lgamma(sup[j] + 1);
   }
-  vector[9] neg_lgamma_sup1 = -lgamma_sup1;
+  vector[n_sup] neg_lgamma_sup1 = -lgamma_sup1;
   // phi is data here, so the per-unit censoring coefficients are free.
   vector[is_nb == 1 ? D : 0] log_phi = log(phi_unit);
-  array[is_nb == 1 ? D : 0] vector[9] b_cens;
+  array[is_nb == 1 ? D : 0] vector[n_sup] b_cens;
   for (d in 1 : (is_nb == 1 ? D : 0)) {
     b_cens[d] = nb_censor_coeff(phi_unit[d], sup, lgamma_sup1);
+  }
+
+  // Ranged cells' supports, laid end to end: cell i's run starts at
+  // icens_start[i] and holds icens_len[i] values. Their NB coefficients are
+  // free too, each computed at its own unit's phi.
+  array[n_icens] int icens_start;
+  array[n_icens] int icens_len;
+  int n_isup = 0;
+  for (i in 1 : n_icens) {
+    if (icens_hi[i] < icens_lo[i]) {
+      reject("icens_hi[", i, "] is below icens_lo[", i, "]");
+    }
+    icens_start[i] = n_isup + 1;
+    icens_len[i] = icens_hi[i] - icens_lo[i] + 1;
+    n_isup += icens_len[i];
+  }
+  vector[n_isup] isup;
+  vector[n_isup] ilgamma_sup1;
+  for (i in 1 : n_icens) {
+    for (j in 1 : icens_len[i]) {
+      isup[icens_start[i] + j - 1] = icens_lo[i] + j - 1;
+      ilgamma_sup1[icens_start[i] + j - 1] = lgamma(icens_lo[i] + j);
+    }
+  }
+  vector[n_isup] ineg_lgamma_sup1 = -ilgamma_sup1;
+  vector[is_nb == 1 ? n_isup : 0] ib_cens;
+  for (i in 1 : (is_nb == 1 ? n_icens : 0)) {
+    int d = exp_d[icens_e[i]];
+    ib_cens[icens_start[i] : (icens_start[i] + icens_len[i] - 1)] =
+      nb_censor_coeff(phi_unit[d],
+                      segment(isup, icens_start[i], icens_len[i]),
+                      segment(ilgamma_sup1, icens_start[i], icens_len[i]));
   }
 }
 parameters {
@@ -126,6 +167,8 @@ model {
     y ~ poisson_log(mu_exposed[obs_e]);
   }
 
+  // Suppressed exposed cells add log P(y in their range); observed cells
+  // need nothing beyond the direct likelihood above (see joint.stan).
   if (adjust_missing == 1) {
     if (is_nb == 1) {
       for (i in 1 : n_cens) {
@@ -133,27 +176,23 @@ model {
         target += suppressed_mass_nb(mu_exposed[cens_e[i]], phi_unit[d],
                                      log_phi[d], b_cens[d], sup);
       }
-      if (n_obs > 0) {
-        vector[n_obs] mass;
-        for (i in 1 : n_obs) {
-          int d = exp_d[obs_e[i]];
-          mass[i] = suppressed_mass_nb(mu_exposed[obs_e[i]], phi_unit[d],
-                                       log_phi[d], b_cens[d], sup);
-        }
-        target += sum(log1m_exp(mass));
+      for (i in 1 : n_icens) {
+        int d = exp_d[icens_e[i]];
+        target += suppressed_mass_nb(
+          mu_exposed[icens_e[i]], phi_unit[d], log_phi[d],
+          segment(ib_cens, icens_start[i], icens_len[i]),
+          segment(isup, icens_start[i], icens_len[i]));
       }
     } else {
       for (i in 1 : n_cens) {
         target += suppressed_mass_pois(mu_exposed[cens_e[i]],
                                        neg_lgamma_sup1, sup);
       }
-      if (n_obs > 0) {
-        vector[n_obs] mass;
-        for (i in 1 : n_obs) {
-          mass[i] = suppressed_mass_pois(mu_exposed[obs_e[i]],
-                                         neg_lgamma_sup1, sup);
-        }
-        target += sum(log1m_exp(mass));
+      for (i in 1 : n_icens) {
+        target += suppressed_mass_pois(
+          mu_exposed[icens_e[i]],
+          segment(ineg_lgamma_sup1, icens_start[i], icens_len[i]),
+          segment(isup, icens_start[i], icens_len[i]));
       }
     }
   }

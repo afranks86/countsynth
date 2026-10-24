@@ -20,7 +20,8 @@ A \code{\link[=countsynth_config]{countsynth_config()}} object.
 }
 \description{
 Mirrors the Python package's \code{fertility_smoke_test.yaml}: total births,
-rank 3, bimonthly aggregation, 200 warmup + 200 sampling iterations.
+rank 3, 200 warmup + 200 sampling iterations. The data is already
+bimonthly, so it needs no time aggregation.
 Fast enough to verify the pipeline end-to-end (~minutes); not for
 inference.
 }

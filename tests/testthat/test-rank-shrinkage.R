@@ -31,9 +31,6 @@ prior_only_data <- function(rank, rank_shrinkage) {
   sd$n_cens <- 0L
   sd$cens_cell <- empty_int
   sd$cens_unit <- empty_int
-  sd$n_notcens <- 0L
-  sd$notcens_cell <- empty_int
-  sd$notcens_unit <- empty_int
   sd
 }
 
