@@ -197,11 +197,16 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
   thresholds <- thresholds %||% countsynth_convergence()
   gate_params <- gate_params %||% DEFAULT_GATE_PARAMS
 
-  summ <- element_diagnostics(fit, diag_variables(fit))
+  # Only the gated variables are diagnosed. R-hat and ESS cost about a
+  # millisecond per element per 600 draws, and diagnosing the ungated ones
+  # only to discard them added a third to the gate's time;
+  # parameter_diagnostics() still covers every variable.
+  vars <- diag_variables(fit)
+  gated_summ <- element_diagnostics(
+    fit, vars[match_gate_params(vars, gate_params)]
+  )
   # Fixed elements (zero posterior span) carry no convergence information.
-  summ <- summ[summ$span > 0 | is.na(summ$span), ]
-  gated <- match_gate_params(summ$base, gate_params)
-  gated_summ <- summ[gated, ]
+  gated_summ <- gated_summ[gated_summ$span > 0 | is.na(gated_summ$span), ]
 
   rhat_max <- max(gated_summ$rhat, na.rm = TRUE)
   ess_bulk_min <- min(gated_summ$ess_bulk, na.rm = TRUE)
@@ -231,6 +236,11 @@ convergence_gate <- function(fit, gate_params = NULL, thresholds = NULL) {
   if (!is.null(gate_params)) {
     out$gate_params <- gate_params
   }
+  # Per-variable rows for gate_failure_bullets() to name the worst offenders
+  # from, instead of re-diagnosing the whole fit. An attribute, not a field,
+  # so the convergence JSON keeps its shape (jsonlite drops attributes).
+  gated_summ$gated <- TRUE
+  attr(out, "parameters") <- parameter_rows(gated_summ, thresholds)
   out
 }
 
@@ -264,9 +274,13 @@ parameter_diagnostics <- function(fit, gate_params = NULL, thresholds = NULL) {
   gate_params <- gate_params %||% DEFAULT_GATE_PARAMS
 
   summ <- element_diagnostics(fit, diag_variables(fit))
-  gated_by_base <- match_gate_params(summ$base, gate_params)
-  summ$gated <- gated_by_base
+  summ$gated <- match_gate_params(summ$base, gate_params)
+  parameter_rows(summ, thresholds)
+}
 
+# One row per base variable from element_diagnostics() output carrying a
+# `gated` column; shared by parameter_diagnostics() and convergence_gate().
+parameter_rows <- function(summ, thresholds) {
   rows <- summ |>
     dplyr::group_by(.data$base) |>
     dplyr::summarise(
@@ -346,8 +360,7 @@ print.countsynth_diagnostics <- function(x, ...) {
 # R-hat or ESS fails it just as a FAIL-level one does. Reporting only the
 # FAIL thresholds would then print "FAILED" next to an R-hat of 1.05 and
 # explain nothing, so each criterion reports the level it actually reached.
-gate_failure_bullets <- function(gate, thresholds = NULL, fit = NULL,
-                                 max_params = 3L) {
+gate_failure_bullets <- function(gate, thresholds = NULL, max_params = 3L) {
   thresholds <- thresholds %||% countsynth_convergence()
   bullets <- character()
   warn_only <- TRUE
@@ -431,7 +444,7 @@ gate_failure_bullets <- function(gate, thresholds = NULL, fit = NULL,
     ))
   }
 
-  worst <- gate_worst_parameters(fit, max_params)
+  worst <- gate_worst_parameters(gate, max_params)
   if (length(worst) > 0) {
     bullets <- c(bullets, sprintf(
       "worst gated parameter%s: %s",
@@ -441,12 +454,11 @@ gate_failure_bullets <- function(gate, thresholds = NULL, fit = NULL,
   bullets
 }
 
-# Top offenders among the gated parameters, formatted "name (R-hat x, ESS y)".
-gate_worst_parameters <- function(fit, max_params = 3L) {
-  if (is.null(fit)) {
-    return(character())
-  }
-  diag <- tryCatch(parameter_diagnostics(fit), error = function(e) NULL)
+# Top offenders among the gated parameters, formatted "name (R-hat x, ESS y)",
+# from the rows convergence_gate() attaches. A cut manifest or a hand-built
+# gate has none, and gets no names.
+gate_worst_parameters <- function(gate, max_params = 3L) {
+  diag <- attr(gate, "parameters")
   if (is.null(diag) || nrow(diag) == 0) {
     return(character())
   }

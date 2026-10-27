@@ -244,8 +244,48 @@ test_that("gate failure bullets name the criterion and the level it reached", {
   )
 })
 
-test_that("gate_worst_parameters is silent without a fit", {
-  expect_equal(gate_worst_parameters(NULL), character())
+test_that("gate_worst_parameters names FAIL rows from the gate itself", {
+  # A cut manifest or hand-built gate carries no rows: no names.
+  expect_equal(gate_worst_parameters(list(converged = FALSE)), character())
+
+  th <- countsynth_convergence(
+    rhat_warn = 1.1, rhat_fail = 1.5, ess_min = 100, ess_fail_fraction = 0.25
+  )
+  summ <- tibble::tibble(
+    base = c("mu_ctrl", "mu_ctrl", "te"),
+    rhat = c(1.02, 1.8, 1.2), ess_bulk = c(900, 12, 60),
+    ess_tail = c(900, 30, 80), span = 1, gated = TRUE
+  )
+  gate <- list(
+    rhat_max = 1.8, ess_bulk_min = 12, ess_tail_min = 30,
+    divergences = 0L, divergence_fraction = 0, converged = FALSE
+  )
+  attr(gate, "parameters") <- parameter_rows(summ, th)
+  # te is only WARN, so mu_ctrl is the one named.
+  expect_identical(
+    gate_worst_parameters(gate), "mu_ctrl (R-hat 1.8, ESS 12)"
+  )
+  expect_match(
+    gate_failure_bullets(gate, th), "worst gated parameter: mu_ctrl",
+    all = FALSE
+  )
+})
+
+test_that("the draws CSV keeps write.csv's format", {
+  # Quoting, NA, dates, factors and logicals. fwrite can round the 15th
+  # significant digit of some doubles differently, so this pins the format,
+  # not every digit.
+  draws <- tibble::tibble(
+    .draw = 1:3, unit = c("A", "B, C", "q\"x"),
+    time = as.Date("2016-01-01") + 0:2, outcome = c(5L, NA, 7L),
+    mu = c(8.6288087, 1 / 3, 1e-20), big = c(123456789012, 1e15, -0.5),
+    treatment = c(TRUE, FALSE, NA), group = factor(c("a", NA, "b"))
+  )
+  dir <- withr::local_tempdir()
+  path <- write_draws_file(draws, "d", dir, "csv")
+  ref <- file.path(dir, "ref.csv")
+  utils::write.csv(as.data.frame(draws), ref, row.names = FALSE)
+  expect_identical(readLines(path), readLines(ref))
 })
 
 test_that("gate failure advice matches the criterion that actually tripped", {
@@ -337,4 +377,37 @@ test_that("mcmc.max_treedepth reaches the sampler", {
   expect_equal(fit$fit$metadata()$max_treedepth, 7)
   # And the gate measures saturation against the configured cap, not 10.
   expect_equal(convergence_gate(fit)$max_treedepth, 7)
+})
+
+test_that("the gate diagnoses only gated variables and matches the full table", {
+  skip_on_cran()
+  skip_if_no_cmdstan()
+  td <- withr::local_tempdir()
+  csv <- write_test_csv(make_test_data(), file.path(td, "panel.csv"))
+  cfg <- make_test_config(csv, file.path(td, "out"))
+  cfg$mcmc <- countsynth_mcmc_opts(
+    auto_parallelism = FALSE, chains = 2, iter_warmup = 40, iter_sampling = 30,
+    thin = 1, seed = 5, progress = FALSE
+  )
+  fit <- countsynth_fit(countsynth_data(cfg, type = "both"), rank = 2, config = cfg)
+  # 60 draws: posterior warns that it capped some ESS values, which is
+  # beside the point here.
+  gate <- suppressWarnings(convergence_gate(fit))
+  full <- suppressWarnings(parameter_diagnostics(fit))
+  gated <- full[full$gated, ]
+
+  # Restricting the work to the gated variables leaves the verdict unchanged.
+  expect_equal(gate$rhat_max, max(gated$rhat, na.rm = TRUE))
+  expect_equal(
+    min(gate$ess_bulk_min, gate$ess_tail_min), min(gated$ess, na.rm = TRUE)
+  )
+  rows <- attr(gate, "parameters")
+  expect_setequal(rows$parameter, gated$parameter)
+  expect_equal(
+    rows[order(rows$parameter), c("rhat", "ess", "status")],
+    gated[order(gated$parameter), c("rhat", "ess", "status")],
+    ignore_attr = TRUE
+  )
+  # Ungated variables are no longer diagnosed by the gate at all.
+  expect_false(any(full$parameter[!full$gated] %in% rows$parameter))
 })

@@ -19,6 +19,7 @@ Imports:
     checkmate,
     cli,
     cmdstanr (>= 0.7.0),
+    data.table,
     dplyr,
     ggplot2,
     glue,

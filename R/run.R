@@ -38,7 +38,11 @@ write_draws_file <- function(draws, stem, dir, format) {
     arrow::write_parquet(as.data.frame(draws), path)
   } else {
     path <- file.path(dir, paste0(stem, ".csv"))
-    utils::write.csv(as.data.frame(draws), path, row.names = FALSE)
+    # fwrite, not write.csv: ~60x faster on tens of millions of rows. The
+    # quote/na settings keep write.csv's format; a non-integer can differ
+    # from it in the 15th significant digit (fwrite's rounding), ~1e-15
+    # relative.
+    data.table::fwrite(draws, path, quote = TRUE, na = "NA")
   }
   path
 }
@@ -118,19 +122,29 @@ countsynth_run <- function(config, types = NULL, ranks = NULL) {
         cut_component_table(fit)
       } else {
         fit <- countsynth_fit(data, rank = rank, config = config)
+        # cmdstanr's "chains finished" is not the end of the fit: these
+        # stages ran silent for minutes on a big panel, longer than a short
+        # run's sampling.
+        cli::cli_progress_step("Reading posterior draws")
+        # One pass over the CmdStan CSVs. Each draws() call that asks for
+        # uncached variables re-scans every file, and the draws frame, the
+        # gate and the report between them ask for nearly all of them.
+        fit$fit$draws()
+        cli::cli_progress_step("Building draws frame")
         draws <- countsynth_draws(fit)
+        cli::cli_progress_step("Checking convergence")
         gate <- convergence_gate(fit)
         ppc_draws <- NULL
       }
 
+      cli::cli_progress_step("Writing draws file")
       draws_path <- write_draws_file(draws, stem, raw_dir, out$draws_format)
       write_convergence_json(
         gate, file.path(raw_dir, paste0(stem, "_convergence.json"))
       )
+      cli::cli_progress_done()
       if (isFALSE(gate$converged)) {
-        reasons <- gate_failure_bullets(
-          gate, config$mcmc$convergence, if (is_cut) NULL else fit
-        )
+        reasons <- gate_failure_bullets(gate, config$mcmc$convergence)
         advice <- gate_failure_advice(gate, config$mcmc$convergence)
         cli::cli_warn(c(
           "Convergence gate FAILED for {stem}; artifacts still written.",
