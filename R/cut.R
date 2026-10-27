@@ -239,6 +239,10 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
   } else {
     NULL
   }
+  # What the mixed predictive check redraws (countsynth_ppc_te_mixed()). The
+  # stage-2 fits are dropped once their draws are pooled, so its inputs are
+  # kept here rather than read back later.
+  te_components <- te_unit_components(te_design, stage1$stan_data)
 
   phi_for_ref <- function(draw) {
     if (!is_nb) {
@@ -291,6 +295,11 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
         te_design, sub(m$beta), sub(m$scale), sub(m$z), chain_ids, iter_ids
       )
     }
+    mixed_m <- extract_var_matrix(fit2, te_mixed_vars(te_components))
+    te_mixed <- te_mixed_parts(
+      mixed_m[keep_idx, , drop = FALSE], te_components,
+      mu1[ref$draw, exposed_cell]
+    )
 
     # Fresh untreated predictive from the component's frozen baseline.
     withr::with_seed(predictive_seed(settings$stage2_seed, ref$component), {
@@ -300,7 +309,7 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
       list(
         ref = ref, diag = diag, te_out = te_out, ypred_out = ypred_out,
         mu_grid = mu_grid, chain_ids = chain_ids, iter_ids = iter_ids,
-        n_out = n_out, te_coefs = te_coefs,
+        n_out = n_out, te_coefs = te_coefs, te_mixed = te_mixed,
         retained_draws = ci2$n_chains * ci2$per_chain
       )
     })
@@ -384,6 +393,20 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
     class(te_draws) <- c("countsynth_te_draws", class(te_draws))
   }
 
+  # Rows follow the pooled .draw order, components stacked as above.
+  te_mixed <- list(
+    base = do.call(rbind, lapply(results, function(r) r$te_mixed$base)),
+    scale = do.call(rbind, lapply(results, function(r) r$te_mixed$scale)),
+    phi = if (is_nb) {
+      do.call(rbind, lapply(results, function(r) {
+        matrix(phi_for_ref(r$ref$draw), r$n_out, D, byrow = TRUE)
+      }))
+    } else {
+      NULL
+    },
+    components = te_components
+  )
+
   all_converged <- all(vapply(component_records, function(r) isTRUE(r$converged), logical(1)))
   # An ungated (variational) stage 1 must not silently count as a pass, but
   # it must not fail the run either -- the run-level flag then reports only
@@ -407,6 +430,7 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
       draws = draws,
       te_draws = te_draws,
       te_design = te_design,
+      te_mixed = te_mixed,
       stage1 = stage1,
       stage1_ppc = stage1_ppc,
       component_records = component_records,

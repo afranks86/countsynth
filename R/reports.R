@@ -7,8 +7,9 @@
 #   tables/             the numbers behind it -- summary_table*.html,
 #                       summary_table_by_unit.csv, expected_vs_observed.csv,
 #                       post_treatment_summary.csv
-#   model_diagnostics/  whether to believe the fit -- ppc_*.png,
-#                       ppc_pvalues.csv, and rank_*.{png,csv} under shrinkage
+#   model_diagnostics/  whether to believe the fit -- ppc_*.png (including
+#                       the treated-side ppc_te_mixed*.png), ppc_pvalues.csv,
+#                       and rank_*.{png,csv} under shrinkage
 #
 # Tables ALWAYS write; only figures are gated by the `figures` selection. The
 # target unit's headline table is not written separately: it is the
@@ -52,6 +53,31 @@ ppc_plot_dims <- function(n_facets, ncol,
   list(
     width = max(min_width, ncol * per_facet_width),
     height = max(min_height, facet_nrow * per_facet_height)
+  )
+}
+
+# The mixed predictive check for the report, or NULL when it cannot run:
+# no fit, a fit without exposed cells, or a cut fit saved before the check
+# existed. Only the last is worth telling anyone about -- the other two have
+# no treatment effect to check.
+report_te_mixed <- function(fit, ppc_units, ppc_exclude_units) {
+  if (is.null(fit)) {
+    return(NULL)
+  }
+  if (inherits(fit, "countsynth_fit") &&
+    (!isTRUE(fit$model_treated) || fit$stan_data$n_exposed == 0)) {
+    return(NULL)
+  }
+  if (inherits(fit, "countsynth_cut_fit") && is.null(fit$te_mixed)) {
+    cli::cli_inform(c(
+      "!" = "Skipping the mixed predictive check: this cut fit predates it.",
+      i = "Refit to save its inputs."
+    ))
+    return(NULL)
+  }
+  countsynth_ppc_te_mixed(
+    fit,
+    ppc_units = ppc_units, ppc_exclude_units = ppc_exclude_units
   )
 }
 
@@ -197,7 +223,8 @@ report_size_guard <- function(draws, aggregate_units, aggregate_groups,
 #' @param fit Optional `countsynth_fit` / `countsynth_cut_fit` the draws came from.
 #'   Required for the `"te_regression"` and `"rank_shrinkage"` figures, which
 #'   read the treatment-effect design and the factor block rather than the
-#'   draws frame; without it those figures are skipped.
+#'   draws frame, and for the mixed predictive check in the `"ppc"` set
+#'   ([countsynth_ppc_te_mixed()]); without it those are skipped.
 #' @inheritParams countsynth_output_opts
 #' @return Invisible list with `summary`, `per_unit`, `detail`,
 #'   `target_unit`, `figures_dir`, `tables_dir`, `diagnostics_dir`,
@@ -413,6 +440,26 @@ countsynth_report <- function(draws, output_dir, target_unit = NULL, groups = NU
       save_plot(
         ppc$plots[[nm]], file.path(ppc_dir, paste0(nm, ".png")),
         width = dims$width, height = dims$height
+      )
+    }
+    # The mixed check reads the fit, not the draws frame (it redraws
+    # treatment-effect coefficients the frame does not carry), so like
+    # te_regression it runs only when the fit is passed.
+    mixed <- report_te_mixed(fit, ppc_units, ppc_exclude_units)
+    if (!is.null(mixed)) {
+      dims <- ppc_plot_dims(nrow(mixed$pvals), ncol = 3L)
+      save_plot(
+        mixed$plot, file.path(ppc_dir, "ppc_te_mixed.png"),
+        width = dims$width, height = dims$height
+      )
+      n_groups <- length(unique(mixed$pvals$group))
+      save_plot(
+        mixed$calibration,
+        file.path(ppc_dir, "ppc_te_mixed_calibration.png"),
+        width = 9, height = max(5, 4 * ceiling(n_groups / 2))
+      )
+      ppc$pvals <- dplyr::bind_rows(
+        ppc$pvals, dplyr::mutate(mixed$pvals, check_type = "te_mixed")
       )
     }
     write_table_csv(

@@ -799,6 +799,7 @@ more than one rank is requested):
     te/                                      # treatment-effect figures
   model_diagnostics/                         # whether to believe the fit
     ppc_*.png, ppc_pvalues.csv               # posterior predictive checks
+    ppc_te_mixed*.png                        # treated side: TE shrinkage
     rank_*.png, rank_*.csv                   # effective rank, under shrinkage
 ```
 

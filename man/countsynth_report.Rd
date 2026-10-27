@@ -85,7 +85,8 @@ package; warns and skips when it is missing.}
 \item{fit}{Optional \code{countsynth_fit} / \code{countsynth_cut_fit} the draws came from.
 Required for the \code{"te_regression"} and \code{"rank_shrinkage"} figures, which
 read the treatment-effect design and the factor block rather than the
-draws frame; without it those figures are skipped.}
+draws frame, and for the mixed predictive check in the \code{"ppc"} set
+(\code{\link[=countsynth_ppc_te_mixed]{countsynth_ppc_te_mixed()}}); without it those are skipped.}
 
 \item{rate_normalizer}{Reported rates are per this many units of exposure
 (default 1000). Purely a display scale: it cancels out of every

@@ -72,6 +72,7 @@ reference:
   - countsynth_ppc_acf
   - countsynth_ppc_rmse
   - countsynth_ppc_unit_corr
+  - countsynth_ppc_te_mixed
   - countsynth_trace_plot
   - countsynth_component_weight_plot
   - countsynth_component_weight_summary
