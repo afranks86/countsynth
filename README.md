@@ -47,6 +47,23 @@ print a path rather than error:
 cmdstanr::cmdstan_path()
 ```
 
+### Optional: faster sampling with stanli
+
+[stanli](https://github.com/seantalts/stanli) runs the same Stan programs
+without compiling them, using Stan's own NUTS, and samples countsynth's models
+about twice as fast as CmdStan with matching results (benchmarks in
+[`scripts/bench-stanli/`](scripts/bench-stanli/README.md)). It is opt-in:
+
+```r
+install.packages("stanli",
+  repos = c("https://seantalts.r-universe.dev", getOption("repos")))
+stanli::stanli_install()      # one-time runtime download, ~12 MB
+```
+
+then set `backend: stanli` under `mcmc:` in the config (or
+`countsynth_mcmc_opts(backend = "stanli")`). Both cut stages use it; an ADVI
+stage 1 still runs on CmdStan.
+
 Preparing a group of people for a workshop? See
 [`WORKSHOP_SETUP.md`](WORKSHOP_SETUP.md) and
 [`scripts/check_setup.R`](scripts/check_setup.R), which runs standalone over
@@ -277,6 +294,7 @@ mcmc:
   thinning: 1                    # retain num_samples / thinning draws
   target_accept: 0.8             # NUTS adapt_delta
   max_treedepth: 10              # NUTS tree-depth cap (cmdstanr's name)
+  # backend: stanli              # cmdstan (default) | stanli (~2x faster; see Installation)
   random_seed: 8675309
   progress_bar: true
   gate_params: [mu_ctrl, te]     # gate on these prefixes (this is the default;

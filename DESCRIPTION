@@ -45,7 +45,7 @@ Suggests:
     ragg,
     rmarkdown,
     scales,
-    stanli,
+    stanli (>= 0.30.1),
     testthat (>= 3.0.0),
     vdiffr
 Additional_repositories: https://stan-dev.r-universe.dev,

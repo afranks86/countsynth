@@ -32,8 +32,11 @@ stanli_stan_model <- function(name) {
 }
 
 check_stanli <- function() {
+  # The floor DESCRIPTION's Suggests names: the backend leans on as_cstanfit(),
+  # a pre-1.0 interface.
   rlang::check_installed(
     "stanli",
+    version = "0.30.1",
     reason = "for `mcmc$backend = \"stanli\"`.",
     action = function(...) {
       utils::install.packages(
