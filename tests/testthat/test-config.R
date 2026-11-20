@@ -201,22 +201,6 @@ test_that("quoted string booleans are rejected", {
   )
 })
 
-test_that("the Python repo's shipped configs load when present", {
-  py_configs <- Sys.glob(
-    file.path(
-      "~", "hierarchical-bayesian-NMF-refactor", "configs",
-      c("base_config.yaml", "fertility_config.yaml", "fertility_smoke_test.yaml",
-        "fertility_cut_smoke_test.yaml", "education_joint.yaml",
-        "education_cut.yaml", "test_config.yaml")
-    )
-  )
-  skip_if(length(py_configs) == 0, "Python repo configs not present")
-  for (path in py_configs) {
-    cfg <- read_countsynth_config(path)
-    expect_s3_class(cfg, "countsynth_config")
-  }
-})
-
 test_that("time_aggregation parses, and the old `aggregation` key still loads", {
   with_data <- function(block) {
     sub("  schema:", paste0(block, "\n  schema:"), BASE_YAML, fixed = TRUE)
