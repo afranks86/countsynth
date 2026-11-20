@@ -54,13 +54,15 @@ is the counterfactual (untreated) posterior predictive. Cut runs add
 
 ## What is checked, and what is not
 
-- **Checked — exact:** the Stan models' log-densities equal the NumPyro
-  models' at shared parameter values, up to an additive constant (fixtures
-  exported from Python; run `testthat::test_file("test-logdensity-parity.R")`).
-  Cell flattening order, cut chain quotas, output-thinning strides, and gate
-  bands are also fixture-pinned.
-- **Checked — statistical:** posterior summaries on the bundled fertility
-  data agree within Monte Carlo error.
+- **Pinned to Python's values:** cell flattening order, cut chain quotas,
+  output-thinning strides, and gate bands.
+- **No longer checked:** model equivalence. The port was validated against
+  Python (equal log-densities at shared parameter values, and posterior
+  summaries on the bundled fertility data within Monte Carlo error), but
+  those checks were retired once the models diverged on purpose. For
+  example, the Stan models no longer add the Python model's "not in 1..9"
+  term for observed cells, which counted that a cell was not suppressed
+  twice.
 - **Not preserved:** bitwise draw identity. NUTS implementations and RNGs
   differ; the cut components selected for the same seed also differ (R and
   numpy RNGs are different streams with the same stratified logic).

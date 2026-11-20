@@ -137,8 +137,7 @@ test_that("rank_shrinkage reaches the Stan data and is off by default", {
   expect_equal(on$group_mass_rate, 1.5)
   expect_equal(on$unit_sd_scale, 0.5)
 
-  # Adding the fields must not disturb the rest of the data list, which the
-  # log-density parity fixture depends on.
+  # Adding the fields must not disturb the rest of the data list.
   expect_equal(off[names(off) != "rank_shrink"][["y"]], on[["y"]])
 })
 
