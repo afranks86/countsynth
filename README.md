@@ -246,7 +246,9 @@ data:
 model:
   outcome_distribution: NB       # NB | Poisson
   nb_disp: 0.0001                # fixed dispersion; concentration = 1/nb_disp
-  sample_disp: false             # sample per-unit dispersion instead (NB only)
+  sample_disp: false             # sample the dispersion instead (NB only)
+  # disp_by: group               # group (default) | unit: where a sampled
+                                 # dispersion varies
   adjust_for_missingness: true   # read NA as a suppressed count, integrate over it
   # suppression_range: [1, 9]    # the counts your source suppresses (default 1-9)
   model_treated: true            # false = baseline-only fit, no effects
@@ -548,8 +550,13 @@ one fit total.
 **Likelihood.** `NB` is the default and the safe choice for count data with
 any overdispersion; `Poisson` is a good deal faster if the mean-variance
 relationship really holds. `nb_disp` fixes the dispersion (concentration
-`1/nb_disp`); `sample_disp: true` estimates it per unit instead, which costs
-sampling time and needs `NB`.
+`1/nb_disp`); `sample_disp: true` estimates it instead, which costs sampling
+time and needs `NB`. A sampled dispersion is one per group by default
+(`disp_by: group`): each is then informed by every unit's cells, and the
+treated unit borrows its controls' noise level rather than estimating its own
+partly from the exposed cells, where the treatment effect competes for the
+same excess variance. `disp_by: unit` gives one per unit instead, as fits
+before this option did.
 
 **Latent factor scale.** `time_fac`, the rank-`R` temporal basis, has a
 `Gamma(shape, shape)` prior: mean 1, entering the log-rate as

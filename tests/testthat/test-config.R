@@ -466,3 +466,16 @@ test_that("time_level round-trips through YAML and defaults to centered", {
     "should be one of"
   )
 })
+
+test_that("disp_by defaults to group and round-trips through YAML", {
+  expect_equal(countsynth_model_opts()$disp_by, "group")
+  expect_equal(countsynth_model_opts(disp_by = "unit")$disp_by, "unit")
+  expect_error(countsynth_model_opts(disp_by = "cell"), "should be one of")
+
+  with_model <- function(block) {
+    sub("model:", paste0("model:\n", block), BASE_YAML, fixed = TRUE)
+  }
+  expect_equal(read_countsynth_config(write_yaml_config(BASE_YAML))$model$disp_by, "group")
+  set <- read_countsynth_config(write_yaml_config(with_model("  disp_by: unit")))
+  expect_equal(set$model$disp_by, "unit")
+})

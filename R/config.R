@@ -418,7 +418,17 @@ countsynth_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 #' @param types Named list of [countsynth_type()] specs; names are the model-type
 #'   labels (e.g. `"total"`, `"age"`).
 #' @param nb_disp Fixed NB dispersion (concentration is `1/nb_disp`).
-#' @param sample_disp Sample per-unit dispersion instead of fixing it.
+#' @param sample_disp Sample the dispersion instead of fixing it.
+#' @param disp_by Where a sampled dispersion varies: `"group"` (default), one
+#'   per group shared by every unit, or `"unit"`, one per unit shared by every
+#'   group. Per group is better identified -- each is informed by every
+#'   unit's cells rather than by one unit's handful of groups -- and lets the
+#'   treated unit borrow its controls' noise level instead of estimating its
+#'   own partly from its exposed cells, where the treatment effect competes
+#'   for the same excess variance. `"unit"` is the historical form: it
+#'   reproduces earlier joint and cut stage-1 fits draw for draw (cut stage 2
+#'   has the same density but rounds differently, so its draws differ).
+#'   Ignored unless `sample_disp` is `TRUE`.
 #' @param adjust_for_missingness Read an `NA` outcome as a suppressed count and
 #'   integrate the likelihood over the values it could have been (see
 #'   `suppression_range`). `FALSE` drops `NA` cells from the likelihood
@@ -476,6 +486,7 @@ countsynth_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 #' @export
 countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
                              nb_disp = 1e-4, sample_disp = FALSE,
+                             disp_by = c("group", "unit"),
                              adjust_for_missingness = TRUE,
                              suppression_range = DEFAULT_SUPPRESSION_RANGE,
                              model_treated = TRUE, inference_mode = NULL,
@@ -485,6 +496,7 @@ countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
                              rank_shrinkage = NULL,
                              time_level = c("centered", "uncentered")) {
   time_level <- match.arg(time_level)
+  disp_by <- match.arg(disp_by)
   checkmate::assert_choice(outcome_distribution, c("NB", "Poisson"))
   types <- coerce_countsynth_list(types, "countsynth_type", "countsynth_type", "types")
   checkmate::assert_list(types, types = "countsynth_type")
@@ -563,7 +575,7 @@ countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
   new_countsynth_class(
     list(
       outcome_distribution = outcome_distribution, types = types,
-      nb_disp = nb_disp, sample_disp = sample_disp,
+      nb_disp = nb_disp, sample_disp = sample_disp, disp_by = disp_by,
       adjust_for_missingness = adjust_for_missingness,
       suppression_range = suppression_range,
       model_treated = model_treated, inference_mode = inference_mode,

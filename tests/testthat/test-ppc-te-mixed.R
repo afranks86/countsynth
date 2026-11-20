@@ -209,7 +209,7 @@ synthetic_source <- function(n_units, tau_model, tau_true, n_draws = 400,
       list(label = "exposed cell", level = seq_len(n_exp), n_levels = n_exp, mult = NULL)
     ),
     unit = sprintf("u%02d", unit_idx), group = rep("g", n_exp),
-    outcome = outcome, exp_d = unit_idx
+    outcome = outcome, exp_disp = rep(1L, n_exp)
   )
 }
 
@@ -345,4 +345,27 @@ test_that("cut fit saves the check's inputs on the pooled draws", {
 
   res <- countsynth_ppc_te_mixed(fit)
   expect_setequal(res$pvals$unit, c("C", "D"))
+})
+
+test_that("a sampled dispersion is one per group, carried into cut stage 2", {
+  skip_on_cran()
+  skip_if_no_cmdstan()
+  data <- mixed_data()
+  config <- mixed_config(data, NULL, inference_mode = "cut")
+  config$model$sample_disp <- TRUE
+  config$cut <- countsynth_cut_opts(
+    num_stage1_draws = 2, stage2_draws_per_component = 5,
+    stage2_mcmc = list(num_warmup = 100, num_samples = 100)
+  )
+  fit <- suppressWarnings(countsynth_cut_fit(data, rank = 2, config = config))
+  disp1 <- extract_var_matrix(fit$stage1$fit, "disp")
+  expect_equal(ncol(disp1), length(data$groups))
+
+  # Every pooled draw carries the concentrations of the stage-1 draw it was
+  # conditioned on, and each exposed cell reads its own group's.
+  d <- fit$draws
+  ref <- d$stage1_draw[match(sort(unique(d$.draw)), d$.draw)]
+  expect_equal(fit$te_mixed$phi, 1 / disp1[ref, , drop = FALSE], ignore_attr = TRUE)
+  expect_identical(te_mixed_source(fit)$exp_disp, mixed_exposed(data)$exp_k)
+  expect_setequal(countsynth_ppc_te_mixed(fit)$pvals$unit, c("C", "D"))
 })

@@ -9,6 +9,7 @@ countsynth_model_opts(
   types = list(),
   nb_disp = 1e-04,
   sample_disp = FALSE,
+  disp_by = c("group", "unit"),
   adjust_for_missingness = TRUE,
   suppression_range = DEFAULT_SUPPRESSION_RANGE,
   model_treated = TRUE,
@@ -28,7 +29,18 @@ labels (e.g. \code{"total"}, \code{"age"}).}
 
 \item{nb_disp}{Fixed NB dispersion (concentration is \code{1/nb_disp}).}
 
-\item{sample_disp}{Sample per-unit dispersion instead of fixing it.}
+\item{sample_disp}{Sample the dispersion instead of fixing it.}
+
+\item{disp_by}{Where a sampled dispersion varies: \code{"group"} (default), one
+per group shared by every unit, or \code{"unit"}, one per unit shared by every
+group. Per group is better identified -- each is informed by every
+unit's cells rather than by one unit's handful of groups -- and lets the
+treated unit borrow its controls' noise level instead of estimating its
+own partly from its exposed cells, where the treatment effect competes
+for the same excess variance. \code{"unit"} is the historical form: it
+reproduces earlier joint and cut stage-1 fits draw for draw (cut stage 2
+has the same density but rounds differently, so its draws differ).
+Ignored unless \code{sample_disp} is \code{TRUE}.}
 
 \item{adjust_for_missingness}{Read an \code{NA} outcome as a suppressed count and
 integrate the likelihood over the values it could have been (see

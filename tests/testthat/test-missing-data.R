@@ -209,7 +209,7 @@ test_that("cut stage 2 splits exposed suppressed cells the same way", {
   w <- suppress_cell(w, "B", "2020-05-01")
   dat <- suppressWarnings(countsynth_data(mortality_config(quarterly), df = w))
   mu <- rep(log(150), length(dat$Y))
-  sd2 <- stan_data_stage2(dat, mu, phi_unit = c(10, 10))
+  sd2 <- stan_data_stage2(dat, mu, phi_flat = rep(10, length(mu)))
   expect_equal(sd2$n_cens, 0)
   expect_equal(sd2$n_icens, 1)
   expect_equal(c(sd2$icens_lo, sd2$icens_hi), c(101L, 109L))

@@ -23,13 +23,16 @@ data {
   int<lower=1> R;                        // factorization rank
   int<lower=1> KDN;                      // K * D * N
   vector[KDN] log_denom;                 // log scaled exposure denominators
-  array[KDN] int<lower=1, upper=D> cell_unit; // unit index of each flat cell
+  // NB dispersion levels: one per group (n_disp = K) or one per unit
+  // (n_disp = D), chosen in R; every *_disp array maps a cell to its level.
+  int<lower=1> n_disp;
+  array[KDN] int<lower=1, upper=n_disp> cell_disp; // level of each flat cell
 
   // Direct-likelihood cells: !missing & (model_treated | control).
   int<lower=0> n_obs;
   array[n_obs] int<lower=1, upper=KDN> obs_cell;
   array[n_obs] int<lower=0> y;
-  array[n_obs] int<lower=1, upper=D> obs_unit;
+  array[n_obs] int<lower=1, upper=n_disp> obs_disp;
 
   // Exposed (treated) cells in canonical flat order; defines treatment_kt_z.
   int<lower=0> n_exposed;
@@ -41,13 +44,13 @@ data {
   // Censoring adjustment sets (all cells if model_treated, else control).
   int<lower=0> n_cens;                   // suppressed: add log P(y in supp range)
   array[n_cens] int<lower=1, upper=KDN> cens_cell;
-  array[n_cens] int<lower=1, upper=D> cens_unit;
+  array[n_cens] int<lower=1, upper=n_disp> cens_disp;
   // Suppressed cells with a range of their own: a time block or synthetic
   // total pooling a suppressed count with others lies in the sum of its
   // parts' ranges, icens_lo..icens_hi. Each adds log P(y in that range).
   int<lower=0> n_icens;
   array[n_icens] int<lower=1, upper=KDN> icens_cell;
-  array[n_icens] int<lower=1, upper=D> icens_unit;
+  array[n_icens] int<lower=1, upper=n_disp> icens_disp;
   array[n_icens] int<lower=0> icens_lo;
   array[n_icens] int<lower=0> icens_hi;
   int<lower=0> supp_lo;                  // the counts the source suppresses
@@ -255,8 +258,17 @@ parameters {
   matrix[te_legacy == 1 ? K : 0, te_legacy == 1 ? D : 0] unit_category_te_z;
   vector[te_legacy == 1 ? K : 0] category_treatment_effect;   // centered
 
-  // Per-unit dispersion; Uniform(0,1) via constraint + factor prior below.
-  vector<lower=0, upper=1>[sample_disp == 1 ? D : 0] disp;
+  // Dispersion per level (see n_disp); Uniform(0,1) via constraint + factor
+  // prior below. Per group is the default, per unit the historical form (same
+  // size and position, so it reproduces earlier fits draw for draw). A
+  // group's dispersion is informed by all D units' cells, a unit's by only K
+  // groups' -- and the treated unit's would rest partly on its own exposed
+  // cells, where treatment_kt_z competes for the same excess variance. Per
+  // group, it borrows the controls' noise level instead. The NB2 dispersion
+  // is a squared coefficient of variation, so unit size, which enters
+  // through mu, is no reason to vary it across units; residual heterogeneity
+  // differing across groups is (see unit_weight_sd).
+  vector<lower=0, upper=1>[sample_disp == 1 ? n_disp : 0] disp;
 
   // Regression surface; all sizes are zero when te_reg == 0.
   vector[P] te_beta;
@@ -283,7 +295,7 @@ transformed parameters {
   // infinite gradient. `generated quantities` reports the natural scale.
   array[rank_shrink == 1 ? K : 0] vector[R] log_group_weight;
   vector[model_treated == 1 ? n_exposed : 0] te;
-  vector[is_nb == 1 ? D : 0] phi_unit;   // NB2 concentration per unit
+  vector[is_nb == 1 ? n_disp : 0] phi;   // NB2 concentration per level
 
   for (k in 1 : (rank_shrink == 1 ? K : 0)) {
     real log_rem = 0;
@@ -353,7 +365,7 @@ transformed parameters {
   }
 
   if (is_nb == 1) {
-    phi_unit = sample_disp == 1 ? inv(disp) : rep_vector(inv(nb_disp), D);
+    phi = sample_disp == 1 ? inv(disp) : rep_vector(inv(nb_disp), n_disp);
   }
 }
 model {
@@ -458,7 +470,7 @@ model {
   }
 
   // Dispersion factor prior (joint.py:224-232): disp ~ Uniform(0,1) via the
-  // constraint, plus factor -1/2 log(disp) - 100 sqrt(disp) per unit.
+  // constraint, plus factor -1/2 log(disp) - 100 sqrt(disp) per level.
   if (sample_disp == 1) {
     target += sum(-0.5 * log(disp) - 100 * sqrt(disp));
   }
@@ -467,7 +479,7 @@ model {
   // data scalar, letting the vectorized lpmf hoist every phi-only term.
   if (is_nb == 1) {
     if (sample_disp == 1) {
-      y ~ neg_binomial_2_log(mu[obs_cell], phi_unit[obs_unit]);
+      y ~ neg_binomial_2_log(mu[obs_cell], phi[obs_disp]);
     } else {
       y ~ neg_binomial_2_log(mu[obs_cell], phi_fixed);
     }
@@ -481,30 +493,30 @@ model {
   // says 25 was not suppressed; the Python model's extra
   // log P(y not in range) on observed cells counted that twice and pulled
   // small cells' means up. Concentration-only terms are precomputed once
-  // per unit (or in transformed data when dispersion is fixed); each cell
-  // then costs a single log_sum_exp over the support. Ranged cells have a
-  // support each, so with sampled dispersion their coefficients are
+  // per dispersion level (or in transformed data when dispersion is fixed);
+  // each cell then costs a single log_sum_exp over the support. Ranged cells
+  // have a support each, so with sampled dispersion their coefficients are
   // computed per cell.
   if (adjust_missing == 1) {
     vector[n_cens] mass_c;
     vector[n_icens] mass_ic;
     if (is_nb == 1 && sample_disp == 1) {
-      vector[D] log_phi = log(phi_unit);
-      array[D] vector[n_sup] b;
-      for (d in 1 : D) {
-        b[d] = nb_censor_coeff(phi_unit[d], sup, lgamma_sup1);
+      vector[n_disp] log_phi = log(phi);
+      array[n_disp] vector[n_sup] b;
+      for (j in 1 : n_disp) {
+        b[j] = nb_censor_coeff(phi[j], sup, lgamma_sup1);
       }
       for (i in 1 : n_cens) {
-        int d = cens_unit[i];
-        mass_c[i] = suppressed_mass_nb(mu[cens_cell[i]], phi_unit[d],
-                                       log_phi[d], b[d], sup);
+        int j = cens_disp[i];
+        mass_c[i] = suppressed_mass_nb(mu[cens_cell[i]], phi[j],
+                                       log_phi[j], b[j], sup);
       }
       for (i in 1 : n_icens) {
-        int d = icens_unit[i];
+        int j = icens_disp[i];
         vector[icens_len[i]] s = segment(isup, icens_start[i], icens_len[i]);
         mass_ic[i] = suppressed_mass_nb(
-          mu[icens_cell[i]], phi_unit[d], log_phi[d],
-          nb_censor_coeff(phi_unit[d], s,
+          mu[icens_cell[i]], phi[j], log_phi[j],
+          nb_censor_coeff(phi[j], s,
                           segment(ilgamma_sup1, icens_start[i], icens_len[i])),
           s);
       }
@@ -575,7 +587,7 @@ generated quantities {
     for (c in 1 : KDN) {
       real lm = fmin(mu_ctrl[c], 20.79);
       ypred[c] = is_nb == 1
-                 ? neg_binomial_2_log_rng(lm, phi_unit[cell_unit[c]])
+                 ? neg_binomial_2_log_rng(lm, phi[cell_disp[c]])
                  : poisson_log_rng(lm);
     }
   }

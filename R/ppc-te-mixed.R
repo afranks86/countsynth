@@ -144,22 +144,24 @@ te_mixed_parts <- function(m, components, mu_exp) {
   list(base = base, scale = scale)
 }
 
-# The exposed cells' unit, group and observed outcome (NA where suppressed
-# or missing), in the canonical flat order every exposed-cell vector uses.
+# The exposed cells' unit, group, observed outcome (NA where suppressed or
+# missing) and dispersion level, in the canonical flat order every
+# exposed-cell vector uses.
 te_mixed_cells <- function(data, stan_data) {
-  cells <- build_cell_table(data)[as.integer(stan_data$exp_cell), ]
+  exp_cell <- as.integer(stan_data$exp_cell)
+  cells <- build_cell_table(data)[exp_cell, ]
   list(
     unit = cells$unit, group = cells$group, outcome = cells$outcome,
-    exp_d = as.integer(stan_data$exp_d)
+    exp_disp = as.integer(stan_data$cell_disp)[exp_cell]
   )
 }
 
 #' Inputs of the mixed predictive check
 #'
 #' Everything [countsynth_ppc_te_mixed()] needs, from either kind of fit:
-#' `base` and `scale` (see `te_mixed_parts()`), `phi` (draws x units NB
-#' concentration, `NULL` for Poisson), `components`, and the exposed cells'
-#' `unit`, `group`, `outcome` and `exp_d`.
+#' `base` and `scale` (see `te_mixed_parts()`), `phi` (draws x dispersion
+#' levels NB concentration, `NULL` for Poisson), `components`, and the exposed
+#' cells' `unit`, `group`, `outcome` and dispersion level `exp_disp`.
 #' @param x A `countsynth_fit` or `countsynth_cut_fit`.
 #' @keywords internal
 te_mixed_source <- function(x) {
@@ -179,11 +181,11 @@ te_mixed_source.countsynth_fit <- function(x) {
   mu_names <- sprintf("mu_ctrl[%d]", as.integer(sd$exp_cell))
   is_nb <- isTRUE(sd$is_nb == 1)
   m <- extract_var_matrix(
-    x$fit, c(mu_names, te_mixed_vars(components), if (is_nb) "phi_unit")
+    x$fit, c(mu_names, te_mixed_vars(components), if (is_nb) "phi")
   )
   parts <- te_mixed_parts(m, components, m[, mu_names, drop = FALSE])
   parts$phi <- if (is_nb) {
-    m[, sprintf("phi_unit[%d]", seq_len(sd$D)), drop = FALSE]
+    m[, sprintf("phi[%d]", seq_len(sd$n_disp)), drop = FALSE]
   } else {
     NULL
   }
@@ -226,7 +228,7 @@ te_mixed_check <- function(src, keep) {
   } else {
     stats::rnbinom(
       length(rate),
-      size = src$phi[, src$exp_d[keep], drop = FALSE], mu = rate
+      size = src$phi[, src$exp_disp[keep], drop = FALSE], mu = rate
     )
   }
   yrep <- matrix(yrep, n_draws, length(keep))

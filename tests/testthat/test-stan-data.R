@@ -54,18 +54,28 @@ test_that("stan_data_joint index sets follow the Python mask logic", {
   expect_identical(as.integer(sd$exp_k), sub$k)
   expect_identical(as.integer(sd$exp_d), sub$d)
 
-  # cell_unit covers every cell
-  expect_equal(length(sd$cell_unit), KDN)
-  expect_identical(as.integer(sd$cell_unit), kdn_from_flat(seq_len(KDN), sd$D, sd$N)$d)
+  # Dispersion levels cover every cell: groups by default, units on request.
+  sub_all <- kdn_from_flat(seq_len(KDN), sd$D, sd$N)
+  expect_equal(sd$n_disp, sd$K)
+  expect_identical(as.integer(sd$cell_disp), sub_all$k)
+  expect_identical(as.integer(sd$obs_disp), sub_all$k[sd$obs_cell])
+  expect_identical(as.integer(sd$cens_disp), sub_all$k[sd$cens_cell])
+  sdu <- stan_data_joint(data, rank = 2, model_treated = TRUE, disp_by = "unit")
+  expect_equal(sdu$n_disp, sdu$D)
+  expect_identical(as.integer(sdu$cell_disp), sub_all$d)
+  expect_identical(as.integer(sdu$obs_disp), sub_all$d[sdu$obs_cell])
+  expect_identical(as.integer(sdu$cens_disp), sub_all$d[sdu$cens_cell])
 })
 
 test_that("stan_data_stage2 subsets are within-exposed positions", {
   fd <- fixture_data()
   data <- fd$data
   mu_flat <- flatten_kdn(array(fd$fx$data$mu_ctrl_fixed, dim = dim(data$Y)))
+  # A distinct concentration per cell, so the exposed subset is checkable.
+  phi_flat <- seq_along(mu_flat) + 0.5
   sd2 <- stan_data_stage2(
     data, mu_flat,
-    phi_unit = fd$fx$data$phi_fixed, outcome_distribution = "NB"
+    phi_flat = phi_flat, outcome_distribution = "NB"
   )
   control_flat <- flatten_kdn(data$control_idx_array)
   missing_flat <- flatten_kdn(data$missing_idx_array)
@@ -77,9 +87,10 @@ test_that("stan_data_stage2 subsets are within-exposed positions", {
   expect_identical(
     as.integer(sd2$cens_e), which(missing_flat[exp_cell])
   )
+  expect_identical(as.numeric(sd2$phi_exposed), phi_flat[exp_cell])
   expect_error(
-    stan_data_stage2(data, mu_flat, phi_unit = NULL, outcome_distribution = "NB"),
-    "phi_unit"
+    stan_data_stage2(data, mu_flat, phi_flat = NULL, outcome_distribution = "NB"),
+    "phi_flat"
   )
 })
 

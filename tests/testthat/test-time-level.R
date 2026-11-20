@@ -49,7 +49,7 @@ test_that("the centered time level sums to zero and has the promised spread", {
     adjust_for_missingness = FALSE, gen_ypred = FALSE
   )
   empty <- as.array(integer(0))
-  for (f in c("obs_cell", "y", "obs_unit", "cens_cell", "cens_unit")) {
+  for (f in c("obs_cell", "y", "obs_disp", "cens_cell", "cens_disp")) {
     sd[[f]] <- empty
   }
   sd$n_obs <- 0L

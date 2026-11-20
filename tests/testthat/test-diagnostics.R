@@ -88,7 +88,7 @@ test_that("gate_params prefix matching errors on zero matches", {
 test_that("the gate defaults to mu_ctrl and te, with an 'all' opt-out", {
   # Every real Stan variable, so an over-matching prefix would show up here.
   bases <- c(
-    "mu_ctrl", "te", "time_fac", "time_fe", "unit_weight", "disp", "phi_unit",
+    "mu_ctrl", "te", "time_fac", "time_fe", "unit_weight", "disp", "phi",
     "unit_fe_mu", "unit_fe_sigma", "unit_fe_z", "unit_category_scale",
     "treatment_it_scale", "treatment_unit_scale", "treatment_category_scale",
     "treatment_kt_z", "unit_treatment_effect_z", "unit_category_te_z",

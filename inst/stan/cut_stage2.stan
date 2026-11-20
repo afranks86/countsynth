@@ -34,7 +34,9 @@ data {
 
   int<lower=0, upper=1> is_nb;
   int<lower=0, upper=1> adjust_missing;
-  vector<lower=0>[is_nb == 1 ? D : 0] phi_unit; // matched stage-1 concentration
+  // Matched stage-1 concentration of each exposed cell, whatever level
+  // (group or unit) stage 1 sampled it at.
+  vector<lower=0>[is_nb == 1 ? n_exposed : 0] phi_exposed;
 
   // Optional treatment-effect regression (te_reg == 1): the legacy
   // group/unit/group:unit hierarchy is replaced by a linear fixed-effect
@@ -63,16 +65,16 @@ transformed data {
     lgamma_sup1[j] = lgamma(sup[j] + 1);
   }
   vector[n_sup] neg_lgamma_sup1 = -lgamma_sup1;
-  // phi is data here, so the per-unit censoring coefficients are free.
-  vector[is_nb == 1 ? D : 0] log_phi = log(phi_unit);
-  array[is_nb == 1 ? D : 0] vector[n_sup] b_cens;
-  for (d in 1 : (is_nb == 1 ? D : 0)) {
-    b_cens[d] = nb_censor_coeff(phi_unit[d], sup, lgamma_sup1);
+  // phi is data here, so the censoring coefficients are free.
+  vector[is_nb == 1 ? n_exposed : 0] log_phi = log(phi_exposed);
+  array[is_nb == 1 ? n_cens : 0] vector[n_sup] b_cens;
+  for (i in 1 : (is_nb == 1 ? n_cens : 0)) {
+    b_cens[i] = nb_censor_coeff(phi_exposed[cens_e[i]], sup, lgamma_sup1);
   }
 
   // Ranged cells' supports, laid end to end: cell i's run starts at
   // icens_start[i] and holds icens_len[i] values. Their NB coefficients are
-  // free too, each computed at its own unit's phi.
+  // free too, each computed at its own cell's phi.
   array[n_icens] int icens_start;
   array[n_icens] int icens_len;
   int n_isup = 0;
@@ -95,9 +97,8 @@ transformed data {
   vector[n_isup] ineg_lgamma_sup1 = -ilgamma_sup1;
   vector[is_nb == 1 ? n_isup : 0] ib_cens;
   for (i in 1 : (is_nb == 1 ? n_icens : 0)) {
-    int d = exp_d[icens_e[i]];
     ib_cens[icens_start[i] : (icens_start[i] + icens_len[i] - 1)] =
-      nb_censor_coeff(phi_unit[d],
+      nb_censor_coeff(phi_exposed[icens_e[i]],
                       segment(isup, icens_start[i], icens_len[i]),
                       segment(ilgamma_sup1, icens_start[i], icens_len[i]));
   }
@@ -162,7 +163,7 @@ model {
   }
 
   if (is_nb == 1) {
-    y ~ neg_binomial_2_log(mu_exposed[obs_e], phi_unit[exp_d[obs_e]]);
+    y ~ neg_binomial_2_log(mu_exposed[obs_e], phi_exposed[obs_e]);
   } else {
     y ~ poisson_log(mu_exposed[obs_e]);
   }
@@ -172,14 +173,14 @@ model {
   if (adjust_missing == 1) {
     if (is_nb == 1) {
       for (i in 1 : n_cens) {
-        int d = exp_d[cens_e[i]];
-        target += suppressed_mass_nb(mu_exposed[cens_e[i]], phi_unit[d],
-                                     log_phi[d], b_cens[d], sup);
+        int e = cens_e[i];
+        target += suppressed_mass_nb(mu_exposed[e], phi_exposed[e],
+                                     log_phi[e], b_cens[i], sup);
       }
       for (i in 1 : n_icens) {
-        int d = exp_d[icens_e[i]];
+        int e = icens_e[i];
         target += suppressed_mass_nb(
-          mu_exposed[icens_e[i]], phi_unit[d], log_phi[d],
+          mu_exposed[e], phi_exposed[e], log_phi[e],
           segment(ib_cens, icens_start[i], icens_len[i]),
           segment(isup, icens_start[i], icens_len[i]));
       }

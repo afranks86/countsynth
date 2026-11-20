@@ -11,8 +11,8 @@ te_mixed_source(x)
 }
 \description{
 Everything \code{\link[=countsynth_ppc_te_mixed]{countsynth_ppc_te_mixed()}} needs, from either kind of fit:
-\code{base} and \code{scale} (see \code{te_mixed_parts()}), \code{phi} (draws x units NB
-concentration, \code{NULL} for Poisson), \code{components}, and the exposed cells'
-\code{unit}, \code{group}, \code{outcome} and \code{exp_d}.
+\code{base} and \code{scale} (see \code{te_mixed_parts()}), \code{phi} (draws x dispersion
+levels NB concentration, \code{NULL} for Poisson), \code{components}, and the exposed
+cells' \code{unit}, \code{group}, \code{outcome} and dispersion level \code{exp_disp}.
 }
 \keyword{internal}

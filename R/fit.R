@@ -68,6 +68,8 @@ countsynth_fit <- function(data, rank = NULL, config, model_treated = NULL,
     outcome_distribution = config$model$outcome_distribution,
     nb_disp = config$model$nb_disp,
     sample_disp = config$model$sample_disp,
+    # A config built before this option existed gets the new default.
+    disp_by = config$model[["disp_by"]] %||% "group",
     adjust_for_missingness = config$model$adjust_for_missingness,
     gen_ypred = gen_ypred,
     te_design = te_design,

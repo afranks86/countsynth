@@ -7,7 +7,7 @@
 stan_data_stage2(
   data,
   mu_ctrl_flat,
-  phi_unit = NULL,
+  phi_flat = NULL,
   outcome_distribution = "NB",
   adjust_for_missingness = TRUE,
   te_design = NULL
@@ -19,8 +19,9 @@ stan_data_stage2(
 \item{mu_ctrl_flat}{One stage-1 draw of the baseline log-rate surface, as a
 flat vector in canonical row-major order (length \code{K*D*N}).}
 
-\item{phi_unit}{Matched per-unit NB concentration for the same stage-1 draw
-(\code{NULL} for Poisson).}
+\item{phi_flat}{Matched NB concentration of every cell for the same
+stage-1 draw, in the same flat order as \code{mu_ctrl_flat} (\code{NULL} for
+Poisson).}
 
 \item{outcome_distribution, adjust_for_missingness, te_design}{See
 \code{\link[=stan_data_joint]{stan_data_joint()}}.}

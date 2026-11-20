@@ -197,7 +197,6 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
   rank <- rank %||% type_spec$ranks_to_test[[1]]
 
   is_nb <- config$model$outcome_distribution == "NB"
-  D <- length(data$units)
 
   # Stage 1: baseline model on control cells, with the counterfactual
   # predictive emitted for the stage-1 PPC frame.
@@ -232,7 +231,8 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
     "cut_stage2", backend = settings$stage2_mcmc[["backend"]] %||% "cmdstan"
   )
   exposed_cell <- as.integer(stage1$stan_data$exp_cell)
-  cell_unit <- as.integer(stage1$stan_data$cell_unit)
+  n_disp <- stage1$stan_data$n_disp
+  cell_disp <- as.integer(stage1$stan_data$cell_disp)
 
   # Optional treatment-effect regression: one design shared by every stage-2
   # component (it depends only on the data, not on the stage-1 draw).
@@ -246,20 +246,23 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
   # kept here rather than read back later.
   te_components <- te_unit_components(te_design, stage1$stan_data)
 
+  # One concentration per dispersion level (group or unit, as stage 1 was
+  # fitted); phi[cell_disp] spreads them over the flat cells.
   phi_for_ref <- function(draw) {
     if (!is_nb) {
       return(NULL)
     }
-    if (is.null(disp1)) rep(1 / config$model$nb_disp, D) else 1 / disp1[draw, ]
+    if (is.null(disp1)) rep(1 / config$model$nb_disp, n_disp) else 1 / disp1[draw, ]
   }
 
   run_component <- function(i) {
     ref <- refs[i, ]
-    phi_unit <- phi_for_ref(ref$draw)
+    phi <- phi_for_ref(ref$draw)
+    phi_flat <- if (is_nb) phi[cell_disp] else NULL
     sd2 <- stan_data_stage2(
       data,
       mu_ctrl_flat = mu1[ref$draw, ],
-      phi_unit = phi_unit,
+      phi_flat = phi_flat,
       outcome_distribution = config$model$outcome_distribution,
       adjust_for_missingness = config$model$adjust_for_missingness,
       te_design = te_design
@@ -306,8 +309,7 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
     # Fresh untreated predictive from the component's frozen baseline.
     withr::with_seed(predictive_seed(settings$stage2_seed, ref$component), {
       mu_grid <- matrix(mu1[ref$draw, ], nrow = n_out, ncol = ncol(mu1), byrow = TRUE)
-      phi_row <- if (is_nb) phi_unit[cell_unit] else NULL
-      ypred_out <- sample_untreated_predictions(mu_grid, phi_row)
+      ypred_out <- sample_untreated_predictions(mu_grid, phi_flat)
       list(
         ref = ref, diag = diag, te_out = te_out, ypred_out = ypred_out,
         mu_grid = mu_grid, chain_ids = chain_ids, iter_ids = iter_ids,
@@ -401,7 +403,7 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
     scale = do.call(rbind, lapply(results, function(r) r$te_mixed$scale)),
     phi = if (is_nb) {
       do.call(rbind, lapply(results, function(r) {
-        matrix(phi_for_ref(r$ref$draw), r$n_out, D, byrow = TRUE)
+        matrix(phi_for_ref(r$ref$draw), r$n_out, n_disp, byrow = TRUE)
       }))
     } else {
       NULL

@@ -237,7 +237,7 @@ test_that("no design gives the legacy stan-data block", {
   stage2 <- stan_data_stage2(
     data,
     mu_ctrl_flat = rep(0, length(flatten_kdn(data$Y))),
-    phi_unit = rep(1, length(data$units))
+    phi_flat = rep(1, length(flatten_kdn(data$Y)))
   )
   expect_equal(stage2$te_reg, 0L)
   expect_equal(nrow(stage2$X), stage2$n_exposed)

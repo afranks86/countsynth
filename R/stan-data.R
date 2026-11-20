@@ -41,7 +41,9 @@ split_censored_cells <- function(data, cells) {
 #'   gives the baseline (cut stage-1) model.
 #' @param outcome_distribution `"NB"` or `"Poisson"`.
 #' @param nb_disp Fixed NB dispersion.
-#' @param sample_disp Sample per-unit dispersion.
+#' @param sample_disp Sample the dispersion instead of fixing it.
+#' @param disp_by `"group"` (default) or `"unit"`: the level at which a
+#'   sampled dispersion varies. See [countsynth_model_opts()].
 #' @param adjust_for_missingness Integrate over censored small counts.
 #' @param gen_ypred Emit the counterfactual posterior predictive in
 #'   `generated quantities`.
@@ -58,6 +60,7 @@ split_censored_cells <- function(data, cells) {
 stan_data_joint <- function(data, rank, model_treated = TRUE,
                             outcome_distribution = "NB", nb_disp = 1e-4,
                             sample_disp = FALSE,
+                            disp_by = c("group", "unit"),
                             adjust_for_missingness = TRUE,
                             gen_ypred = TRUE, te_design = NULL,
                             time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
@@ -65,6 +68,7 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
                             rank_shrinkage = NULL,
                             time_level = c("centered", "uncentered")) {
   time_level <- match.arg(time_level)
+  disp_by <- match.arg(disp_by)
   if (!is.null(te_design) && !model_treated) {
     cli::cli_abort(
       "te_design requires {.field model_treated} = TRUE."
@@ -104,16 +108,21 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
   cens_cell <- cens_all[split$standard]
   icens_cell <- cens_all[!split$standard]
 
-  unit_of <- function(cell) kdn_from_flat(cell, D, N)$d
+  # Each cell's dispersion level: its group, or its unit.
+  disp_of <- function(cell) {
+    sub <- kdn_from_flat(cell, D, N)
+    if (disp_by == "group") sub$k else sub$d
+  }
 
   sd <- list(
     K = K, D = D, N = N, R = as.integer(rank), KDN = KDN,
     log_denom = log(denom_flat),
-    cell_unit = as.array(unit_of(seq_len(KDN))),
+    n_disp = if (disp_by == "group") K else D,
+    cell_disp = as.array(disp_of(seq_len(KDN))),
     n_obs = length(obs_cell),
     obs_cell = as.array(obs_cell),
     y = as.array(as.integer(round(y_flat[obs_cell]))),
-    obs_unit = as.array(unit_of(obs_cell)),
+    obs_disp = as.array(disp_of(obs_cell)),
     n_exposed = length(exp_cell),
     exp_k = as.array(exp_sub$k),
     exp_d = as.array(exp_sub$d),
@@ -121,10 +130,10 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
     exp_cell = as.array(exp_cell),
     n_cens = length(cens_cell),
     cens_cell = as.array(cens_cell),
-    cens_unit = as.array(unit_of(cens_cell)),
+    cens_disp = as.array(disp_of(cens_cell)),
     n_icens = length(icens_cell),
     icens_cell = as.array(icens_cell),
-    icens_unit = as.array(unit_of(icens_cell)),
+    icens_disp = as.array(disp_of(icens_cell)),
     icens_lo = as.array(split$lo),
     icens_hi = as.array(split$hi),
     supp_lo = split$supp_lo,
@@ -189,12 +198,13 @@ rank_shrinkage_stan_fields <- function(rank_shrinkage, rank) {
 #' @param data A `countsynth_data` object.
 #' @param mu_ctrl_flat One stage-1 draw of the baseline log-rate surface, as a
 #'   flat vector in canonical row-major order (length `K*D*N`).
-#' @param phi_unit Matched per-unit NB concentration for the same stage-1 draw
-#'   (`NULL` for Poisson).
+#' @param phi_flat Matched NB concentration of every cell for the same
+#'   stage-1 draw, in the same flat order as `mu_ctrl_flat` (`NULL` for
+#'   Poisson).
 #' @param outcome_distribution,adjust_for_missingness,te_design See
 #'   [stan_data_joint()].
 #' @keywords internal
-stan_data_stage2 <- function(data, mu_ctrl_flat, phi_unit = NULL,
+stan_data_stage2 <- function(data, mu_ctrl_flat, phi_flat = NULL,
                              outcome_distribution = "NB",
                              adjust_for_missingness = TRUE,
                              te_design = NULL) {
@@ -227,9 +237,10 @@ stan_data_stage2 <- function(data, mu_ctrl_flat, phi_unit = NULL,
   icens_e <- cens_all[!split$standard]
 
   is_nb <- outcome_distribution == "NB"
-  if (is_nb && is.null(phi_unit)) {
-    cli::cli_abort("NB stage-2 model requires a matched {.field phi_unit} vector.")
+  if (is_nb && is.null(phi_flat)) {
+    cli::cli_abort("NB stage-2 model requires a matched {.field phi_flat} vector.")
   }
+  stopifnot(!is_nb || length(phi_flat) == KDN)
 
   sd <- list(
     K = K, D = D, KDN = KDN,
@@ -252,7 +263,7 @@ stan_data_stage2 <- function(data, mu_ctrl_flat, phi_unit = NULL,
     supp_hi = split$supp_hi,
     is_nb = as.integer(is_nb),
     adjust_missing = as.integer(adjust_for_missingness),
-    phi_unit = if (is_nb) as.array(as.numeric(phi_unit)) else numeric(0)
+    phi_exposed = if (is_nb) as.array(as.numeric(phi_flat[exp_cell])) else numeric(0)
   )
   sd <- c(sd, te_stan_fields(te_design, length(exp_cell)))
   attr(sd, "dims") <- c(K = K, D = D, N = N)
