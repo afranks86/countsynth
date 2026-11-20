@@ -632,6 +632,14 @@ countsynth_convergence <- function(rhat_warn = 1.01, rhat_fail = 1.05,
 #'   trajectories need more steps and hit the cap more often.
 #' @param seed Base RNG seed (cut-mode stage seeds derive from it).
 #' @param progress Show sampler progress.
+#' @param backend What runs the Stan programs: `"cmdstan"` (the default,
+#'   through cmdstanr) or `"stanli"`, which interprets the same programs
+#'   with no C++ compilation and keeps the draws in memory. Both run Stan's
+#'   NUTS on the same log density; stanli's gradients measured about 2x
+#'   faster on the bundled panels. It covers both cut stages; an ADVI stage
+#'   1 still runs on CmdStan. Needs the 'stanli' package from
+#'   <https://seantalts.r-universe.dev> and its runtime
+#'   (`stanli::stanli_install()`).
 #' @param gate_params Parameter-name prefixes the convergence gate is
 #'   restricted to (divergences always count run-wide). Defaults to
 #'   `c("mu_ctrl", "te")` -- the counterfactual surface and the treatment
@@ -646,6 +654,7 @@ countsynth_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
                             iter_warmup = 1000, iter_sampling = 2500,
                             thin = 1, adapt_delta = 0.8, seed = 8675309,
                             progress = TRUE, max_treedepth = 10,
+                            backend = c("cmdstan", "stanli"),
                             gate_params = DEFAULT_GATE_PARAMS,
                             convergence = countsynth_convergence()) {
   checkmate::assert_flag(auto_parallelism)
@@ -662,6 +671,7 @@ countsynth_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
   checkmate::assert_int(seed)
   checkmate::assert_flag(progress)
   checkmate::assert_int(max_treedepth, lower = 1)
+  backend <- match.arg(backend)
   # Resolve here rather than relying on the signature default: the YAML
   # loader passes gate_params = NULL explicitly when the key is absent, and an
   # explicit NULL skips an R default.
@@ -679,7 +689,7 @@ countsynth_mcmc_opts <- function(auto_parallelism = TRUE, max_chains = 4,
       iter_warmup = as.integer(iter_warmup),
       iter_sampling = as.integer(iter_sampling), thin = as.integer(thin),
       adapt_delta = adapt_delta, seed = as.integer(seed), progress = progress,
-      max_treedepth = as.integer(max_treedepth),
+      max_treedepth = as.integer(max_treedepth), backend = backend,
       gate_params = gate_params, convergence = convergence
     ),
     "countsynth_mcmc_opts"

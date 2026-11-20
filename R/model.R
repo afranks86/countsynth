@@ -16,10 +16,19 @@ stan_file_path <- function(name) {
 #' @param name `"joint"` (also the cut stage-1 baseline, via the
 #'   `model_treated` data flag) or `"cut_stage2"`.
 #' @param quiet Suppress compilation output.
-#' @return A `cmdstanr::CmdStanModel`.
+#' @param backend `"cmdstan"` compiles the model with cmdstanr; `"stanli"`
+#'   returns a stand-in whose `$sample()` takes the same arguments and runs
+#'   the same program through stanli (see [countsynth_mcmc_opts()]).
+#' @return A `cmdstanr::CmdStanModel`, or for `"stanli"` an object with
+#'   cmdstanr's `$sample()` and `$variational()`.
 #' @export
-countsynth_stan_model <- function(name = c("joint", "cut_stage2"), quiet = TRUE) {
+countsynth_stan_model <- function(name = c("joint", "cut_stage2"), quiet = TRUE,
+                                  backend = c("cmdstan", "stanli")) {
   name <- match.arg(name)
+  backend <- match.arg(backend)
+  if (backend == "stanli") {
+    return(stanli_stan_model(name))
+  }
   check_cmdstan()
   cache_dir <- tools::R_user_dir("countsynth", "cache")
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)

@@ -228,7 +228,9 @@ countsynth_cut_fit <- function(data, rank = NULL, config,
     settings$selection_seed
   )
 
-  model2 <- countsynth_stan_model("cut_stage2")
+  model2 <- countsynth_stan_model(
+    "cut_stage2", backend = settings$stage2_mcmc[["backend"]] %||% "cmdstan"
+  )
   exposed_cell <- as.integer(stage1$stan_data$exp_cell)
   cell_unit <- as.integer(stage1$stan_data$cell_unit)
 

@@ -16,6 +16,7 @@ countsynth_mcmc_opts(
   seed = 8675309,
   progress = TRUE,
   max_treedepth = 10,
+  backend = c("cmdstan", "stanli"),
   gate_params = DEFAULT_GATE_PARAMS,
   convergence = countsynth_convergence()
 )
@@ -44,6 +45,15 @@ so it is the remedy when the run reports a large share of transitions at
 the cap -- at up to twice the cost per iteration for each level added.
 Raising \code{adapt_delta} does the opposite: it shrinks the step size, so
 trajectories need more steps and hit the cap more often.}
+
+\item{backend}{What runs the Stan programs: \code{"cmdstan"} (the default,
+through cmdstanr) or \code{"stanli"}, which interprets the same programs
+with no C++ compilation and keeps the draws in memory. Both run Stan's
+NUTS on the same log density; stanli's gradients measured about 2x
+faster on the bundled panels. It covers both cut stages; an ADVI stage
+1 still runs on CmdStan. Needs the 'stanli' package from
+\url{https://seantalts.r-universe.dev} and its runtime
+(\code{stanli::stanli_install()}).}
 
 \item{gate_params}{Parameter-name prefixes the convergence gate is
 restricted to (divergences always count run-wide). Defaults to

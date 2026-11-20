@@ -4,16 +4,25 @@
 \alias{countsynth_stan_model}
 \title{Compile (or fetch from cache) a bundled Stan model}
 \usage{
-countsynth_stan_model(name = c("joint", "cut_stage2"), quiet = TRUE)
+countsynth_stan_model(
+  name = c("joint", "cut_stage2"),
+  quiet = TRUE,
+  backend = c("cmdstan", "stanli")
+)
 }
 \arguments{
 \item{name}{\code{"joint"} (also the cut stage-1 baseline, via the
 \code{model_treated} data flag) or \code{"cut_stage2"}.}
 
 \item{quiet}{Suppress compilation output.}
+
+\item{backend}{\code{"cmdstan"} compiles the model with cmdstanr; \code{"stanli"}
+returns a stand-in whose \verb{$sample()} takes the same arguments and runs
+the same program through stanli (see \code{\link[=countsynth_mcmc_opts]{countsynth_mcmc_opts()}}).}
 }
 \value{
-A \code{cmdstanr::CmdStanModel}.
+A \code{cmdstanr::CmdStanModel}, or for \code{"stanli"} an object with
+cmdstanr's \verb{$sample()} and \verb{$variational()}.
 }
 \description{
 Compile (or fetch from cache) a bundled Stan model

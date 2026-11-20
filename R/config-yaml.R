@@ -192,7 +192,8 @@ parse_yaml_mcmc <- function(x, path = "mcmc") {
     x,
     c("auto_parallelism", "max_chains", "num_chains", "chain_method",
       "num_warmup", "num_samples", "thinning", "target_accept", "random_seed",
-      "progress_bar", "gate_params", "convergence", "max_treedepth"),
+      "progress_bar", "gate_params", "convergence", "max_treedepth",
+      "backend"),
     path
   )
   convergence <- countsynth_convergence()
@@ -242,6 +243,7 @@ parse_yaml_mcmc <- function(x, path = "mcmc") {
     progress = yaml_flag(x$progress_bar, glue::glue("{path}.progress_bar"), TRUE),
     # cmdstanr's name: the Python package has no tree-depth setting to mirror.
     max_treedepth = x$max_treedepth %||% 10L,
+    backend = x$backend %||% "cmdstan",
     gate_params = yaml_chr(x$gate_params),
     convergence = convergence
   )

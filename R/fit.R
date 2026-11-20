@@ -91,7 +91,10 @@ countsynth_fit <- function(data, rank = NULL, config, model_treated = NULL,
   }
 
   mcmc <- config$mcmc
-  model <- countsynth_stan_model("joint")
+  # [[ ]]: a config built before `backend` existed has no field.
+  model <- countsynth_stan_model(
+    "joint", backend = mcmc[["backend"]] %||% "cmdstan"
+  )
 
   if (method == "variational") {
     # ADVI has no chains, warmup, thinning or adapt_delta; the only MCMC
