@@ -67,6 +67,31 @@ test_that("stan_data_joint index sets follow the Python mask logic", {
   expect_identical(as.integer(sdu$cens_disp), sub_all$d[sdu$cens_cell])
 })
 
+test_that("disp_prior_rate enters the log density as -rate * sum(sqrt(disp))", {
+  skip_on_cran()
+  skip_if_not_installed("stanli")
+  skip_if_not(stanli::stanli_available(), "stanli runtime missing")
+  data <- fixture_data()$data
+  model_at <- function(rate) {
+    test_env <- parent.frame()
+    sd <- stan_data_joint(data, rank = 2, sample_disp = TRUE, disp_prior_rate = rate)
+    json <- withr::local_tempfile(fileext = ".json", .local_envir = test_env)
+    cmdstanr::write_stan_json(sd, json)
+    stanli::stanli_model(
+      file = stan_file_path("joint"), data = json,
+      include_paths = system.file("stan", "include", package = "countsynth")
+    )
+  }
+  expect_equal(stan_data_joint(data, rank = 2)$disp_prior_rate, 100)
+  m100 <- model_at(100)
+  m10 <- model_at(10)
+  # One point, dispersion pinned, everything else random but shared.
+  disp <- c(0.01, 0.04)
+  q <- stanli::unconstrain(m100, list(disp = disp), partial = TRUE, seed = 1)
+  shift <- stanli::log_prob_grad(m10, q)$lp - stanli::log_prob_grad(m100, q)$lp
+  expect_equal(shift, (100 - 10) * sum(sqrt(disp)), tolerance = 1e-10)
+})
+
 test_that("stan_data_stage2 subsets are within-exposed positions", {
   fd <- fixture_data()
   data <- fd$data

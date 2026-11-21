@@ -61,6 +61,7 @@ data {
   int<lower=0, upper=1> sample_disp;
   int<lower=0, upper=1> adjust_missing;
   real<lower=0> nb_disp;                 // fixed dispersion (phi = 1/nb_disp)
+  real<lower=0> disp_prior_rate;         // sampled: sqrt(disp) ~ Exponential(rate)
   int<lower=0, upper=1> gen_ypred;       // emit counterfactual predictive
   // Gamma(shape, shape) on the temporal basis: mean 1, and sd(log) ~
   // 1/sqrt(shape), so this sets how far the low-rank temporal structure may
@@ -470,9 +471,11 @@ model {
   }
 
   // Dispersion factor prior (joint.py:224-232): disp ~ Uniform(0,1) via the
-  // constraint, plus factor -1/2 log(disp) - 100 sqrt(disp) per level.
+  // constraint, plus factor -1/2 log(disp) - rate sqrt(disp) per level, i.e.
+  // sqrt(disp) ~ Exponential(rate) truncated at 1. The rate was a literal 100
+  // until it became data; at 100 the density is unchanged.
   if (sample_disp == 1) {
-    target += sum(-0.5 * log(disp) - 100 * sqrt(disp));
+    target += sum(-0.5 * log(disp) - disp_prior_rate * sqrt(disp));
   }
 
   // Direct likelihood on observed cells. With fixed dispersion phi is a

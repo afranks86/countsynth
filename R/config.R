@@ -21,6 +21,11 @@ FIGURE_NAMES <- c(
 DEFAULT_TIME_FAC_SHAPE <- 20   # unit-specific temporal basis
 DEFAULT_TIME_FE_SHAPE <- 1     # common time level (Gamma(1, 1))
 
+# Rate of the sampled NB dispersion's prior, sqrt(disp) ~ Exponential(rate),
+# as hard-coded in joint.stan before it was an option. Kept as the default so
+# a config that does not set it reproduces earlier fits draw for draw.
+DEFAULT_DISP_PRIOR_RATE <- 100
+
 #' Gamma shape implied by an expected multiplicative swing
 #'
 #' Both temporal priors are `Gamma(shape, shape)`: mean 1, entering the
@@ -429,6 +434,17 @@ countsynth_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 #'   reproduces earlier joint and cut stage-1 fits draw for draw (cut stage 2
 #'   has the same density but rounds differently, so its draws differ).
 #'   Ignored unless `sample_disp` is `TRUE`.
+#' @param disp_prior_rate Rate of the prior on a sampled dispersion,
+#'   `sqrt(disp) ~ Exponential(disp_prior_rate)`: a penalized-complexity prior
+#'   shrinking toward the Poisson, with `P(disp > u) = exp(-rate * sqrt(u))`.
+#'   To put probability `alpha` on an extra-Poisson CV above `cv`, set it to
+#'   `-log(alpha) / cv`. The default 100 is the historical value and a strong
+#'   one: `P(disp > 0.01) = 4.5e-5`, so a 10% extra-Poisson CV is all but
+#'   ruled out, and where the low-rank factors can absorb unit-level noise
+#'   that pushes residual variation into the factors rather than the
+#'   dispersion. `10` puts 5% on a CV above 30%. The dispersion is also
+#'   bounded above by 1, which truncates the prior noticeably only for rates
+#'   below about 3. Ignored unless `sample_disp` is `TRUE`.
 #' @param adjust_for_missingness Read an `NA` outcome as a suppressed count and
 #'   integrate the likelihood over the values it could have been (see
 #'   `suppression_range`). `FALSE` drops `NA` cells from the likelihood
@@ -487,6 +503,7 @@ countsynth_rank_shrinkage_opts <- function(group_mass_prior = c(2, 1),
 countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
                              nb_disp = 1e-4, sample_disp = FALSE,
                              disp_by = c("group", "unit"),
+                             disp_prior_rate = DEFAULT_DISP_PRIOR_RATE,
                              adjust_for_missingness = TRUE,
                              suppression_range = DEFAULT_SUPPRESSION_RANGE,
                              model_treated = TRUE, inference_mode = NULL,
@@ -505,6 +522,7 @@ countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
   }
   checkmate::assert_number(nb_disp, lower = .Machine$double.xmin)
   checkmate::assert_flag(sample_disp)
+  checkmate::assert_number(disp_prior_rate, lower = .Machine$double.xmin, finite = TRUE)
   checkmate::assert_flag(adjust_for_missingness)
   checkmate::assert_integerish(
     suppression_range,
@@ -576,6 +594,7 @@ countsynth_model_opts <- function(outcome_distribution = "NB", types = list(),
     list(
       outcome_distribution = outcome_distribution, types = types,
       nb_disp = nb_disp, sample_disp = sample_disp, disp_by = disp_by,
+      disp_prior_rate = disp_prior_rate,
       adjust_for_missingness = adjust_for_missingness,
       suppression_range = suppression_range,
       model_treated = model_treated, inference_mode = inference_mode,

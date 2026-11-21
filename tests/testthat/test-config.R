@@ -479,3 +479,19 @@ test_that("disp_by defaults to group and round-trips through YAML", {
   set <- read_countsynth_config(write_yaml_config(with_model("  disp_by: unit")))
   expect_equal(set$model$disp_by, "unit")
 })
+
+test_that("disp_prior_rate defaults to 100 and round-trips through YAML", {
+  expect_equal(countsynth_model_opts()$disp_prior_rate, 100)
+  expect_equal(countsynth_model_opts(disp_prior_rate = 10)$disp_prior_rate, 10)
+  expect_error(countsynth_model_opts(disp_prior_rate = 0), ">=")
+  expect_error(countsynth_model_opts(disp_prior_rate = Inf), "finite")
+
+  with_model <- function(block) {
+    sub("model:", paste0("model:\n", block), BASE_YAML, fixed = TRUE)
+  }
+  expect_equal(
+    read_countsynth_config(write_yaml_config(BASE_YAML))$model$disp_prior_rate, 100
+  )
+  set <- read_countsynth_config(write_yaml_config(with_model("  disp_prior_rate: 10")))
+  expect_equal(set$model$disp_prior_rate, 10)
+})

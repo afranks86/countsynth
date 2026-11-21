@@ -249,6 +249,7 @@ model:
   sample_disp: false             # sample the dispersion instead (NB only)
   # disp_by: group               # group (default) | unit: where a sampled
                                  # dispersion varies
+  # disp_prior_rate: 100         # sampled: sqrt(disp) ~ Exponential(rate)
   adjust_for_missingness: true   # read NA as a suppressed count, integrate over it
   # suppression_range: [1, 9]    # the counts your source suppresses (default 1-9)
   model_treated: true            # false = baseline-only fit, no effects
@@ -556,7 +557,17 @@ time and needs `NB`. A sampled dispersion is one per group by default
 treated unit borrows its controls' noise level rather than estimating its own
 partly from the exposed cells, where the treatment effect competes for the
 same excess variance. `disp_by: unit` gives one per unit instead, as fits
-before this option did.
+before this option did. A sampled dispersion has the penalized-complexity
+prior `sqrt(disp) ~ Exponential(disp_prior_rate)`, which shrinks toward the
+Poisson: `P(disp > u) = exp(-rate * sqrt(u))`, so `-log(alpha) / cv` puts
+probability `alpha` on an extra-Poisson CV above `cv`. The default rate, 100,
+is the historical one and strong: it puts 4.5e-5 on a CV above 10%. Unit-level
+noise the dispersion is not allowed to take goes into the low-rank factors
+instead. A weaker rate is not free, though: random inits start the dispersion
+at 0.12-0.88, and without a strong prior pulling it down a chain can stay
+there with the factors switched off. On the county APPS panel, rate `10` (5% on
+a CV above 30%) left one of four chains stuck that way, and the other three
+mixed worse than at 100 while moving the effects by about a point.
 
 **Latent factor scale.** `time_fac`, the rank-`R` temporal basis, has a
 `Gamma(shape, shape)` prior: mean 1, entering the log-rate as

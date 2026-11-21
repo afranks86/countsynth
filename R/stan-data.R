@@ -44,6 +44,9 @@ split_censored_cells <- function(data, cells) {
 #' @param sample_disp Sample the dispersion instead of fixing it.
 #' @param disp_by `"group"` (default) or `"unit"`: the level at which a
 #'   sampled dispersion varies. See [countsynth_model_opts()].
+#' @param disp_prior_rate Rate of the sampled dispersion's prior,
+#'   `sqrt(disp) ~ Exponential(disp_prior_rate)`. See
+#'   [countsynth_model_opts()].
 #' @param adjust_for_missingness Integrate over censored small counts.
 #' @param gen_ypred Emit the counterfactual posterior predictive in
 #'   `generated quantities`.
@@ -61,6 +64,7 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
                             outcome_distribution = "NB", nb_disp = 1e-4,
                             sample_disp = FALSE,
                             disp_by = c("group", "unit"),
+                            disp_prior_rate = DEFAULT_DISP_PRIOR_RATE,
                             adjust_for_missingness = TRUE,
                             gen_ypred = TRUE, te_design = NULL,
                             time_fac_shape = DEFAULT_TIME_FAC_SHAPE,
@@ -143,6 +147,7 @@ stan_data_joint <- function(data, rank, model_treated = TRUE,
     sample_disp = as.integer(sample_disp),
     adjust_missing = as.integer(adjust_for_missingness),
     nb_disp = nb_disp,
+    disp_prior_rate = disp_prior_rate,
     gen_ypred = as.integer(gen_ypred),
     time_fac_shape = time_fac_shape,
     center_time = as.integer(time_level == "centered"),

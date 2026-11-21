@@ -12,6 +12,7 @@ stan_data_joint(
   nb_disp = 1e-04,
   sample_disp = FALSE,
   disp_by = c("group", "unit"),
+  disp_prior_rate = DEFAULT_DISP_PRIOR_RATE,
   adjust_for_missingness = TRUE,
   gen_ypred = TRUE,
   te_design = NULL,
@@ -37,6 +38,10 @@ gives the baseline (cut stage-1) model.}
 
 \item{disp_by}{\code{"group"} (default) or \code{"unit"}: the level at which a
 sampled dispersion varies. See \code{\link[=countsynth_model_opts]{countsynth_model_opts()}}.}
+
+\item{disp_prior_rate}{Rate of the sampled dispersion's prior,
+\code{sqrt(disp) ~ Exponential(disp_prior_rate)}. See
+\code{\link[=countsynth_model_opts]{countsynth_model_opts()}}.}
 
 \item{adjust_for_missingness}{Integrate over censored small counts.}
 

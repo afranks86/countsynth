@@ -76,7 +76,7 @@ parse_yaml_model <- function(x, path = "model") {
   check_known_keys(
     x,
     c("outcome_distribution", "types", "nb_disp", "sample_disp", "disp_by",
-      "adjust_for_missingness", "suppression_range", "model_treated",
+      "disp_prior_rate", "adjust_for_missingness", "suppression_range", "model_treated",
       "inference_mode",
       "treatment_effects", "factor_variation_pct",
       "time_level_variation_pct", "rank_shrinkage", "time_level"),
@@ -137,6 +137,7 @@ parse_yaml_model <- function(x, path = "model") {
     nb_disp = x$nb_disp %||% 1e-4,
     sample_disp = yaml_flag(x$sample_disp, glue::glue("{path}.sample_disp"), FALSE),
     disp_by = x$disp_by %||% "group",
+    disp_prior_rate = x$disp_prior_rate %||% DEFAULT_DISP_PRIOR_RATE,
     adjust_for_missingness =
       yaml_flag(x$adjust_for_missingness, glue::glue("{path}.adjust_for_missingness"), TRUE),
     suppression_range = if (is.null(x$suppression_range)) {

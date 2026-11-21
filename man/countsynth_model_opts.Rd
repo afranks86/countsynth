@@ -10,6 +10,7 @@ countsynth_model_opts(
   nb_disp = 1e-04,
   sample_disp = FALSE,
   disp_by = c("group", "unit"),
+  disp_prior_rate = DEFAULT_DISP_PRIOR_RATE,
   adjust_for_missingness = TRUE,
   suppression_range = DEFAULT_SUPPRESSION_RANGE,
   model_treated = TRUE,
@@ -41,6 +42,18 @@ for the same excess variance. \code{"unit"} is the historical form: it
 reproduces earlier joint and cut stage-1 fits draw for draw (cut stage 2
 has the same density but rounds differently, so its draws differ).
 Ignored unless \code{sample_disp} is \code{TRUE}.}
+
+\item{disp_prior_rate}{Rate of the prior on a sampled dispersion,
+\code{sqrt(disp) ~ Exponential(disp_prior_rate)}: a penalized-complexity prior
+shrinking toward the Poisson, with \code{P(disp > u) = exp(-rate * sqrt(u))}.
+To put probability \code{alpha} on an extra-Poisson CV above \code{cv}, set it to
+\code{-log(alpha) / cv}. The default 100 is the historical value and a strong
+one: \code{P(disp > 0.01) = 4.5e-5}, so a 10\% extra-Poisson CV is all but
+ruled out, and where the low-rank factors can absorb unit-level noise
+that pushes residual variation into the factors rather than the
+dispersion. \code{10} puts 5\% on a CV above 30\%. The dispersion is also
+bounded above by 1, which truncates the prior noticeably only for rates
+below about 3. Ignored unless \code{sample_disp} is \code{TRUE}.}
 
 \item{adjust_for_missingness}{Read an \code{NA} outcome as a suppressed count and
 integrate the likelihood over the values it could have been (see
