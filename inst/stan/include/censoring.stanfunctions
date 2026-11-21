@@ -8,21 +8,35 @@
 // evaluation, the pmf is factored so that everything depending only on the
 // concentration is precomputed once per unit (coefficient row b), leaving
 // one cheap log_sum_exp over the support per cell:
-//   NB2(v | mu, phi), eta = log(mu), L = log(phi + mu):
-//     lp(v) = b[v] + phi * (log(phi) - L) + v * (eta - L)
+//   NB2(v | mu, phi), eta = log(mu), d = log(1 + mu / phi):
+//     lp(v) = b[v] - phi * d + v * (eta - log(phi) - d)
 //     b[v]  = lgamma(v + phi) - lgamma(phi) - lgamma(v + 1)
 //   Poisson(v | mu): lp(v) = -mu + v * eta - lgamma(v + 1)
+//
+// Both NB terms are written the way Stan's own neg_binomial_2 computes them,
+// because the textbook forms fall apart as phi grows -- which a sampled
+// dispersion near zero (phi = 1 / disp) asks for. The lgamma difference in b
+// subtracts two numbers near 3e16 at phi = 1e15, and phi * (log(phi) - L)
+// multiplies a difference of two numbers near log(phi) by phi. Past phi ~1e10
+// both are noise: neighbouring phi then gave log-masses scattered over
+// several nats, positive ones included, and a chain that wandered there
+// froze, every proposal rejected and its step size adapted to ~1e-13.
 
 // Per-unit NB coefficient row over a support (1..9 by default).
-vector nb_censor_coeff(real phi, vector sup, vector lgamma_sup1) {
-  return lgamma(sup + phi) - lgamma(phi) - lgamma_sup1;
+vector nb_censor_coeff(real phi, vector sup) {
+  int n = rows(sup);
+  vector[n] b;
+  for (i in 1 : n) {
+    b[i] = lchoose(sup[i] + phi - 1, sup[i]);
+  }
+  return b;
 }
 
 // log P(Y in support) for NB2 at log-mean eta, concentration phi.
 real suppressed_mass_nb(real eta, real phi, real log_phi, vector b,
                         vector sup) {
-  real L = log_sum_exp(log_phi, eta);
-  return phi * (log_phi - L) + log_sum_exp(b + sup * (eta - L));
+  real d = log1p_exp(eta - log_phi);
+  return -phi * d + log_sum_exp(b + sup * (eta - log_phi - d));
 }
 
 // log P(Y in support) for Poisson at log-mean eta.

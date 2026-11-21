@@ -145,7 +145,7 @@ transformed data {
   // autodiff cost at all.
   real phi_fixed = inv(nb_disp);
   real log_phi_fixed = log(phi_fixed);
-  vector[n_sup] b_fixed = nb_censor_coeff(phi_fixed, sup, lgamma_sup1);
+  vector[n_sup] b_fixed = nb_censor_coeff(phi_fixed, sup);
 
   // Ranged cells' supports, laid end to end: cell i's run starts at
   // icens_start[i] and holds icens_len[i] values.
@@ -169,7 +169,7 @@ transformed data {
     }
   }
   vector[n_isup] ineg_lgamma_sup1 = -ilgamma_sup1;
-  vector[n_isup] ib_fixed = nb_censor_coeff(phi_fixed, isup, ilgamma_sup1);
+  vector[n_isup] ib_fixed = nb_censor_coeff(phi_fixed, isup);
 }
 parameters {
   array[K] matrix<lower=0>[N, R] time_fac;   // Gamma(shape, shape), logged
@@ -507,7 +507,7 @@ model {
       vector[n_disp] log_phi = log(phi);
       array[n_disp] vector[n_sup] b;
       for (j in 1 : n_disp) {
-        b[j] = nb_censor_coeff(phi[j], sup, lgamma_sup1);
+        b[j] = nb_censor_coeff(phi[j], sup);
       }
       for (i in 1 : n_cens) {
         int j = cens_disp[i];
@@ -519,8 +519,7 @@ model {
         vector[icens_len[i]] s = segment(isup, icens_start[i], icens_len[i]);
         mass_ic[i] = suppressed_mass_nb(
           mu[icens_cell[i]], phi[j], log_phi[j],
-          nb_censor_coeff(phi[j], s,
-                          segment(ilgamma_sup1, icens_start[i], icens_len[i])),
+          nb_censor_coeff(phi[j], s),
           s);
       }
     } else if (is_nb == 1) {

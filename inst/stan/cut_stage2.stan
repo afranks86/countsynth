@@ -69,7 +69,7 @@ transformed data {
   vector[is_nb == 1 ? n_exposed : 0] log_phi = log(phi_exposed);
   array[is_nb == 1 ? n_cens : 0] vector[n_sup] b_cens;
   for (i in 1 : (is_nb == 1 ? n_cens : 0)) {
-    b_cens[i] = nb_censor_coeff(phi_exposed[cens_e[i]], sup, lgamma_sup1);
+    b_cens[i] = nb_censor_coeff(phi_exposed[cens_e[i]], sup);
   }
 
   // Ranged cells' supports, laid end to end: cell i's run starts at
@@ -99,8 +99,7 @@ transformed data {
   for (i in 1 : (is_nb == 1 ? n_icens : 0)) {
     ib_cens[icens_start[i] : (icens_start[i] + icens_len[i] - 1)] =
       nb_censor_coeff(phi_exposed[icens_e[i]],
-                      segment(isup, icens_start[i], icens_len[i]),
-                      segment(ilgamma_sup1, icens_start[i], icens_len[i]));
+                      segment(isup, icens_start[i], icens_len[i]));
   }
 }
 parameters {

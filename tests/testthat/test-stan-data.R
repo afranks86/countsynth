@@ -92,6 +92,38 @@ test_that("disp_prior_rate enters the log density as -rate * sum(sqrt(disp))", {
   expect_equal(shift, (100 - 10) * sum(sqrt(disp)), tolerance = 1e-10)
 })
 
+test_that("the censored NB mass stays exact as a sampled dispersion nears zero", {
+  skip_on_cran()
+  skip_if_not_installed("stanli")
+  skip_if_not(stanli::stanli_available(), "stanli runtime missing")
+  sd <- stan_data_joint(fixture_data()$data, rank = 2, sample_disp = TRUE)
+  expect_gt(sd$n_cens, 0)
+  json <- withr::local_tempfile(fileext = ".json")
+  cmdstanr::write_stan_json(sd, json)
+  m <- stanli::stanli_model(
+    file = stan_file_path("joint"), data = json,
+    include_paths = system.file("stan", "include", package = "countsynth")
+  )
+  # One random point; only the dispersion coordinates (logit disp) move.
+  q_at <- function(d) {
+    stanli::unconstrain(m, list(disp = rep(d, sd$n_disp)), partial = TRUE, seed = 1)
+  }
+  q <- q_at(1e-6)
+  idx <- which(q != q_at(1e-7))
+  expect_length(idx, sd$n_disp)
+  disp <- 10^-(11:15)
+  lp <- vapply(disp, function(d) {
+    q[idx] <- stats::qlogis(d)
+    stanli::log_prob_grad(m, q)$lp
+  }, numeric(1))
+  # Less the dispersion's own prior and logit Jacobian, the log density is
+  # already at its Poisson limit here and must stay there. Before the stable
+  # forms, phi = 1e13-1e15 scattered it over several nats per censored cell.
+  rest <- lp - sd$n_disp *
+    (0.5 * log(disp) - sd$disp_prior_rate * sqrt(disp) + log1p(-disp))
+  expect_lt(diff(range(rest)), 1e-4)
+})
+
 test_that("stan_data_stage2 subsets are within-exposed positions", {
   fd <- fixture_data()
   data <- fd$data
