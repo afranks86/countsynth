@@ -135,6 +135,11 @@ countsynth_fit <- function(data, rank = NULL, config, model_treated = NULL,
     )
     run <- model$sample
   }
+  if (is.null(init)) {
+    init <- disp_init(sd, mcmc$seed)
+    # The start sets disp alone, by design; cmdstanr would say so per chain.
+    if (!is.null(init)) withr::local_options(cmdstanr_warn_inits = FALSE)
+  }
   if (!is.null(init)) args$init <- init
   args <- args[!vapply(args, is.null, logical(1))]
   # Explicit `...` arguments win over the config-derived defaults.
@@ -160,6 +165,37 @@ countsynth_fit <- function(data, rank = NULL, config, model_treated = NULL,
     ),
     "countsynth_fit"
   )
+}
+
+#' Starting values for a sampled NB dispersion
+#'
+#' Each chain's `disp` starts near the Poisson, at the prior's own scale
+#' `(1 / rate)^2` (the prior mean of `sqrt(disp)` is `1 / rate`), jittered by
+#' up to a factor of e so the chains still start apart, and moves away only
+#' as far as the data push it. Every other parameter keeps Stan's random
+#' init. Left to Stan, `disp` would start uniform on (-2, 2) in logit space,
+#' i.e. at 0.12-0.88, where a large dispersion can absorb what the factors
+#' should explain: on the infant-mortality panel, two of four chains from such
+#' starts settled with every state's loadings collapsed onto the shared
+#' profile (`unit_weight_sd` ~1e-4) and a dispersion of ~0.04, an lp
+#' 1600-2500 below the other two, and never left.
+#'
+#' @param stan_data The list from [stan_data_joint()].
+#' @param seed The MCMC seed; the jitter for chain `c` is drawn at `seed + c`.
+#' @return `NULL` unless the dispersion is sampled, else a cmdstanr `init`
+#'   function of `chain_id`.
+#' @keywords internal
+disp_init <- function(stan_data, seed) {
+  if (!(stan_data$is_nb == 1 && stan_data$sample_disp == 1)) {
+    return(NULL)
+  }
+  n <- stan_data$n_disp
+  scale <- 1 / stan_data$disp_prior_rate^2
+  function(chain_id) {
+    jitter <- withr::with_seed((seed %||% 0L) + chain_id, stats::runif(n, -1, 1))
+    # disp is bounded by 1; only a rate below ~1.7 could reach it.
+    list(disp = as.array(pmin(scale * exp(jitter), 0.5)))
+  }
 }
 
 #' Validate the ADVI tuning list against the settable knobs

@@ -124,6 +124,46 @@ test_that("the censored NB mass stays exact as a sampled dispersion nears zero",
   expect_lt(diff(range(rest)), 1e-4)
 })
 
+test_that("a sampled dispersion starts near the Poisson, apart per chain", {
+  data <- fixture_data()$data
+  expect_null(disp_init(stan_data_joint(data, rank = 2), seed = 1))
+  expect_null(disp_init(
+    stan_data_joint(data, rank = 2, outcome_distribution = "Poisson"), seed = 1
+  ))
+
+  sd <- stan_data_joint(data, rank = 2, sample_disp = TRUE, disp_prior_rate = 20)
+  init <- disp_init(sd, seed = 7)
+  starts <- lapply(1:4, init)
+  for (s in starts) {
+    expect_named(s, "disp")
+    expect_length(s$disp, sd$n_disp)
+    expect_true(all(s$disp >= exp(-1) / 400 & s$disp <= exp(1) / 400))
+  }
+  expect_false(identical(starts[[1]]$disp, starts[[2]]$disp))
+  expect_identical(init(3), disp_init(sd, seed = 7)(3))
+
+  # One level stays a length-1 array, which write_stan_json keeps a vector.
+  sd1 <- sd
+  sd1$n_disp <- 1L
+  expect_true(is.array(disp_init(sd1, seed = 1)(1)$disp))
+})
+
+test_that("countsynth_fit starts each chain's dispersion from disp_init", {
+  skip_on_cran()
+  skip_if_no_cmdstan()
+  tmp <- withr::local_tempdir()
+  config <- make_test_config(write_test_csv(make_test_data(), file.path(tmp, "panel.csv")), tmp)
+  config$model$sample_disp <- TRUE
+  data <- countsynth_data(config, type = "both")
+  fit <- suppressWarnings(countsynth_fit(data, rank = 2, config = config))
+  used <- fit$fit$init()
+  expect_length(used, 2)
+  want <- disp_init(fit$stan_data, config$mcmc$seed)
+  for (c in 1:2) {
+    expect_equal(as.numeric(used[[c]]$disp), as.numeric(want(c)$disp), tolerance = 1e-8)
+  }
+})
+
 test_that("stan_data_stage2 subsets are within-exposed positions", {
   fd <- fixture_data()
   data <- fd$data
