@@ -563,7 +563,10 @@ Poisson: `P(disp > u) = exp(-rate * sqrt(u))`, so `-log(alpha) / cv` puts
 probability `alpha` on an extra-Poisson CV above `cv`. The default rate, 100,
 is the historical one and strong: it puts 4.5e-5 on a CV above 10%. Unit-level
 noise the dispersion is not allowed to take goes into the low-rank factors
-instead. A weaker rate is not free, though: random inits start the dispersion
+instead. The dispersion is floored at 1e-10, where the NB is already the
+Poisson: well below it (under ~1e-12) Stan's NB gradient with respect to the
+concentration loses all precision, and chains that wandered there froze. A
+weaker rate is not free, though: random inits start the dispersion
 at 0.12-0.88, and without a strong prior pulling it down a chain can stay
 there with the factors switched off. On the county APPS panel, rate `10` (5% on
 a CV above 30%) left one of four chains stuck that way, and the other three

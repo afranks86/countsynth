@@ -193,8 +193,11 @@ disp_init <- function(stan_data, seed) {
   scale <- 1 / stan_data$disp_prior_rate^2
   function(chain_id) {
     jitter <- withr::with_seed((seed %||% 0L) + chain_id, stats::runif(n, -1, 1))
-    # disp is bounded by 1; only a rate below ~1.7 could reach it.
-    list(disp = as.array(pmin(scale * exp(jitter), 0.5)))
+    # disp is bounded by 1, which only a rate below ~1.7 could reach, and by
+    # disp_floor; starts stay 10x above the floor, which binds only for a
+    # rate above ~2e4.
+    start <- pmin(pmax(scale * exp(jitter), 10 * stan_data$disp_floor), 0.5)
+    list(disp = as.array(start))
   }
 }
 

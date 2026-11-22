@@ -92,36 +92,72 @@ test_that("disp_prior_rate enters the log density as -rate * sum(sqrt(disp))", {
   expect_equal(shift, (100 - 10) * sum(sqrt(disp)), tolerance = 1e-10)
 })
 
-test_that("the censored NB mass stays exact as a sampled dispersion nears zero", {
-  skip_on_cran()
-  skip_if_not_installed("stanli")
-  skip_if_not(stanli::stanli_available(), "stanli runtime missing")
+# The joint program under stanli on the fixture panel with a sampled
+# dispersion, at one random point where only the dispersion coordinates move:
+# eval_at(u) sets every one of them to u on the unconstrained scale, u_at(d)
+# is the u that puts the dispersion at d.
+stanli_disp_point <- function(env = parent.frame()) {
   sd <- stan_data_joint(fixture_data()$data, rank = 2, sample_disp = TRUE)
-  expect_gt(sd$n_cens, 0)
-  json <- withr::local_tempfile(fileext = ".json")
+  json <- withr::local_tempfile(fileext = ".json", .local_envir = env)
   cmdstanr::write_stan_json(sd, json)
   m <- stanli::stanli_model(
     file = stan_file_path("joint"), data = json,
     include_paths = system.file("stan", "include", package = "countsynth")
   )
-  # One random point; only the dispersion coordinates (logit disp) move.
   q_at <- function(d) {
     stanli::unconstrain(m, list(disp = rep(d, sd$n_disp)), partial = TRUE, seed = 1)
   }
   q <- q_at(1e-6)
   idx <- which(q != q_at(1e-7))
-  expect_length(idx, sd$n_disp)
-  disp <- 10^-(11:15)
-  lp <- vapply(disp, function(d) {
-    q[idx] <- stats::qlogis(d)
-    stanli::log_prob_grad(m, q)$lp
+  list(
+    sd = sd,
+    idx = idx,
+    u_at = function(d) q_at(d)[idx[1]],
+    eval_at = function(u) {
+      q[idx] <- u
+      stanli::log_prob_grad(m, q)
+    }
+  )
+}
+
+test_that("the censored NB mass stays exact as a sampled dispersion nears its floor", {
+  skip_on_cran()
+  skip_if_not_installed("stanli")
+  skip_if_not(stanli::stanli_available(), "stanli runtime missing")
+  p <- stanli_disp_point()
+  sd <- p$sd
+  expect_gt(sd$n_cens, 0)
+  expect_length(p$idx, sd$n_disp)
+  floor <- sd$disp_floor
+  disp <- c(1e-8, 1e-9, 5e-10, 2e-10, 1.1e-10, 1.01e-10)
+  lp <- vapply(disp, function(d) p$eval_at(p$u_at(d))$lp, numeric(1))
+  # Less the dispersion's own prior and the Jacobian of its logit onto
+  # (floor, 1), the log density is the Poisson's plus the NB's first-order
+  # departure from it, a straight line in disp this close to zero. Before the
+  # stable forms, phi past ~1e10 scattered it over several nats per censored
+  # cell; the floor stops phi at 1e10.
+  rest <- lp - sd$n_disp * (-0.5 * log(disp) - sd$disp_prior_rate * sqrt(disp) +
+    log(disp - floor) + log1p(-disp) - log1p(-floor))
+  expect_lt(max(abs(stats::resid(stats::lm(rest ~ disp)))), 1e-6)
+})
+
+test_that("the gradient on a sampled dispersion stays exact down to its floor", {
+  skip_on_cran()
+  skip_if_not_installed("stanli")
+  skip_if_not(stanli::stanli_available(), "stanli runtime missing")
+  p <- stanli_disp_point()
+  # Logit-scale points that, unfloored, put disp at 1e-6 ... 1e-20. Without
+  # the floor the NB2 phi-partials cancel to rounding past phi ~1e12 and the
+  # chain rule multiplies them by phi: autodiff here read 72 at 1e-16 and
+  # 2,347 from 1e-17 on, against a finite difference of 1.
+  u <- stats::qlogis(10^-(6:20))
+  h <- 1e-4
+  err <- vapply(u, function(v) {
+    autodiff <- sum(p$eval_at(v)$grad[p$idx])
+    finite <- (p$eval_at(v + h)$lp - p$eval_at(v - h)$lp) / (2 * h)
+    autodiff - finite
   }, numeric(1))
-  # Less the dispersion's own prior and logit Jacobian, the log density is
-  # already at its Poisson limit here and must stay there. Before the stable
-  # forms, phi = 1e13-1e15 scattered it over several nats per censored cell.
-  rest <- lp - sd$n_disp *
-    (0.5 * log(disp) - sd$disp_prior_rate * sqrt(disp) + log1p(-disp))
-  expect_lt(diff(range(rest)), 1e-4)
+  expect_lt(max(abs(err)), 1e-3)
 })
 
 test_that("a sampled dispersion starts near the Poisson, apart per chain", {
@@ -146,6 +182,10 @@ test_that("a sampled dispersion starts near the Poisson, apart per chain", {
   sd1 <- sd
   sd1$n_disp <- 1L
   expect_true(is.array(disp_init(sd1, seed = 1)(1)$disp))
+
+  # A rate strong enough to start below the floor starts 10x above it.
+  strong <- stan_data_joint(data, rank = 2, sample_disp = TRUE, disp_prior_rate = 1e6)
+  expect_true(all(disp_init(strong, seed = 1)(1)$disp == 10 * strong$disp_floor))
 })
 
 test_that("countsynth_fit starts each chain's dispersion from disp_init", {

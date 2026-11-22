@@ -62,6 +62,7 @@ data {
   int<lower=0, upper=1> adjust_missing;
   real<lower=0> nb_disp;                 // fixed dispersion (phi = 1/nb_disp)
   real<lower=0> disp_prior_rate;         // sampled: sqrt(disp) ~ Exponential(rate)
+  real<lower=0, upper=1> disp_floor;     // sampled: lower bound on disp
   int<lower=0, upper=1> gen_ypred;       // emit counterfactual predictive
   // Gamma(shape, shape) on the temporal basis: mean 1, and sd(log) ~
   // 1/sqrt(shape), so this sets how far the low-rank temporal structure may
@@ -259,17 +260,27 @@ parameters {
   matrix[te_legacy == 1 ? K : 0, te_legacy == 1 ? D : 0] unit_category_te_z;
   vector[te_legacy == 1 ? K : 0] category_treatment_effect;   // centered
 
-  // Dispersion per level (see n_disp); Uniform(0,1) via constraint + factor
-  // prior below. Per group is the default, per unit the historical form (same
-  // size and position, so it reproduces earlier fits draw for draw). A
-  // group's dispersion is informed by all D units' cells, a unit's by only K
-  // groups' -- and the treated unit's would rest partly on its own exposed
-  // cells, where treatment_kt_z competes for the same excess variance. Per
-  // group, it borrows the controls' noise level instead. The NB2 dispersion
-  // is a squared coefficient of variation, so unit size, which enters
-  // through mu, is no reason to vary it across units; residual heterogeneity
-  // differing across groups is (see unit_weight_sd).
-  vector<lower=0, upper=1>[sample_disp == 1 ? n_disp : 0] disp;
+  // Dispersion per level (see n_disp); Uniform(disp_floor, 1) via constraint
+  // + factor prior below. Per group is the default, per unit the historical
+  // form (same size and position, so it reproduces earlier fits draw for
+  // draw). A group's dispersion is informed by all D units' cells, a unit's
+  // by only K groups' -- and the treated unit's would rest partly on its own
+  // exposed cells, where treatment_kt_z competes for the same excess
+  // variance. Per group, it borrows the controls' noise level instead. The
+  // NB2 dispersion is a squared coefficient of variation, so unit size, which
+  // enters through mu, is no reason to vary it across units; residual
+  // heterogeneity differing across groups is (see unit_weight_sd).
+  //
+  // The floor (1e-10, R's DISP_FLOOR) keeps phi = 1 / disp at or below 1e10.
+  // Past phi ~1e12 the log density is still exact (censoring.stanfunctions)
+  // but its gradient is not: the NB2 phi-partials, digamma(n + phi) -
+  // digamma(phi) and the like, cancel to rounding, and the chain rule to
+  // logit(disp) multiplies them by phi. On the county APPS panel the gradient
+  // on logit(disp) read 0.31, 27, -378 and 27,634 at disp = 1e-12, 1e-14,
+  // 1e-15 and 1e-16, against a finite difference of 0.500 at each, in
+  // CmdStan and stanli alike; chains that reached ~1e-16 in early warmup
+  // froze there. Below the floor the NB is the Poisson anyway.
+  vector<lower=disp_floor, upper=1>[sample_disp == 1 ? n_disp : 0] disp;
 
   // Regression surface; all sizes are zero when te_reg == 0.
   vector[P] te_beta;
@@ -470,10 +481,11 @@ model {
     }
   }
 
-  // Dispersion factor prior (joint.py:224-232): disp ~ Uniform(0,1) via the
-  // constraint, plus factor -1/2 log(disp) - rate sqrt(disp) per level, i.e.
-  // sqrt(disp) ~ Exponential(rate) truncated at 1. The rate was a literal 100
-  // until it became data; at 100 the density is unchanged.
+  // Dispersion factor prior (joint.py:224-232): disp ~ Uniform(disp_floor, 1)
+  // via the constraint, plus factor -1/2 log(disp) - rate sqrt(disp) per
+  // level, i.e. sqrt(disp) ~ Exponential(rate) truncated to
+  // [sqrt(disp_floor), 1]. The rate was a literal 100 until it became data;
+  // at 100 the density is unchanged.
   if (sample_disp == 1) {
     target += sum(-0.5 * log(disp) - disp_prior_rate * sqrt(disp));
   }

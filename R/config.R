@@ -26,6 +26,13 @@ DEFAULT_TIME_FE_SHAPE <- 1     # common time level (Gamma(1, 1))
 # a config that does not set it reproduces earlier fits draw for draw.
 DEFAULT_DISP_PRIOR_RATE <- 100
 
+# Lower bound on a sampled NB dispersion, so the concentration phi = 1 / disp
+# stays at or below 1e10. Past phi ~1e12 Stan Math's NB2 gradient with respect
+# to phi cancels to rounding (see joint.stan, where disp is declared). At the
+# floor the NB is the Poisson to within a variance factor of 1 + 1e-10 * mu,
+# and the default prior puts ~1e-3 of its mass below it.
+DISP_FLOOR <- 1e-10
+
 #' Gamma shape implied by an expected multiplicative swing
 #'
 #' Both temporal priors are `Gamma(shape, shape)`: mean 1, entering the
